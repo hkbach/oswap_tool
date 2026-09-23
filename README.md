@@ -106,6 +106,15 @@ python3 tests/mock_server.py 8899 &
 python3 -m owasp_scanner http://127.0.0.1:8899 --yes
 ```
 
+Bộ test tự động (pytest) phủ các kịch bản AT-01…AT-18 của `SRS.md` mục 9,
+tự dựng HTTP/HTTPS server trên `127.0.0.1` và tự sinh chứng chỉ test (hết hạn,
+chưa hiệu lực, sắp hết hạn, tự ký) — không cần internet:
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
 ## Gợi ý mở rộng sau này
 
 - Thêm chế độ "Active nhẹ" (crawl link nội bộ, kiểm tra form login, phát hiện

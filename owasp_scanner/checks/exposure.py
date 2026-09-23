@@ -65,7 +65,7 @@ def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[
                 continue
             finding_id, severity, label = _SENSITIVE_PATHS[path]
             if path == ".well-known/security.txt":
-                if resp.status_code == 200:
+                if resp.status_code == 200 and not soft_404:
                     findings.append(
                         Finding(
                             id=finding_id,

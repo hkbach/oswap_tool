@@ -12,10 +12,12 @@ from __future__ import annotations
 import argparse
 import datetime
 import sys
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit, urlunsplit
+
+import requests
 
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
-from .http_utils import build_session, safe_get
+from .http_utils import build_session
 from .models import ScanResult
 from .report import print_report, write_json
 
@@ -37,9 +39,35 @@ CONSENT_BANNER = """
 
 
 def _normalize_target(target: str) -> str:
-    if not urlparse(target).scheme:
+    # urlparse() reads "host:port" as scheme "host", so test for "://" instead.
+    if "://" not in target:
         target = "https://" + target
-    return target.rstrip("/") + "/"
+    parts = urlsplit(target)
+    path = parts.path if parts.path.endswith("/") else parts.path + "/"
+    return urlunsplit(parts._replace(path=path))
+
+
+def _utc_timestamp() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
+
+
+def _fetch_baseline(session, url: str):
+    """GET that never raises; returns (response, error_str, failed_in_tls_layer)."""
+    try:
+        return session.get(url), None, False
+    except requests.exceptions.SSLError as exc:
+        return None, str(exc), True
+    except requests.exceptions.RequestException as exc:
+        return None, str(exc), False
+
+
+def _run_check(result: ScanResult, name: str, check, *args, **kwargs) -> None:
+    result.checks_run.append(name)
+    try:
+        for f in check(*args, **kwargs):
+            result.add(f)
+    except Exception as exc:  # one broken check must not abort the scan (FR-REPORT-05)
+        result.errors.append(f"Check '{name}' failed: {exc!r}")
 
 
 def _confirm_authorization(assume_yes: bool) -> bool:
@@ -57,54 +85,42 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
     parsed = urlparse(base_url)
     hostname = parsed.hostname or base_url
 
-    result = ScanResult(target=base_url, started_at=datetime.datetime.utcnow().isoformat() + "Z")
+    result = ScanResult(target=base_url, started_at=_utc_timestamp())
     session = build_session(timeout=timeout)
+    tls_args = (tls_check.check_tls, hostname)
+    tls_kwargs = {"port": parsed.port or 443, "timeout": timeout}
 
     # 1. Baseline fetch of the target page
-    resp, err = safe_get(session, base_url)
+    resp, err, tls_failure = _fetch_baseline(session, base_url)
     if err or resp is None:
         result.errors.append(f"Could not fetch {base_url}: {err}")
-        result.finished_at = datetime.datetime.utcnow().isoformat() + "Z"
+        # An expired/untrusted certificate makes the verifying baseline GET fail;
+        # the TLS check opens its own connections and is exactly what explains it.
+        if tls_failure:
+            _run_check(result, "tls", *tls_args, **tls_kwargs)
+        result.finished_at = _utc_timestamp()
         return result
 
-    result.checks_run.append("security-headers")
-    for f in headers.check_security_headers(base_url, dict(resp.headers), is_https=(parsed.scheme == "https")):
-        result.add(f)
+    _run_check(
+        result, "security-headers", headers.check_security_headers,
+        base_url, dict(resp.headers), is_https=(parsed.scheme == "https"),
+    )
 
-    result.checks_run.append("cookies")
-    set_cookie_headers = resp.raw.headers.get_all("Set-Cookie") if hasattr(resp.raw, "headers") else None
-    if not set_cookie_headers:
-        # requests folds multiple Set-Cookie headers; fall back to the cookie jar
-        set_cookie_headers = [f"{c.name}={c.value}" for c in resp.cookies]
-    for f in cookies.check_cookies(base_url, set_cookie_headers or []):
-        result.add(f)
+    # requests folds repeated Set-Cookie headers into one string, so read them from
+    # the raw urllib3 headers — of the final response and of every redirect hop.
+    set_cookie_headers = [raw for r in (*resp.history, resp) for raw in r.raw.headers.getlist("Set-Cookie")]
+    _run_check(result, "cookies", cookies.check_cookies, base_url, set_cookie_headers)
 
     if parsed.scheme == "https":
-        result.checks_run.append("tls")
-        for f in tls_check.check_tls(hostname, port=parsed.port or 443, timeout=timeout):
-            result.add(f)
+        _run_check(result, "tls", *tls_args, **tls_kwargs)
+        _run_check(result, "http-to-https-redirect", redirect_check.check_http_to_https_redirect, session, hostname)
 
-        result.checks_run.append("http-to-https-redirect")
-        for f in redirect_check.check_http_to_https_redirect(session, hostname):
-            result.add(f)
+    _run_check(result, "cors", cors_check.check_cors, session, base_url)
+    _run_check(result, "sensitive-paths", exposure.check_sensitive_paths, session, base_url, max_workers=workers)
+    _run_check(result, "directory-listing", exposure.check_directory_listing, session, base_url)
+    _run_check(result, "robots-sitemap", exposure.check_robots_and_sitemap, session, base_url)
 
-    result.checks_run.append("cors")
-    for f in cors_check.check_cors(session, base_url):
-        result.add(f)
-
-    result.checks_run.append("sensitive-paths")
-    for f in exposure.check_sensitive_paths(session, base_url, max_workers=workers):
-        result.add(f)
-
-    result.checks_run.append("directory-listing")
-    for f in exposure.check_directory_listing(session, base_url):
-        result.add(f)
-
-    result.checks_run.append("robots-sitemap")
-    for f in exposure.check_robots_and_sitemap(session, base_url):
-        result.add(f)
-
-    result.finished_at = datetime.datetime.utcnow().isoformat() + "Z"
+    result.finished_at = _utc_timestamp()
     return result
 
 
