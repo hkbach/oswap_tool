@@ -4,6 +4,7 @@
 // the scanned site, so it is only ever rendered via textContent — never innerHTML.
 
 const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"];
+const LOCALE = "en-US";
 
 const $ = (id) => document.getElementById(id);
 let lastResult = null;
@@ -24,12 +25,27 @@ function setBusy(busy, target) {
   $("scan-button").disabled = busy;
   $("target").disabled = busy;
   $("status").hidden = !busy;
-  $("status-text").textContent = busy ? `Đang quét ${target}… có thể mất vài chục giây.` : "";
+  $("status-text").textContent = busy ? `Scanning ${target}… this can take up to a minute.` : "";
 }
 
 function formatTime(iso) {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString(LOCALE, { timeZoneName: "short" });
+}
+
+function plural(count, word) {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+function showReportLink(result) {
+  const row = $("report-link-row");
+  if (!result || !result.report_url) {
+    row.hidden = true;
+    $("report-link").removeAttribute("href");
+    return;
+  }
+  $("report-link").href = result.report_url;
+  row.hidden = false;
 }
 
 function renderSummary(result) {
@@ -45,13 +61,13 @@ function renderSummary(result) {
   const baselineFailed = result.errors.some((e) => e.startsWith("Could not fetch"));
   if (result.gate_failed) {
     gate.className = "gate gate-fail";
-    gate.textContent = "Có finding CRITICAL/HIGH — CLI sẽ trả exit code 1 (fail CI gate).";
+    gate.textContent = "CRITICAL/HIGH findings present: the CLI exits with code 1 (fails the CI gate).";
   } else if (baselineFailed) {
     gate.className = "gate gate-warn";
-    gate.textContent = "Không tải được trang chủ target nên phần lớn check chưa chạy — xem mục lỗi bên dưới.";
+    gate.textContent = "The target home page could not be fetched, so most checks did not run. See the errors below.";
   } else {
     gate.className = "gate gate-pass";
-    gate.textContent = "Không có finding CRITICAL/HIGH — CLI sẽ trả exit code 0.";
+    gate.textContent = "No CRITICAL/HIGH findings: the CLI exits with code 0.";
   }
 }
 
@@ -86,29 +102,30 @@ function renderFindings() {
 
     const details = el("dl", "details");
     if (f.evidence) details.append(detailRow("Evidence", f.evidence, true));
-    if (f.recommendation) details.append(detailRow("Cách khắc phục", f.recommendation, false));
+    if (f.recommendation) details.append(detailRow("Recommendation", f.recommendation, false));
     if (f.url) details.append(detailRow("URL", f.url, true));
     if (details.childElementCount) item.append(details);
     list.append(item);
   }
   $("no-findings").hidden = findings.length > 0;
   $("no-findings").textContent =
-    lastResult.findings.length === 0 ? "Không có finding nào." : "Không có finding nào ở mức độ này.";
+    lastResult.findings.length === 0 ? "No findings." : "No findings at this severity.";
 }
 
 function renderResult(result) {
   lastResult = result;
   $("result-target").textContent = result.target;
   $("result-meta").textContent =
-    `Bắt đầu ${formatTime(result.started_at)} · Kết thúc ${formatTime(result.finished_at)} · ` +
-    `${result.findings.length} finding`;
+    `Started ${formatTime(result.started_at)} · Finished ${formatTime(result.finished_at)} · ` +
+    plural(result.findings.length, "finding");
   $("checks-run").textContent = result.checks_run.length
-    ? `Các nhóm check đã chạy: ${result.checks_run.join(", ")}`
-    : "Chưa có nhóm check nào chạy.";
+    ? `Checks run: ${result.checks_run.join(", ")}`
+    : "No checks ran.";
   renderSummary(result);
   renderErrors(result);
   $("severity-filter").value = "ALL";
   renderFindings();
+  showReportLink(result);
   $("results").hidden = false;
 }
 
@@ -117,15 +134,16 @@ async function runScan(event) {
   showFormError("");
   const target = $("target").value.trim();
   if (!target) {
-    showFormError("Nhập URL hoặc hostname cần quét.");
+    showFormError("Enter the URL or hostname to scan.");
     $("target").focus();
     return;
   }
   if (!$("authorized").checked) {
-    showFormError("Hãy xác nhận bạn có quyền quét target này trước khi chạy.");
+    showFormError("Confirm that you are authorized to scan this target before running the scan.");
     return;
   }
 
+  showReportLink(null); // the link always refers to the result shown below it
   setBusy(true, target);
   try {
     const response = await fetch("/api/scan", {
@@ -135,12 +153,14 @@ async function runScan(event) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      showFormError(data.error || `Lỗi server (HTTP ${response.status}).`);
+      showFormError(data.error || `Server error (HTTP ${response.status}).`);
+      if (lastResult) showReportLink(lastResult);
       return;
     }
     renderResult(data);
   } catch (err) {
-    showFormError("Không kết nối được tới scanner server. Server còn đang chạy không?");
+    showFormError("Could not reach the scanner server. Is it still running?");
+    if (lastResult) showReportLink(lastResult);
   } finally {
     setBusy(false, target);
   }
@@ -148,7 +168,8 @@ async function runScan(event) {
 
 function downloadJson() {
   if (!lastResult) return;
-  const { gate_failed, ...report } = lastResult; // same shape as the CLI --json report
+  // Same shape as the CLI --json report: drop the UI-only fields.
+  const { gate_failed, report_id, report_url, ...report } = lastResult;
   const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
   const link = el("a");
   link.href = URL.createObjectURL(blob);

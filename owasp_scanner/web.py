@@ -4,6 +4,9 @@ Usage:
     python -m owasp_scanner.web                # http://127.0.0.1:8765/
     python -m owasp_scanner.web --port 9000
 
+After a scan, the page offers a "Download Test result" link: a standalone HTML
+report (see html_report.py) kept in memory for the most recent scans only.
+
 The UI runs the same run_scan() as the CLI. The authorization rule is the same
 too: a scan only starts when the operator ticks the confirmation box, and the
 API enforces that server-side. The server binds to loopback by default so other
@@ -15,12 +18,16 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
+import re
+import secrets
 import threading
+from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from .cli import _normalize_target, run_scan
+from .html_report import render_html
 
 _STATIC_DIR = Path(__file__).with_name("static")
 _STATIC_FILES = {
@@ -29,6 +36,8 @@ _STATIC_FILES = {
     "/app.css": ("app.css", "text/css; charset=utf-8"),
 }
 _MAX_BODY_BYTES = 4096
+_MAX_STORED_REPORTS = 20
+_REPORT_PATH = re.compile(r"^/api/report/([A-Za-z0-9_-]{16,64})\.html$")
 _SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
     "X-Content-Type-Options": "nosniff",
@@ -51,16 +60,22 @@ def _is_loopback(host: str) -> bool:
         return False
 
 
+def _report_filename(report: dict) -> str:
+    host = urlsplit(report.get("target", "")).netloc or "target"
+    stamp = re.sub(r"\D", "", report.get("started_at", ""))[:14] or "report"
+    return f"owasp-scan-{re.sub(r'[^A-Za-z0-9.-]', '_', host)}-{stamp}.html"
+
+
 class ScanUIHandler(BaseHTTPRequestHandler):
     server_version = "OWASPScannerUI"
 
     # --- helpers -----------------------------------------------------------------
 
-    def _send(self, status: int, body: bytes, content_type: str) -> None:
+    def _send(self, status: int, body: bytes, content_type: str, extra_headers: dict | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        for name, value in _SECURITY_HEADERS.items():
+        for name, value in {**_SECURITY_HEADERS, **(extra_headers or {})}.items():
             self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
@@ -87,6 +102,9 @@ class ScanUIHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._host_allowed():
             return self._error(403, "Host not allowed")
+        report_match = _REPORT_PATH.match(self.path)
+        if report_match:
+            return self._send_report(report_match.group(1))
         static = _STATIC_FILES.get(self.path.split("?", 1)[0])
         if static is None:
             return self._error(404, "Not found")
@@ -132,10 +150,35 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         finally:
             self.server.scan_lock.release()
 
-        data = result.to_dict()
-        counts = data["summary"]
+        report = result.to_dict()
+        report_id = self._store_report(report)
+        counts = report["summary"]
+        data = dict(report, report_id=report_id, report_url=f"/api/report/{report_id}.html")
         data["gate_failed"] = bool(counts["CRITICAL"] or counts["HIGH"])  # same rule as CLI exit code 1
         self._json(200, data)
+
+    # --- stored reports ----------------------------------------------------------
+
+    def _store_report(self, report: dict) -> str:
+        # Unguessable id; only the most recent scans are kept, in memory only.
+        report_id = secrets.token_urlsafe(16)
+        with self.server.reports_lock:
+            self.server.reports[report_id] = report
+            while len(self.server.reports) > _MAX_STORED_REPORTS:
+                self.server.reports.popitem(last=False)
+        return report_id
+
+    def _send_report(self, report_id: str) -> None:
+        with self.server.reports_lock:
+            report = self.server.reports.get(report_id)
+        if report is None:
+            return self._error(404, f"Report not found. Only the last {_MAX_STORED_REPORTS} scans are kept; run the scan again.")
+        self._send(
+            200,
+            render_html(report).encode("utf-8"),
+            "text/html; charset=utf-8",
+            {"Content-Disposition": f'attachment; filename="{_report_filename(report)}"'},
+        )
 
 
 def build_server(host: str = "127.0.0.1", port: int = 8765, timeout: int = 10, workers: int = 5) -> ThreadingHTTPServer:
@@ -144,6 +187,8 @@ def build_server(host: str = "127.0.0.1", port: int = 8765, timeout: int = 10, w
     server.scan_lock = threading.Lock()
     server.scan_timeout = timeout
     server.scan_workers = workers
+    server.reports = OrderedDict()
+    server.reports_lock = threading.Lock()
     return server
 
 

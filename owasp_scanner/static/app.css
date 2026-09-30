@@ -115,6 +115,10 @@ button.secondary {
   padding: 8px 14px;
 }
 
+.report-link-row { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.report-link-row .meta { font-size: 13px; }
+.report-link-row a { color: var(--accent); font-weight: 600; }
+
 .consent { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; color: var(--muted); font-size: 14px; }
 .consent input { margin-top: 3px; }
 

@@ -56,6 +56,60 @@ def test_scan_returns_report(ui, http_server):
     assert ranks == sorted(ranks)
 
 
+def test_scan_result_links_to_downloadable_html_report(ui, http_server):
+    data = scan(ui, {"target": http_server(MockHandler), "authorized": True}).json()
+    assert data["report_url"] == f"/api/report/{data['report_id']}.html"
+
+    resp = requests.get(ui + data["report_url"], timeout=5)
+    assert resp.status_code == 200
+    assert resp.headers["Content-Type"].startswith("text/html")
+    disposition = resp.headers["Content-Disposition"]
+    assert disposition.startswith('attachment; filename="owasp-scan-127.0.0.1_') and disposition.endswith('.html"')
+    assert "OWASP Passive Scan Report" in resp.text
+    assert "EXPOSURE-ENV" in resp.text
+
+
+def test_report_ids_are_unguessable_and_unknown_ids_404(ui, http_server):
+    target = http_server(MockHandler)
+    first = scan(ui, {"target": target, "authorized": True}).json()["report_id"]
+    second = scan(ui, {"target": target, "authorized": True}).json()["report_id"]
+    assert first != second and len(first) >= 16
+    assert requests.get(f"{ui}/api/report/{'A' * 22}.html", timeout=5).status_code == 404
+    assert requests.get(f"{ui}/api/report/../index.html", timeout=5).status_code == 404
+
+
+def test_only_recent_reports_are_kept(ui, monkeypatch):
+    monkeypatch.setattr(
+        web, "run_scan",
+        lambda target, timeout, workers: ScanResult(target=target, started_at="2026-01-01T00:00:00Z"),
+    )
+    ids = [scan(ui, {"target": "http://127.0.0.1:1", "authorized": True}).json()["report_id"]
+           for _ in range(web._MAX_STORED_REPORTS + 1)]
+    assert requests.get(f"{ui}/api/report/{ids[0]}.html", timeout=5).status_code == 404
+    assert requests.get(f"{ui}/api/report/{ids[-1]}.html", timeout=5).status_code == 200
+
+
+def test_report_download_blocks_rebinding_host(ui, http_server):
+    report_url = scan(ui, {"target": http_server(MockHandler), "authorized": True}).json()["report_url"]
+    port = ui.rsplit(":", 1)[1]
+    resp = requests.get(ui + report_url, headers={"Host": f"evil.example:{port}"}, timeout=5)
+    assert resp.status_code == 403
+
+
+def test_ui_text_is_english():
+    # English is the default language of the system; guard against untranslated strings.
+    import re
+    from pathlib import Path
+
+    static = Path(web.__file__).with_name("static")
+    html = (static / "index.html").read_text(encoding="utf-8")
+    assert '<html lang="en">' in html
+    for name in ("index.html", "app.js", "app.css"):
+        text = (static / name).read_text(encoding="utf-8")
+        assert not re.search(r"[À-ɏḀ-ỿ]", text), f"non-English text in {name}"
+    assert "Download Test result" in html
+
+
 def test_scan_of_unreachable_target_reports_error(ui, closed_port):
     resp = scan(ui, {"target": f"http://127.0.0.1:{closed_port}", "authorized": True})
     assert resp.status_code == 200
