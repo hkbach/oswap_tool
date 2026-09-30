@@ -118,6 +118,27 @@ def test_web_ui_always_redacts_even_if_asked_not_to(http_server):
         server.server_close()
 
 
+def test_same_cookie_on_a_redirect_and_the_final_response_is_redacted_in_both(http_server):
+    # Two COOKIE-FLAGS-MISSING findings with the same fingerprint (same cookie name, same
+    # target): the redactions of both must apply, not only those of the last one.
+    first, second = f"{COOKIE_SECRET}-hop", f"{COOKIE_SECRET}-final"
+
+    class RedirectThenHome(QuietHandler):
+        def do_GET(self):
+            if self.path == "/":
+                self.send(302, b"", [("Location", "/home"), ("Set-Cookie", f"sid={first}; Path=/")])
+            elif self.path == "/home":
+                self.send(200, b"home", [("Set-Cookie", f"sid={second}; Path=/")])
+            else:
+                self.send(404)
+
+    report = output.build_report(cli.run_scan(http_server(RedirectThenHome), timeout=5))
+    text = json.dumps(report)
+    assert first not in text and second not in text
+    evidence = sorted(f["evidence"] for f in report["findings"] if f["id"] == "COOKIE-FLAGS-MISSING")
+    assert evidence == [f"sid=<redacted len={len(first)}>; Path=/", f"sid=<redacted len={len(second)}>; Path=/"]
+
+
 def test_errors_are_redacted(closed_port):
     result = cli.run_scan(f"http://127.0.0.1:{closed_port}/?token={TOKEN_SECRET}", timeout=2)
     assert TOKEN_SECRET in result.errors[0]  # raw result keeps it; output must not

@@ -39,7 +39,11 @@ def build_report(result: ScanResult, *, show_secrets: bool = False, fail_on: str
     if show_secrets:
         return report
 
-    pairs_by_fingerprint = {f.fingerprint: f.redactions for f in result.findings}
+    # Findings can share a fingerprint (the same cookie set on a redirect hop and on the final
+    # response), so collect the pairs of all of them instead of keeping only the last.
+    pairs_by_fingerprint: dict[str, list[tuple[str, str]]] = {}
+    for f in result.findings:
+        pairs_by_fingerprint.setdefault(f.fingerprint, []).extend(f.redactions)
     report["target"] = redact(report["target"])
     report["final_url"] = redact(report["final_url"])
     report["redirect_chain"] = [dict(hop, url=redact(hop["url"])) for hop in report["redirect_chain"]]
