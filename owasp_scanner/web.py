@@ -28,9 +28,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from . import catalog
 from .cli import _ca_bundle, _normalize_target, run_scan
 from .html_report import render_html
-from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, gate_message
+from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, gate_message, group_findings, owasp_groups
 from .redact import redact
 
 _STATIC_DIR = Path(__file__).with_name("static")
@@ -44,7 +45,15 @@ _MAX_DRAIN_BYTES = 65536  # how much of an oversized body we read before replyin
 _MAX_STORED_REPORTS = 20
 # Fields the Web UI adds to the report dict of output.build_report() (SRS 6.3); everything else
 # is the same JSON as the CLI's --json.
-WEB_ONLY_FIELDS = ("gate_failed", "gate_status", "gate_message", "report_id", "report_url")
+WEB_ONLY_FIELDS = (
+    "gate_failed",
+    "gate_status",
+    "gate_message",
+    "groups",
+    "owasp_groups",
+    "report_id",
+    "report_url",
+)
 _REPORT_PATH = re.compile(r"^/api/report/([A-Za-z0-9_-]{16,64})\.html$")
 _SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
@@ -112,6 +121,9 @@ class ScanUIHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._host_allowed():
             return self._error(403, "Host not allowed")
+        if self.path.split("?", 1)[0] == "/api/checks":
+            groups = [{"id": g.id, "title": g.title, "description": g.description} for g in catalog.CHECK_GROUPS]
+            return self._json(200, {"groups": groups})
         report_match = _REPORT_PATH.match(self.path)
         if report_match:
             return self._send_report(report_match.group(1))
@@ -160,6 +172,15 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         parts = urlsplit(target)
         if parts.scheme not in ("http", "https") or not parts.hostname:
             return self._error(400, "Target must be an http:// or https:// URL")
+        groups = None  # absent: every group, as in the CLI
+        if "checks" in payload:
+            checks = payload["checks"]
+            if not isinstance(checks, list) or not all(isinstance(c, str) for c in checks):
+                return self._error(400, "checks must be a list of check group ids")
+            try:
+                groups = catalog.normalize_groups(checks)
+            except ValueError as exc:
+                return self._error(400, str(exc))
 
         # One scan at a time keeps the load on the target bounded (NFR-PERF-02).
         if not self.server.scan_lock.acquire(blocking=False):
@@ -170,6 +191,7 @@ class ScanUIHandler(BaseHTTPRequestHandler):
                 timeout=self.server.scan_timeout,
                 workers=self.server.scan_workers,
                 ca_bundle=self.server.scan_ca_bundle,
+                groups=groups,
             )
             report = build_report(result, fail_on=self.server.scan_fail_on)  # same pipeline as the CLI (FR-WEB-01)
         except Exception as exc:  # a bug must still answer the browser instead of dropping the connection
@@ -183,6 +205,7 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         data = dict(report, report_id=report_id, report_url=f"/api/report/{report_id}.html")
         data["gate_failed"] = report["gate"]["failed"]
         data["gate_status"], data["gate_message"] = gate_message(report["gate"])  # same text as the HTML report
+        data["groups"], data["owasp_groups"] = group_findings(report), owasp_groups(report)  # same as the HTML report
         self._json(200, data)
 
     # --- stored reports ----------------------------------------------------------

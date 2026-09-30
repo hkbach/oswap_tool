@@ -17,23 +17,44 @@
       </p>
     </header>
 
-    <form id="scan-form" class="card" novalidate>
-      <label for="target" class="field-label">Target URL or hostname</label>
-      <div class="input-row">
+    <form id="scan-form" class="card scan-form" novalidate>
+      <div class="form-step">
+        <label for="target" class="field-label"><span class="step">1</span> Target URL or hostname</label>
         <input id="target" name="target" type="text" inputmode="url" autocomplete="url"
                placeholder="https://example.com" spellcheck="false" required>
-        <button id="scan-button" type="submit">Scan</button>
       </div>
-      <p id="report-link-row" class="report-link-row" hidden>
-        <a id="report-link" href="#" download>Download Test result</a>
-        <span class="meta">(HTML report of the last scan)</span>
-      </p>
-      <label class="consent">
-        <input id="authorized" type="checkbox">
-        <span>I own this system or have written authorization to scan it.
-          Scanning third-party systems without permission may be illegal.</span>
-      </label>
+
+      <fieldset class="form-step groups-picker">
+        <legend class="field-label"><span class="step">2</span> Test targets</legend>
+        <div class="picker-bar">
+          <span id="groups-count" class="meta"></span>
+          <span class="picker-actions">
+            <button id="groups-all" type="button" class="link">Select all</button>
+            <button id="groups-none" type="button" class="link">Clear</button>
+          </span>
+        </div>
+        <ul id="groups-list" class="groups-list"></ul>
+        <p id="groups-loading" class="meta">Loading test targets…</p>
+      </fieldset>
+
+      <div class="form-step">
+        <span class="field-label"><span class="step">3</span> Authorization</span>
+        <label class="consent">
+          <input id="authorized" type="checkbox">
+          <span>I own this system or have written authorization to scan it.
+            Scanning third-party systems without permission may be illegal.</span>
+        </label>
+      </div>
+
       <p id="form-error" class="form-error" role="alert" hidden></p>
+
+      <div class="form-actions">
+        <button id="scan-button" type="submit">Scan</button>
+        <p id="report-link-row" class="report-link-row" hidden>
+          <a id="report-link" href="#" download>Download Test result</a>
+          <span class="meta">(HTML report of the last scan)</span>
+        </p>
+      </div>
     </form>
 
     <section id="status" class="status" aria-live="polite" hidden>
@@ -52,6 +73,7 @@
         </div>
         <p id="gate" class="gate"></p>
         <ul id="summary" class="summary"></ul>
+        <p id="scope" class="meta"></p>
         <p id="checks-run" class="meta"></p>
       </div>
 
@@ -62,19 +84,27 @@
 
       <div class="findings-head">
         <h2>Findings</h2>
-        <label class="filter">Severity
-          <select id="severity-filter">
-            <option value="ALL">All</option>
-            <option value="CRITICAL">CRITICAL</option>
-            <option value="HIGH">HIGH</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="LOW">LOW</option>
-            <option value="INFO">INFO</option>
-          </select>
-        </label>
+        <div class="controls">
+          <label class="filter">Group by
+            <select id="group-by">
+              <option value="target">Test target</option>
+              <option value="owasp">OWASP Top 10</option>
+            </select>
+          </label>
+          <label class="filter">Severity
+            <select id="severity-filter">
+              <option value="ALL">All</option>
+              <option value="CRITICAL">CRITICAL</option>
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="LOW">LOW</option>
+              <option value="INFO">INFO</option>
+            </select>
+          </label>
+        </div>
       </div>
       <p id="no-findings" class="empty" hidden>No findings.</p>
-      <ol id="findings" class="findings"></ol>
+      <div id="groups" class="groups"></div>
     </section>
 
     <footer class="page-footer">

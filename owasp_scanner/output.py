@@ -7,7 +7,8 @@ the Web UI response and the HTML report cannot drift apart.
 
 from __future__ import annotations
 
-from .models import ScanResult
+from .catalog import CHECK_GROUPS, group_of_check
+from .models import SEVERITY_ORDER, ScanResult
 from .redact import redact
 
 # FR-CI-01: --fail-on threshold -> severities that fail the gate (default "high" = FR-CLI-04).
@@ -79,6 +80,64 @@ def gate_message(gate: dict) -> tuple[str, str]:
     if gate["fail_on"] == "none":
         return "pass", "--fail-on none: the gate never fails; the CLI exits with code 0."
     return "pass", f"No findings at or above the {threshold} threshold: the CLI exits with code 0."
+
+
+def _counts(findings: list[dict], indexes: list[int]) -> dict[str, int]:
+    counts = dict.fromkeys(SEVERITY_ORDER, 0)
+    for i in indexes:
+        counts[findings[i]["severity"]] = counts.get(findings[i]["severity"], 0) + 1
+    return counts
+
+
+def group_findings(report: dict) -> list[dict]:
+    """The report's findings by test target (catalog.CHECK_GROUPS), for the HTML report and the Web UI.
+
+    One entry per group, in table order: ``id``, ``title``, ``description``, ``status``,
+    ``counts`` (per severity) and ``findings`` (indexes into ``report["findings"]``, in
+    report order). ``status`` is ``issues``, ``clean`` (ran, nothing found), ``not-run``
+    (selected but none of its checks ran, e.g. TLS on an http:// target) or ``not-selected``.
+    """
+    findings = report["findings"]
+    selected = set(report["scan_groups"])
+    ran = set(report["checks_run"])
+    groups = []
+    for group in CHECK_GROUPS:
+        indexes = [i for i, f in enumerate(findings) if group_of_check(f["check"]) == group.id]
+        if indexes:
+            status = "issues"
+        elif group.id not in selected:
+            status = "not-selected"
+        elif ran.intersection(group.checks):
+            status = "clean"
+        else:
+            status = "not-run"
+        groups.append(
+            {
+                "id": group.id,
+                "title": group.title,
+                "description": group.description,
+                "status": status,
+                "counts": _counts(findings, indexes),
+                "findings": indexes,
+            }
+        )
+    return groups
+
+
+def owasp_groups(report: dict) -> list[dict]:
+    """The report's findings by OWASP Top 10 category, sorted by category; only categories found.
+
+    Each entry has ``id`` (e.g. ``A05:2021``), ``title`` (the full ``owasp_category``),
+    ``counts`` and ``findings`` (indexes into ``report["findings"]``).
+    """
+    findings = report["findings"]
+    by_category: dict[str, list[int]] = {}
+    for i, f in enumerate(findings):
+        by_category.setdefault(f["owasp_category"], []).append(i)
+    return [
+        {"id": title.split(" - ", 1)[0], "title": title, "counts": _counts(findings, indexes), "findings": indexes}
+        for title, indexes in sorted(by_category.items())
+    ]
 
 
 def exit_code(report: dict) -> int:

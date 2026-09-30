@@ -152,3 +152,54 @@ def test_bad_check_selection_or_missing_target_exits_2(capsys, argv, message):
     with pytest.raises(SystemExit) as exc:
         cli.main([*argv, "--yes"])
     assert exc.value.code == 2 and message in capsys.readouterr().err
+
+
+# --- grouped views (output.group_findings / output.owasp_groups) ---------------------
+
+
+def _finding(fid, severity, check, category="A05:2021 - Security Misconfiguration"):
+    return {"id": fid, "severity": severity, "check": check, "owasp_category": category}
+
+
+def _grouped_report(**overrides):
+    report = {
+        "scan_groups": ["headers", "cookies", "tls"],
+        "checks_run": ["security-headers", "cookies"],
+        "findings": [
+            _finding("HDR-A", "MEDIUM", "security-headers"),
+            _finding("HDR-B", "INFO", "security-headers"),
+            _finding("EXPOSURE-X", "CRITICAL", "sensitive-paths", "A01:2021 - Broken Access Control"),
+        ],
+    }
+    report.update(overrides)
+    return report
+
+
+def test_group_findings_gives_every_group_a_status_in_table_order():
+    groups = output.group_findings(_grouped_report())
+    assert [g["id"] for g in groups] == list(catalog.GROUP_IDS)
+    by_id = {g["id"]: g for g in groups}
+    assert by_id["headers"]["status"] == "issues" and by_id["headers"]["findings"] == [0, 1]
+    assert by_id["headers"]["counts"] == {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 1, "LOW": 0, "INFO": 1}
+    assert by_id["cookies"]["status"] == "clean"  # ran, nothing found
+    assert by_id["tls"]["status"] == "not-run"  # selected, but its check did not run (e.g. http target)
+    assert by_id["cors"]["status"] == "not-selected"
+    assert by_id["exposed-files"]["findings"] == [2]  # a finding always lands in its own group
+    assert all(g["title"] and g["description"] for g in groups)
+
+
+def test_owasp_groups_are_sorted_by_category_and_list_only_categories_found():
+    groups = output.owasp_groups(_grouped_report())
+    assert [(g["id"], g["title"], g["findings"]) for g in groups] == [
+        ("A01:2021", "A01:2021 - Broken Access Control", [2]),
+        ("A05:2021", "A05:2021 - Security Misconfiguration", [0, 1]),
+    ]
+    assert groups[0]["counts"]["CRITICAL"] == 1
+
+
+def test_grouped_views_of_a_real_scan_cover_every_finding_once(recording_mock):
+    target, _ = recording_mock
+    report = output.build_report(cli.run_scan(target, timeout=5))
+    for view in (output.group_findings(report), output.owasp_groups(report)):
+        indexes = sorted(i for g in view for i in g["findings"])
+        assert indexes == list(range(len(report["findings"])))
