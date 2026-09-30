@@ -30,6 +30,8 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
 - [`CLAUDE.md`](./CLAUDE.md) — working rules for this repository.
 - [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema of the `--json`
   report (`schema_version` 1.4).
+- [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md) — license of every
+  runtime and dev dependency, direct and transitive.
 
 ## Authorized use only
 
@@ -122,15 +124,34 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.7.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.8.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.7.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.8.0.tar.gz"
 ```
 
 Installing the package adds two commands: `owasp-scanner` (same as
 `python -m owasp_scanner`) and `owasp-scanner-web` (same as
 `python -m owasp_scanner.web`).
+
+### Docker
+
+An official `Dockerfile` (FR-CI-04) builds a minimal image that runs the CLI as a
+non-root user; it is not published to a registry yet (build it yourself until
+that is decided):
+
+```bash
+docker build -t owasp-scanner .
+docker run --rm owasp-scanner https://example.com --yes --no-color
+
+# Write reports to the host: mount a directory and give it as the output path.
+docker run --rm -v "$PWD":/data -w /data owasp-scanner \
+  https://example.com --yes --json report.json --html report.html
+```
+
+The image has no shell tools beyond Python; it only runs
+`python -m owasp_scanner`. There is no `owasp-scanner-web` equivalent yet —
+the web UI is meant for a trusted local machine, not a container.
 
 ## Usage
 
@@ -209,7 +230,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.7.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.8.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -277,10 +298,11 @@ Tips:
 
 - The declarative pipeline runs in a `python:3.12-slim` Docker agent (needs the
   Docker Pipeline plugin) and archives `owasp-report.*`.
-- The template installs `git` with `apt-get`. Jenkins often runs the agent
-  container as a non-root user, and then `apt-get` fails. In that case install
-  the scanner from the source archive URL in [Installation](#installation),
-  which needs no `git`, or use an image that already has `git`.
+- The template installs from the tag's source archive over plain HTTPS (see
+  [Installation](#installation)), not with `git+https`: Jenkins' Docker
+  Pipeline plugin runs the agent container as a non-root user by default, and
+  `apt-get install git` (needed for a `git+https` install, like the other
+  three templates use) fails there.
 
 **Other CI systems:** install the package from the tag and run the scan
 command above. Treat exit codes `1`, `2` and `3` as failures and keep the
@@ -321,9 +343,17 @@ targets were not tested, non-fatal errors, and the findings:
   settings in the page.
 - The server listens on `127.0.0.1` by default and rejects requests with an
   unexpected `Host` or `Origin` header (protection against DNS rebinding and
-  cross-site requests). It runs one scan at a time. Do not use
-  `--host 0.0.0.0` unless you really need it: anyone who can reach that port
-  can then start scans from your machine.
+  cross-site requests). It runs one scan at a time.
+- **Binding anywhere other than `127.0.0.1`** (for example `--host 0.0.0.0`)
+  needs `--allow-remote` as well, or the server refuses to start. With
+  `--allow-remote`, every request needs an access token: a random one is
+  generated and printed at startup (or set your own with `--token`), together
+  with a ready-to-open URL (`http://host:port/?token=...`). Opening that URL
+  once sets a cookie for the rest of the browser session; API calls can also
+  send `X-Scanner-Token: <token>`. The token is never written to the server's
+  console log, even when it arrives in the URL. Anyone who has the token can
+  start scans from this machine, so treat it like a password and prefer the
+  default loopback bind unless you really need remote access.
 - No extra dependencies: the server uses Python's `http.server`, and the UI is
   static HTML/CSS/JS in `owasp_scanner/static/` that loads nothing from the
   internet.
@@ -338,7 +368,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-49 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-60 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -374,6 +404,7 @@ git diff tests/golden/
 | `test` | `test (ubuntu-24.04, 3.12)`, `test (ubuntu-24.04, 3.14)`, `test (windows-latest, 3.14)` | Offline `pytest` on Ubuntu 24.04 (Python 3.12, the oldest supported, and 3.14) and Windows (3.14). |
 | `min-deps` | `min-deps` | Offline `pytest` on Python 3.12 with the lowest dependency versions `pyproject.toml` allows |
 | `audit` | `audit` | `pip-audit` of the runtime dependencies declared in `pyproject.toml` |
+| `docker` | `docker` | Builds the official image, checks it runs as a non-root user, and scans `tests/mock_server.py` from inside the container over `--network host` |
 | `secrets` | `secrets` | gitleaks over the whole git history, binary checksum verified. The allowlist in `.gitleaks.toml` covers only two fake values used by the redaction tests. |
 
 The workflow has only `contents: read` permission and uses no repository
@@ -393,6 +424,7 @@ Required checks:
 lint
 min-deps
 audit
+docker
 secrets
 test (ubuntu-24.04, 3.12)
 test (ubuntu-24.04, 3.14)
@@ -417,7 +449,7 @@ checks too, or pull requests will wait for a check that no longer runs.
      `1` or more when the team has a second reviewer; `0` still forces every
      change through a pull request and its checks.
    - **Require status checks to pass**. Tick *Require branches to be up to
-     date before merging*, then **Add checks** and add the seven check names
+     date before merging*, then **Add checks** and add the eight check names
      above (choose the GitHub Actions source if asked).
 6. Leave **Bypass list** empty, so the rules also apply to admins.
 7. Click **Create**.
@@ -429,7 +461,7 @@ checks too, or pull requests will wait for a check that no longer runs.
 3. Tick **Require a pull request before merging** (set the number of approvals
    as in option A).
 4. Tick **Require status checks to pass before merging**, tick **Require
-   branches to be up to date before merging**, and search for and add the seven
+   branches to be up to date before merging**, and search for and add the eight
    checks above.
 5. Tick **Do not allow bypassing the above settings**.
 6. Leave *Allow force pushes* and *Allow deletions* unticked. Click **Create**.
@@ -443,7 +475,7 @@ gh api --method PUT repos/hkbach/oswap_tool/branches/main/protection --input - <
   "required_status_checks": {
     "strict": true,
     "contexts": [
-      "lint", "min-deps", "audit", "secrets",
+      "lint", "min-deps", "audit", "docker", "secrets",
       "test (ubuntu-24.04, 3.12)", "test (ubuntu-24.04, 3.14)", "test (windows-latest, 3.14)"
     ]
   },
@@ -457,7 +489,7 @@ EOF
 ```
 
 **Check that it works:** open a pull request to `main`. The merge button must
-stay disabled until all seven checks pass, and a direct `git push` to `main`
+stay disabled until all eight checks pass, and a direct `git push` to `main`
 must be rejected.
 
 Rulesets and branch protection are available for public repositories on all
@@ -491,10 +523,27 @@ owasp_scanner/
 examples/ci/        # CI templates for GitHub Actions, GitLab CI, Azure Pipelines, Jenkins
 tests/              # offline test suite, mock servers, golden files
 docs/               # SRS, backlog, JSON Schema of the report
+Dockerfile          # official CLI image, non-root, not published to a registry yet
+.dockerignore       # keeps the Docker build context to the package itself
+THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog
 
+- **v1.8.0** (Sprint 9, closing Phase A). Changes to note:
+  - **Binding the web UI to anything other than `127.0.0.1` now needs
+    `--allow-remote`**, or the server refuses to start (before: it started
+    with only a warning). With `--allow-remote`, every request needs an
+    access token (`--token`, or a random one printed at startup).
+  - Console and HTML reports end with a scope-and-limitations note
+    (`output.SCOPE_NOTE`); no format uses absolute-assurance language.
+  - New `THIRD_PARTY_LICENSES.md`; a `Dockerfile` (non-root, built and
+    smoke-tested in CI, not yet published to a registry); the Jenkins
+    template installs from the source archive instead of `git+apt-get`,
+    fixing the known non-root failure.
+  - Required CI status checks: the new `docker` job joins the required
+    list (eight checks now); update branch protection.
+  - JSON report and `schema_version` (1.4) are unchanged.
 - **v1.7.0** (Sprint 8, test targets):
   - **Choose the test targets of a scan:** `--checks headers,tls,...` and
     `--list-checks` in the CLI, checkboxes on the web page. Unselected test

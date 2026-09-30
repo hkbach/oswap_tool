@@ -61,7 +61,19 @@ def test_template_warns_about_authorization_and_exit_codes(template):
 def test_template_installs_the_current_release(template):
     text = template.read_text(encoding="utf-8")
     assert f"v{__version__}" in text, f"{template.name}: SCANNER_REF must follow the release version"
-    assert "git+https://github.com/hkbach/oswap_tool@" in text
+    installs_via_git = "git+https://github.com/hkbach/oswap_tool@" in text
+    installs_via_archive = "github.com/hkbach/oswap_tool/archive/refs/tags/" in text
+    assert installs_via_git or installs_via_archive
+
+
+def test_jenkinsfile_installs_from_the_source_archive_not_git():
+    # Jenkins' Docker Pipeline plugin runs the agent container as a non-root user by default,
+    # so `apt-get install git` (needed for a git+https install, like the other three templates
+    # use) used to fail here. The tagged source archive over plain HTTPS needs neither.
+    text = next(p for p in TEMPLATES if p.name == "Jenkinsfile").read_text(encoding="utf-8")
+    assert "archive/refs/tags/" in text
+    assert "sh 'apt-get" not in text  # a comment may still explain why, that's fine
+    assert "git+https" not in text
 
 
 @pytest.mark.parametrize("template", [p for p in TEMPLATES if p.suffix == ".yml"], ids=lambda p: p.name)

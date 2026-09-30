@@ -21,6 +21,16 @@ FAIL_ON_SEVERITIES = {
 }
 FAIL_ON_CHOICES = tuple(FAIL_ON_SEVERITIES)
 DEFAULT_FAIL_ON = "high"
+# FR-RPT-08: every report must say what it does not check and must not claim absolute safety
+# (CLAUDE.md: no "đảm bảo an toàn" / "phát hiện 100%" — no "guaranteed safe" / "detects
+# everything" in English either). One wording, shared by the console report and the HTML
+# report so they cannot drift apart.
+SCOPE_NOTE = (
+    "This is a non-intrusive configuration check, not a full DAST assessment: it does not "
+    "detect real SQL injection/XSS, business-logic flaws or application-level authentication "
+    "issues. A clean report does not mean the target is secure: it means these checks found "
+    "nothing. Only scan systems you own or are explicitly authorized to test."
+)
 _REDACTED_FINDING_FIELDS = ("title", "description", "evidence", "url", "instance_key")
 
 

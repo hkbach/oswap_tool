@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import textwrap
 
 from .catalog import CHECK_GROUPS
 from .models import SEVERITY_ORDER
+from .output import SCOPE_NOTE
 
 _SEVERITIES = SEVERITY_ORDER
 _SEVERITY_COLOR = {
@@ -66,6 +68,7 @@ def print_report(report: dict, use_color: bool = True) -> None:
             print(f"  - {e}")
 
     print("=" * 72)
+    print(textwrap.fill(SCOPE_NOTE, width=72, initial_indent=" ", subsequent_indent=" "))
 
 
 def write_json(report: dict, path: str) -> None:

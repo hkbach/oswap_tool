@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | OWASP-Aligned Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.9 |
-| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.8: 2026-09-30) |
+| **Phiên bản tài liệu** | 1.10 |
+| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.9: 2026-09-30) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.7.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 8). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.8.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 9). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -32,6 +32,7 @@
 | 1.7 | 2026-09-30 | Theo code v1.5.1 (Sprint 6, chất lượng repo; không đổi hành vi tool): workflow CI của repo (FR-QA-07); golden file JSON/SARIF/HTML (FR-QA-02); mọi finding ID có test (FR-QA-01); NFR-PORT-01 ghi ma trận CI; mục 10 thêm rủi ro Python 3.9 hết hỗ trợ; AT-47…AT-49. |
 | 1.8 | 2026-09-30 | Theo code v1.6.0 (Sprint 7): Python ≥ 3.12 (NFR-PORT-01, mục 2; bỏ rủi ro 3.9 ở mục 10); Bước A của TLS chấp nhận TLS 1.0/1.1 và cipher cũ (FR-TLS-01, FR-TLS-04); che userinfo trong URL và gộp redaction theo fingerprint (NFR-SEC-04, AT-32); parse Set-Cookie theo RFC 6265 (FR-COOKIE-01, AT-04); robots/sitemap đọc tối đa 512 KiB, charset lạ không làm dừng check (NFR-PERF-04, AT-38); Web UI trả 500 khi quét lỗi (FR-UI-05, AT-26); `gate_status`/`gate_message` và `output.gate_message()` (FR-UI-09, mục 6.3); AT-50…AT-51. |
 | 1.9 | 2026-09-30 | Theo code v1.7.0 (Sprint 8): nhóm mục tiêu kiểm thử `catalog.CHECK_GROUPS` và chọn nhóm khi quét (mục 4.11, FR-GRP-01…03); `--checks`, `--list-checks` (mục 7); JSON `schema_version` 1.4 với `scan_groups` và `check` (mục 6.2); Web UI chọn nhóm và nhóm kết quả theo test target/OWASP Top 10, `GET /api/checks`, `groups`/`owasp_groups` (FR-UI-10, FR-UI-11, mục 6.3); báo cáo HTML theo nhóm (FR-UI-07); AT-52…AT-55. |
+| 1.10 | 2026-09-30 | Theo code v1.8.0 (Sprint 9, đóng Phase A): Web UI bind ra ngoài bắt buộc `--allow-remote` + access token (FR-UI-01, mục 6.3, 7); `output.SCOPE_NOTE` dùng chung cho console và HTML (FR-RPT-08, NFR-COMP-01); kiểm kê license `THIRD_PARTY_LICENSES.md` (FR-SEC-10, NFR-LEGAL-01); image Docker chính thức và job CI `docker` (FR-CI-04), sửa Jenkinsfile dùng source archive; rà lại toàn bộ README (FR-DOC-01); AT-56…AT-60. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -342,6 +343,7 @@ Chỉ gửi 1 GET với header `Origin` giả lập, rõ ràng là request kiể
 | FR-REPORT-05 | Nếu một check gặp lỗi non-fatal (timeout, lỗi parse, exception bất kỳ), tool PHẢI hoàn tất các check còn lại và ghi lỗi vào `errors` dạng `Check '<tên check>' failed: <mô tả exception>`. Tên check vẫn có trong `checks_run`. | M |
 | FR-REPORT-06 | Với `--sarif PATH`, tool PHẢI ghi báo cáo **SARIF 2.1.0** dựng từ cùng dict của `output.build_report()` (secret đã che). Mỗi `Finding.id` là một rule (`shortDescription` = title, `helpUri` = reference đầu tiên, `help` = recommendation, `properties.tags` gồm OWASP và CWE, `properties.precision` = confidence, `properties.security-severity` theo severity cao nhất của id đó: CRITICAL 9.5, HIGH 8.0, MEDIUM 5.5, LOW 3.0, INFO 0.0); mỗi finding là một result (`level`: CRITICAL/HIGH → `error`, MEDIUM → `warning`, LOW/INFO → `note`; `locations` = URL của finding; `partialFingerprints.owaspScannerFingerprint/v1` = `fingerprint`). `errors` thành `toolExecutionNotifications`; `executionSuccessful` là `false` khi quét không hoàn tất. Kết quả trỏ tới URL, không phải file trong repo, nên công cụ code scanning (ví dụ GitHub) sẽ không gắn được vào dòng code. | S |
 | FR-REPORT-07 | Với `--html PATH`, tool PHẢI ghi báo cáo HTML bằng **cùng hàm `render_html()`** mà Web UI dùng cho "Download Test result" (FR-UI-06, FR-UI-07), từ cùng dict của `output.build_report()`: cho cùng một báo cáo, file HTML của CLI và của Web UI giống hệt nhau. Có `--show-secrets` thì báo cáo hiện băng cảnh báo (NFR-SEC-04). | S |
+| FR-RPT-08 | Console (`print_report()`) và báo cáo HTML (`render_html()`) PHẢI kết thúc bằng một đoạn **phạm vi & giới hạn** dùng chung một nguồn văn bản duy nhất (`output.SCOPE_NOTE`, từ v1.8.0): nêu rõ đây là kiểm tra cấu hình không xâm lấn, không phải DAST toàn diện, không phát hiện SQLi/XSS thật, lỗi business logic hay lỗi xác thực ở tầng ứng dụng; và nêu rõ **báo cáo sạch không có nghĩa là target an toàn**, chỉ có nghĩa là các check này không tìm thấy gì. Không định dạng nào (console, JSON, HTML, SARIF) được dùng ngôn ngữ đảm bảo tuyệt đối (ví dụ "100% secure", "guaranteed", "risk-free"). | M |
 
 ### 4.10 Nhóm Web UI cục bộ (`web.py`, `static/`, `html_report.py`)
 
@@ -349,7 +351,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 
 | ID | Yêu cầu | Priority |
 |---|---|---|
-| FR-UI-01 | Server PHẢI mặc định bind `127.0.0.1`. Nếu bind địa chỉ không phải loopback, PHẢI in cảnh báo rằng bất kỳ ai truy cập được cổng đều có thể ra lệnh quét. | M |
+| FR-UI-01 | Server PHẢI mặc định bind `127.0.0.1`. Bind địa chỉ không phải loopback PHẢI qua cờ tường minh `--allow-remote`; thiếu cờ này, tool PHẢI thoát (exit code 2) trước khi mở socket, không bind. Có `--allow-remote`, tool PHẢI in cảnh báo và **bắt buộc access token** trên mọi request (header `X-Scanner-Token`, query `?token=` hoặc cookie do server cấp sau lần đầu xác thực qua query); token ngẫu nhiên (`secrets.token_urlsafe(32)`) trừ khi có `--token`; token PHẢI được che khi ghi log server (từ v1.8.0). | M |
 | FR-UI-02 | `POST /api/scan` PHẢI từ chối (HTTP 400, không quét) nếu trường `authorized` không phải đúng giá trị JSON `true`. UI PHẢI có ô xác nhận quyền quét và không gửi request khi chưa tick. | M |
 | FR-UI-03 | Khi server bind loopback, mọi request có `Host` không phải loopback PHẢI bị từ chối (403) để chống DNS rebinding. `POST /api/scan` có `Origin` khác `Host` PHẢI bị từ chối (403). | M |
 | FR-UI-04 | `POST /api/scan` PHẢI yêu cầu `Content-Type: application/json` (415 nếu khác), body tối đa 4096 byte (413), là JSON object hợp lệ (400), `target` là chuỗi không rỗng và sau chuẩn hoá có scheme `http`/`https` và hostname (400). | M |
@@ -405,7 +407,8 @@ Các check được gom thành 8 nhóm mục tiêu kiểm thử, khai báo **m�
 | NFR-PORT-01 | Khả chuyển | Tool PHẢI chạy trên Python ≥ 3.12, Linux/macOS/Windows. *Nâng từ ≥ 3.9 lên ≥ 3.12 theo quyết định của chủ sản phẩm ngày 2026-09-30 (3.9 đã hết hỗ trợ, 3.10 hết hỗ trợ 2026-10-31; 3.12 là bản có sẵn trên Ubuntu 24.04). Môi trường dev dùng 3.14. CI của repo (FR-QA-07) chạy trên Ubuntu 24.04 (3.12, 3.14) và Windows (3.14); macOS chưa có trong CI.* |
 | NFR-MAINT-01 | Bảo trì | Mỗi nhóm check nằm trong module riêng, unit test được không cần mạng thật (dùng mock server cục bộ hoặc dữ liệu có sẵn). |
 | NFR-MAINT-02 | Bảo trì | Danh sách header bắt buộc (4.3) và path nhạy cảm (4.8.1) là cấu trúc dữ liệu khai báo ở đầu file. |
-| NFR-COMP-01 | Tuân thủ | README, UI và báo cáo PHẢI nêu rõ giới hạn phạm vi (không phải DAST toàn diện, không thay thế pentest). Không dùng ngôn ngữ đảm bảo tuyệt đối ("website an toàn", "phát hiện 100%"). |
+| NFR-COMP-01 | Tuân thủ | README, UI và báo cáo PHẢI nêu rõ giới hạn phạm vi (không phải DAST toàn diện, không thay thế pentest). Không dùng ngôn ngữ đảm bảo tuyệt đối ("website an toàn", "phát hiện 100%"). Từ v1.8.0: `output.SCOPE_NOTE` (FR-RPT-08) là nguồn duy nhất cho console và HTML. |
+| NFR-LEGAL-01 | Pháp lý | Mọi dependency (runtime và dev), trực tiếp và bắc cầu, PHẢI có license ghi trong `THIRD_PARTY_LICENSES.md` (FR-SEC-10, từ v1.8.0), không có GPL/AGPL/LGPL; dependency mới PHẢI thêm vào file này cùng lúc với `pyproject.toml`. Không thêm công cụ quét license mới; kiểm kê viết tay, đối chiếu bằng `tests/test_licenses.py`. License có điều khoản cần lưu ý (ví dụ MPL-2.0) PHẢI ghi rõ và đánh dấu `[CONFIRM]` để rà lại trước khi thương mại hóa. |
 
 ---
 
@@ -468,7 +471,7 @@ class ScanResult:
 ```json
 {
   "schema_version": "1.4",
-  "scanner_version": "1.7.0",
+  "scanner_version": "1.8.0",
   "rules_version": "1.1.0",
   "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "secrets_redacted": true,
@@ -576,6 +579,8 @@ python -m owasp_scanner.web [--host 127.0.0.1] [--port 8765] [--timeout N] [--wo
 | `GET /`, `/app.js`, `/app.css` | Trang UI và file tĩnh. |
 | `GET /api/checks` | Danh sách nhóm của mục 4.11: `{"groups": [{"id", "title", "description"}]}` (từ v1.7.0). |
 | `POST /api/scan` | Chạy quét đồng bộ, trả JSON mục 6.2 + 6.3. Body có thể có `checks`: danh sách id nhóm (không có = mọi nhóm); không phải danh sách chuỗi, rỗng hoặc có id lạ → 400. Mã lỗi: 400, 403, 413, 415, 429, 500 (FR-UI-02…05, FR-UI-10). |
+
+Khi server chạy với `--allow-remote` (FR-UI-01, từ v1.8.0), mọi route ở trên (kể cả `GET /`, `/app.js`, `/app.css`, `GET /api/checks`, `GET /api/report/<id>.html`) PHẢI thêm kiểm tra access token trước khi xử lý: thiếu hoặc sai token → 403. Mặc định (loopback) không cần token.
 | `GET /api/report/<id>.html` | Tải báo cáo HTML (FR-UI-06). 404 nếu không còn. |
 
 ---
@@ -659,6 +664,11 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-53 | CLI chọn nhóm (FR-GRP-01, mục 7) | `--list-checks`; `--checks cookies,HEADERS`; quét đủ nhóm; `--checks tls,bogus`; thiếu target | `--list-checks` in đủ 8 nhóm, exit `0`, không hỏi xác nhận; `--checks` chỉ chạy nhóm đã chọn, console in `Check groups:` và `Not selected (not tested):`; quét đủ không in dòng `Not selected`; id sai hoặc thiếu target → exit `2` | `test_list_checks_prints_every_group_without_a_target`, `test_checks_option_selects_groups`, `test_console_does_not_list_unselected_groups_for_a_full_scan`, `test_bad_check_selection_or_missing_target_exits_2` |
 | AT-54 | Web UI chọn và nhóm (FR-UI-10, FR-UI-11, mục 6.3) | `GET /api/checks` (và với Host lạ); quét mock với `checks` = `cookies`,`headers`; không có `checks`; `checks` = `[]`/`["bogus"]`/`"headers"`/`[1]`/`null`; bảng nhóm và nhóm OWASP của dữ liệu mẫu và của lần quét thật | Danh sách đúng bảng 4.11; Host lạ → 403; chỉ chạy nhóm đã chọn, `groups`/`owasp_groups` đúng bằng `output.group_findings()`/`owasp_groups()` của báo cáo, nhóm không chọn có `status` `not-selected`; không có `checks` → mọi nhóm; lựa chọn sai → 400, không quét; mỗi finding nằm đúng một nhóm ở cả hai cách nhóm; Download JSON bỏ đúng `web.WEB_ONLY_FIELDS`. *Phần hiển thị (HTML/JS) được kiểm tra bằng ảnh chụp trình duyệt headless, không có test tự động.* | `test_checks_endpoint_lists_the_groups`, `test_checks_endpoint_blocks_rebinding_host`, `test_scan_runs_only_the_selected_groups_and_returns_grouped_views`, `test_scan_without_checks_runs_every_group`, `test_scan_rejects_an_invalid_check_selection`, `test_group_findings_gives_every_group_a_status_in_table_order`, `test_owasp_groups_are_sorted_by_category_and_list_only_categories_found`, `test_grouped_views_of_a_real_scan_cover_every_finding_once`, `test_download_json_in_the_ui_strips_exactly_the_web_only_fields` |
 | AT-55 | Báo cáo HTML theo nhóm (FR-UI-07) | Báo cáo mẫu chỉ chọn `headers`,`cookies`,`tls`; báo cáo quét đủ nhóm; quét mock (golden) | Có 3 phần tóm tắt/chi tiết; mọi nhóm có mục riêng với trạng thái đúng (`2 issues`, `No issues`, `Not run`); dòng *Not selected (not tested)* liệt kê nhóm không chọn và không xuất hiện khi quét đủ; link trong bảng OWASP trỏ tới finding có trong trang; trong nhóm sắp theo severity; khớp golden file | `test_report_groups_findings_by_test_target_and_summarises_owasp`, `test_full_scan_report_has_no_not_selected_row`, `test_report_matches_the_golden_file` |
+| AT-56 | Access token khi bind ra ngoài (FR-UI-01) | `--host 0.0.0.0` không có `--allow-remote`; server dựng với `access_token` đặt sẵn (loopback thật, mô phỏng chế độ remote); request thiếu/sai token qua mọi route; token đúng qua header/query; query đúng lần đầu; query sai; nội dung log sau request có `?token=` | Thiếu `--allow-remote` → thoát code 2, không mở socket (không gọi `build_server`); mọi route (kể cả `GET /`, `/app.js`, `/api/checks`, `POST /api/scan`) trả 403 khi thiếu/sai token; header hoặc query đúng → 200; query đúng cấp cookie `HttpOnly`+`SameSite=Strict`, các request sau chỉ cần cookie; query sai không cấp cookie; log server không chứa giá trị token nguyên văn (`token=<redacted...>` thay vào đó); trang UI tự quét bằng chính scanner không có finding header từ MEDIUM trở lên | `test_default_bind_never_requires_a_token`, `test_missing_or_wrong_token_is_rejected_on_every_route`, `test_correct_token_is_accepted_via_header_or_query`, `test_valid_query_token_sets_a_cookie_used_by_later_same_origin_requests`, `test_wrong_query_token_does_not_set_a_cookie`, `test_access_token_never_appears_in_server_logs`, `test_remote_bind_without_allow_remote_refuses_to_start`, `test_web_ui_headers_pass_the_scanners_own_check` |
+| AT-57 | Phạm vi & giới hạn trong mọi báo cáo (FR-RPT-08) | Console và HTML của một lần quét mock; JSON/SARIF/console/HTML của cùng lần quét | Console và HTML cùng chứa `output.SCOPE_NOTE` (console được word-wrap, so khớp sau khi chuẩn hoá khoảng trắng); không định dạng nào chứa cụm từ đảm bảo tuyệt đối (`100% secure`, `fully secure`, `guaranteed secure`, `risk-free`, …) | `test_scope_note_names_its_own_limits`, `test_console_report_includes_the_scope_note`, `test_html_report_footer_includes_the_scope_note`, `test_no_absolute_assurance_language_anywhere_in_a_real_scan` |
+| AT-58 | Kiểm kê license (FR-SEC-10, NFR-LEGAL-01) | `THIRD_PARTY_LICENSES.md` đối chiếu `pyproject.toml`; nội dung cột License của từng dòng | Tập package trực tiếp trong bảng Runtime/Dev khớp chính xác `dependencies`/`optional-dependencies.dev` của `pyproject.toml`; không dòng nào có license GPL/AGPL/LGPL | `test_third_party_licenses_lists_every_direct_dependency`, `test_third_party_licenses_has_no_copyleft_that_would_force_releasing_source` |
+| AT-59 | Image Docker chính thức (FR-CI-04) | `Dockerfile`, `.dockerignore`; job CI `docker` build và quét mock server qua `--network host` | 2 giai đoạn (không còn source/pyproject trong stage cuối); có `USER` khác root với `--uid`; entrypoint `python -m owasp_scanner`; `.dockerignore` loại `.venv`/`.git`/`tests`/`docs`. *Không build/chạy được trên máy dev (không có Docker); kiểm tra nội dung file ở đây, build và smoke test thật chạy trên GitHub.* Chưa publish lên registry nào. | `test_dockerfile_exists_and_is_two_stage`, `test_dockerfile_runs_as_a_non_root_user`, `test_dockerfile_entrypoint_is_the_cli`, `test_dockerfile_final_stage_does_not_copy_the_source_tree`, `test_dockerignore_excludes_the_venv_and_test_suite`, `test_workflow_has_the_six_jobs`, `test_docker_job_builds_runs_non_root_and_smoke_tests_a_scan`, `test_jenkinsfile_installs_from_the_source_archive_not_git` |
+| AT-60 | README khớp SRS và `ci.yml` (FR-DOC-01) | Câu "AT-01 to AT-NN" trong README so với số AT lớn nhất trong mục 9; danh sách check bắt buộc trong README (khối `text` và JSON của `gh api`) so với job/matrix thật của `ci.yml` | Hai giá trị bằng nhau ở cả hai phép so sánh; test tự fail nếu ai đó thêm AT hoặc đổi job/matrix mà quên sửa README | `test_readme_at_range_matches_the_srs`, `test_readme_required_checks_list_matches_the_workflow` |
 
 ---
 
@@ -700,4 +710,4 @@ Hiện không có điểm nào. Exit code `3` (Q1 cũ) đã được xác nhận
 
 ---
 
-*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.7.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với các test tự động của v1.7.0 ngày 2026-09-30 (các test cần bắt tay TLS được tin cậy tự skip trên máy có phần mềm chặn TLS). Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*
+*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.8.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với các test tự động của v1.8.0 ngày 2026-09-30 (các test cần bắt tay TLS được tin cậy tự skip trên máy có phần mềm chặn TLS). Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*

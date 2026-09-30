@@ -288,7 +288,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-RPT-05** (P1 · Business) Hai mẫu báo cáo: **Executive summary** (không kỹ thuật) và **Technical report** (cho developer).
 - [ ] **FR-RPT-06** (P1 · Pro) Báo cáo **so sánh** hai lần quét: mới / đã sửa / còn tồn tại (dựa trên `fingerprint`).
 - [ ] **FR-RPT-07** (P2 · Enterprise) Báo cáo tuân thủ theo chuẩn (PCI DSS, ISO 27001...) với disclaimer rõ ràng, không thay thế đánh giá của chuyên gia.
-- [ ] **FR-RPT-08** (P0 · all) Mọi báo cáo có phần **phạm vi & giới hạn** (những gì KHÔNG được kiểm tra) và **không dùng ngôn ngữ đảm bảo tuyệt đối** ("website an toàn").
+- [x] **FR-RPT-08** (P0 · all) *(xong ở Sprint 9: `output.SCOPE_NOTE`, dùng chung cho console và HTML; SRS AT-57)* Mọi báo cáo có phần **phạm vi & giới hạn** (những gì KHÔNG được kiểm tra) và **không dùng ngôn ngữ đảm bảo tuyệt đối** ("website an toàn").
 
 ### E4. CLI và tích hợp CI/CD
 
@@ -298,7 +298,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-CI-02** (P0 · Pro) `--baseline FILE`: chỉ tính lỗi **mới** so với baseline (theo `fingerprint`) để không chặn pipeline vì nợ cũ.
   Phụ thuộc: FR-MODEL-01, FR-MODEL-02.
 - [x] **FR-CI-03** (P0 · all) *(xong ở Sprint 5: `examples/ci/`, AT-46; chưa chạy trên CI thật)* Template CI/CD: GitHub Actions, GitLab CI, Azure DevOps, Jenkins (trong `examples/ci/`), kèm hướng dẫn upload SARIF/artefact.
-- [ ] **FR-CI-04** (P0 · Pro) Image Docker chính thức chạy được CLI (`docker run ... scan https://...`), user không phải root.
+- [x] **FR-CI-04** (P0 · Pro) *(xong ở Sprint 9: `Dockerfile` 2 giai đoạn, user không phải root, job CI `docker` build+smoke-test; sửa luôn Jenkinsfile dùng source archive thay vì `git+apt-get`; SRS AT-59. Chưa publish lên registry nào — `[CONFIRM]` mục 11 roadmap Phase B)* Image Docker chính thức chạy được CLI (`docker run ... scan https://...`), user không phải root.
 - [ ] **FR-CI-05** (P1 · Pro) `--targets-file FILE` và nhiều `target` trong một lần chạy, gộp báo cáo; giới hạn tuần tự/song song có kiểm soát.
 - [ ] **FR-CI-06** (P1 · Pro) File cấu hình (`scanner.yaml`): target, exclusion, rate limit, auth profile, ngưỡng fail, đường dẫn báo cáo; tham số CLI ghi đè cấu hình.
 - [x] **FR-CI-10** (P0 · all) *(xong ở Sprint 5: mặc định kho OS cho cả hai đường, `--ca-bundle`; SRS FR-CLI-06, AT-42)* `--ca-bundle PATH` (và biến môi trường `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE` được tôn trọng) cho **cả** HTTP session và kiểm tra TLS (`ssl.create_default_context(cafile=...)`). Gỡ blocker **B1** `[FACT – quan sát trên máy dev ngày 2026-09-23; đính chính 2026-09-30: thành phần chặn TLS là Avast Web/Mail Shield chạy trên máy, không phải proxy mạng; SRS mục 10]`: `requests` tin kho `certifi`, còn nhóm TLS tin kho chứng chỉ của hệ điều hành. Sau proxy có TLS inspection, `requests` từ chối **mọi** site HTTPS nên baseline thất bại; nhóm TLS vẫn qua vì kho OS tin CA của proxy. Kết quả: 1 lỗi "Could not fetch", 0 finding, exit code `0`.
@@ -491,7 +491,7 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 - [ ] **FR-SEC-07** (P1 · Business) Không gửi dữ liệu khách hàng (finding, evidence, cấu hình) sang dịch vụ AI công cộng; nếu dùng AI để giải thích/tóm tắt finding thì chỉ khi có lựa chọn rõ ràng của khách, mô hình/đường truyền được phê duyệt, dữ liệu đã che, không dùng để huấn luyện `[CONFIRM]`.
 - [ ] **FR-SEC-08** (P1 · Enterprise) Chương trình tuân thủ của chính đơn vị vận hành: SOC 2 hoặc ISO 27001 (lộ trình), pentest độc lập định kỳ, chính sách công bố lỗ hổng (`security.txt` cho chính nền tảng), quy trình xử lý sự cố + thông báo khách hàng.
 - [ ] **FR-SEC-09** (P1 · Business) Chuỗi cung ứng: khóa phiên bản phụ thuộc, SBOM cho từng bản phát hành, ký image/gói phát hành.
-- [ ] **FR-SEC-10** (P0 · all) Rà **giấy phép** (license) của toàn bộ phụ thuộc và bộ luật/dữ liệu đi kèm trước khi thương mại hóa; lưu bản kiểm kê (`THIRD_PARTY_LICENSES`).
+- [x] **FR-SEC-10** (P0 · all) *(xong ở Sprint 9: `THIRD_PARTY_LICENSES.md`, không thêm công cụ quét license, `tests/test_licenses.py` đối chiếu với `pyproject.toml`; SRS AT-58. `certifi` là MPL-2.0, đã ghi `[CONFIRM]` cần rà lại trước khi thương mại hóa)* Rà **giấy phép** (license) của toàn bộ phụ thuộc và bộ luật/dữ liệu đi kèm trước khi thương mại hóa; lưu bản kiểm kê (`THIRD_PARTY_LICENSES`).
 
 ### E20. Quan sát và vận hành
 
@@ -515,7 +515,7 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 
 ### E22. Tài liệu và tài sản đưa ra thị trường
 
-- [ ] **FR-DOC-01** (P0 · all) *(phạm vi/giới hạn và hướng dẫn CI đã có trong README ở Sprint 5; còn rà lại toàn bộ trước khi phát hành)* README nêu rõ **phạm vi và giới hạn** (không phải DAST toàn diện ở giai đoạn 1; không thay thế pentest), hướng dẫn cài đặt/chạy/CI.
+- [x] **FR-DOC-01** (P0 · all) *(xong ở Sprint 9: rà lại toàn bộ README — link `THIRD_PARTY_LICENSES.md`, mục Docker, số AT cập nhật, danh sách branch protection khớp `ci.yml`; hai test đối chiếu tự động `tests/test_readme.py` chặn README lệch với SRS/`ci.yml` sau này)* README nêu rõ **phạm vi và giới hạn** (không phải DAST toàn diện ở giai đoạn 1; không thay thế pentest), hướng dẫn cài đặt/chạy/CI.
 - [ ] **FR-DOC-02** (P0 · Business) Tài liệu pháp lý cần có (do pháp lý soạn/duyệt `[CONFIRM]`): Điều khoản sử dụng, Chính sách sử dụng chấp nhận được (AUP), Chính sách quyền riêng tư, DPA (nếu xử lý dữ liệu cá nhân), SLA.
 - [ ] **FR-DOC-03** (P1 · Business) Tài liệu bảo mật cho khách (security overview): cách bảo vệ dữ liệu, mã hóa, cách ly, retention, quy trình xử lý sự cố; bộ trả lời bảng câu hỏi bảo mật (security questionnaire) mẫu.
 - [ ] **FR-DOC-04** (P1 · Pro) Tài liệu người dùng: bắt đầu nhanh, danh mục check (mỗi check: mô tả, vì sao quan trọng, cách sửa), FAQ false positive, cách cấu hình auth/exclusion.
@@ -586,6 +586,7 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 6 | Lint (ruff) + CI cho repo | FR-QA-07 (+ FR-QA-01/02) | Xong (v1.5.1) trên branch `feat/sprint-6`, chờ review; CI xanh trên GitHub ngày 2026-09-30 |
 | 7 | README tiếng Anh + hướng dẫn CI/CD và branch protection; Python ≥ 3.12; sửa lỗi từ code review (redact, TLS cũ, cookie, giới hạn đọc, Web UI 500, IPv6); refactor gate/severity | FR-DOC-01 (một phần), NFR-PORT-01, NFR-SEC-04, FR-TLS-01, FR-COOKIE-01, NFR-PERF-04, FR-UI-05 | Xong (v1.6.0) trên branch `feat/sprint-7`, chờ review; CI xanh trên GitHub |
 | 8 | Nhóm mục tiêu kiểm thử: chọn nhóm khi quét (CLI `--checks`, Web UI), kết quả và báo cáo HTML nhóm theo test target / OWASP Top 10 | SRS 4.11 (FR-GRP-01…03), FR-UI-07, FR-UI-10, FR-UI-11 (yêu cầu của chủ sản phẩm ngày 2026-09-30) | Xong (v1.7.0) trên branch `feat/sprint-8`, chờ review |
+| 9 | Đóng Phase A: Web UI bắt buộc token khi bind ra ngoài, phạm vi & giới hạn trong mọi báo cáo, kiểm kê license, image Docker chính thức, rà lại README | FR-WEB-02, FR-RPT-08, FR-SEC-10, FR-CI-04, FR-DOC-01 | Xong (v1.8.0) trên branch `feat/sprint-9`, chờ review |
 
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
 

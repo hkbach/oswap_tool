@@ -222,6 +222,88 @@ def test_bind_address_decides_host_check():
     assert web._is_loopback("localhost") and web._is_loopback("::1") and not web._is_loopback("0.0.0.0")  # noqa: S104 - test data, nothing binds here
 
 
+# --- access token (FR-WEB-02) ---------------------------------------------------------
+#
+# These tests build the server bound to 127.0.0.1 (a real, safe loopback bind) but with
+# access_token set explicitly, which exercises exactly the same request-handling code as a
+# real --allow-remote server. Binding 0.0.0.0/a real interface is deliberately not exercised
+# here: on the Windows dev machine that would risk a Firewall permission prompt with nobody
+# to click it, and CI runners cannot meaningfully test "is this socket reachable from outside"
+# either. Only the refusal-without-flag path (main(), no bind attempted) is tested end to end.
+
+
+@pytest.fixture
+def token_ui():
+    server = web.build_server("127.0.0.1", 0, timeout=5, access_token="right-token")  # noqa: S106 - test fixture
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}"
+    server.shutdown()
+    server.server_close()
+
+
+def test_default_bind_never_requires_a_token(ui):
+    assert requests.get(ui + "/", timeout=5).status_code == 200
+
+
+def test_missing_or_wrong_token_is_rejected_on_every_route(token_ui, http_server):
+    assert requests.get(token_ui + "/", timeout=5).status_code == 403
+    assert requests.get(token_ui + "/", headers={"X-Scanner-Token": "wrong"}, timeout=5).status_code == 403
+    assert requests.get(token_ui + "/api/checks", timeout=5).status_code == 403
+    resp = scan(token_ui, {"target": http_server(MockHandler), "authorized": True})
+    assert resp.status_code == 403
+
+
+def test_correct_token_is_accepted_via_header_or_query(token_ui, http_server):
+    assert requests.get(token_ui + "/", headers={"X-Scanner-Token": "right-token"}, timeout=5).status_code == 200
+    assert requests.get(token_ui + "/?token=right-token", timeout=5).status_code == 200
+    resp = scan(
+        token_ui,
+        {"target": http_server(MockHandler), "authorized": True},
+        headers={"X-Scanner-Token": "right-token"},
+    )
+    assert resp.status_code == 200
+
+
+def test_valid_query_token_sets_a_cookie_used_by_later_same_origin_requests(token_ui):
+    session = requests.Session()
+    first = session.get(token_ui + "/?token=right-token", timeout=5)
+    assert first.status_code == 200
+    set_cookie = first.headers["Set-Cookie"]
+    assert "owasp_scanner_token=right-token" in set_cookie
+    assert "HttpOnly" in set_cookie and "SameSite=Strict" in set_cookie
+    # No header, no query string this time: the cookie alone must be enough.
+    assert session.get(token_ui + "/app.js", timeout=5).status_code == 200
+    assert session.get(token_ui + "/api/checks", timeout=5).status_code == 200
+
+
+def test_wrong_query_token_does_not_set_a_cookie(token_ui):
+    resp = requests.get(token_ui + "/?token=wrong", timeout=5)
+    assert resp.status_code == 403 and "Set-Cookie" not in resp.headers
+
+
+def test_access_token_never_appears_in_server_logs(token_ui, capsys):
+    requests.get(token_ui + "/?token=right-token", timeout=5)
+    logged = capsys.readouterr().err
+    assert "right-token" not in logged
+    assert "token=<redacted" in logged
+
+
+def test_remote_bind_without_allow_remote_refuses_to_start(capsys, monkeypatch):
+    monkeypatch.setattr(web, "build_server", lambda *a, **kw: pytest.fail("must not bind before refusing to start"))
+    with pytest.raises(SystemExit) as exc:
+        web.main(["--host", "0.0.0.0"])  # noqa: S104 - the argument under test; never actually bound
+    assert exc.value.code == 2
+    assert "--allow-remote" in capsys.readouterr().err
+
+
+def test_web_ui_headers_pass_the_scanners_own_check(ui):
+    from owasp_scanner.checks import headers as headers_check
+
+    resp = requests.get(ui + "/", timeout=5)
+    found = headers_check.check_security_headers(ui + "/", dict(resp.headers), is_https=False)
+    assert not [f for f in found if f.severity.value in ("CRITICAL", "HIGH", "MEDIUM")]
+
+
 # --- check groups (SRS 4.11) ---------------------------------------------------------
 
 

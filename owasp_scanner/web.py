@@ -17,6 +17,7 @@ Origin is not this server (DNS-rebinding / cross-site request protection).
 from __future__ import annotations
 
 import argparse
+import hmac
 import ipaddress
 import json
 import re
@@ -26,7 +27,7 @@ import threading
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from . import catalog
 from .cli import _ca_bundle, _normalize_target, run_scan
@@ -60,8 +61,13 @@ _SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Cache-Control": "no-store",
 }
+# FR-WEB-02: required on every request once the server is not loopback-only. Issued as a
+# cookie after the first request that supplies a correct ?token= query value, so opening
+# http://host:port/?token=... once is enough for the rest of a browser session.
+_TOKEN_COOKIE = "owasp_scanner_token"  # noqa: S105 - a cookie name, not a secret value
 
 
 def _hostname(host_header: str) -> str:
@@ -90,11 +96,20 @@ class ScanUIHandler(BaseHTTPRequestHandler):
 
     # --- helpers -----------------------------------------------------------------
 
+    def log_message(self, format: str, *args) -> None:
+        # Same format as the base implementation, but redacted (D2): once a token is
+        # accepted via ?token=, its value would otherwise be printed here in the clear.
+        message = (format % args).translate(self._control_char_table)
+        sys.stderr.write(f"{self.address_string()} - - [{self.log_date_time_string()}] {redact(message)}\n")
+
     def _send(self, status: int, body: bytes, content_type: str, extra_headers: dict | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        for name, value in {**_SECURITY_HEADERS, **(extra_headers or {})}.items():
+        headers = {**_SECURITY_HEADERS, **(extra_headers or {})}
+        if getattr(self, "_issue_token_cookie", False):
+            headers["Set-Cookie"] = f"{_TOKEN_COOKIE}={self.server.access_token}; Path=/; HttpOnly; SameSite=Strict"
+        for name, value in headers.items():
             self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
@@ -116,11 +131,38 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         origin = self.headers.get("Origin")
         return origin is None or urlsplit(origin).netloc.lower() == self.headers.get("Host", "").lower()
 
+    def _query_token(self) -> str | None:
+        values = parse_qs(urlsplit(self.path).query).get("token")
+        return values[0] if values else None
+
+    def _cookie_token(self) -> str | None:
+        for part in self.headers.get("Cookie", "").split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == _TOKEN_COOKIE:
+                return value
+        return None
+
+    def _token_allowed(self) -> bool:
+        # FR-WEB-02: no token required by default (loopback); required on every route once
+        # the server is bound elsewhere. Accepted via header, query string or cookie.
+        required = self.server.access_token
+        if required is None:
+            return True
+        query = self._query_token()
+        supplied = self.headers.get("X-Scanner-Token") or query or self._cookie_token()
+        ok = supplied is not None and hmac.compare_digest(supplied, required)
+        # A fresh, correct query token earns a cookie so the rest of the browser session
+        # (static assets, API calls) does not need the token repeated in every URL.
+        self._issue_token_cookie = ok and query == required
+        return ok
+
     # --- routes ------------------------------------------------------------------
 
     def do_GET(self):
         if not self._host_allowed():
             return self._error(403, "Host not allowed")
+        if not self._token_allowed():
+            return self._error(403, "Missing or invalid access token")
         if self.path.split("?", 1)[0] == "/api/checks":
             groups = [{"id": g.id, "title": g.title, "description": g.description} for g in catalog.CHECK_GROUPS]
             return self._json(200, {"groups": groups})
@@ -153,6 +195,8 @@ class ScanUIHandler(BaseHTTPRequestHandler):
             return self._error(404, "Not found")
         if not self._host_allowed() or not self._same_origin():
             return self._error(403, "Cross-origin requests are not allowed")
+        if not self._token_allowed():
+            return self._error(403, "Missing or invalid access token")
         # Requiring JSON forces a CORS preflight for any cross-site caller, which we never approve.
         if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
             return self._error(415, "Content-Type must be application/json")
@@ -241,9 +285,16 @@ def build_server(
     workers: int = 5,
     ca_bundle: str | None = None,
     fail_on: str = DEFAULT_FAIL_ON,
+    access_token: str | None = None,
 ) -> ThreadingHTTPServer:
+    """``access_token``, if set, is required (header/query/cookie) on every request (FR-WEB-02).
+
+    Meant to be set whenever ``host`` is not loopback; ``main()`` enforces that pairing for the
+    CLI entry point. Left ``None`` (the default) nothing changes from before this option existed.
+    """
     server = ThreadingHTTPServer((host, port), ScanUIHandler)
     server.loopback_only = _is_loopback(host)
+    server.access_token = access_token
     server.scan_lock = threading.Lock()
     server.scan_timeout = timeout
     server.scan_workers = workers
@@ -275,15 +326,36 @@ def main(argv=None) -> int:
         type=_ca_bundle,
         help="PEM file of CA certificates to trust instead of the OS store (default: env, else OS store)",
     )
+    parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="Required together with a non-loopback --host. Anyone who can reach the port can then "
+        "start scans from this machine; an access token is then required on every request.",
+    )
+    parser.add_argument(
+        "--token",
+        metavar="TOKEN",
+        help="Access token to require when --allow-remote is set (default: a random token, "
+        "generated and printed once). Ignored when --host is loopback.",
+    )
     args = parser.parse_args(argv)
 
-    server = build_server(args.host, args.port, args.timeout, args.workers, args.ca_bundle, args.fail_on)
+    if not _is_loopback(args.host) and not args.allow_remote:
+        parser.error(
+            f"--host {args.host} is not loopback; pass --allow-remote to confirm that you understand "
+            "anyone who can reach this port could otherwise start scans from this machine."
+        )
+    access_token = (args.token or secrets.token_urlsafe(32)) if not _is_loopback(args.host) else None
+
+    server = build_server(args.host, args.port, args.timeout, args.workers, args.ca_bundle, args.fail_on, access_token)
     if not server.loopback_only:
         print(
-            f"WARNING: listening on {args.host}; anyone who can reach this port can start scans "
-            "from this machine. Use the default 127.0.0.1 unless you really need remote access.",
+            f"WARNING: listening on {args.host}; an access token is required on every request "
+            "(see below). Use the default 127.0.0.1 unless you really need remote access.",
             flush=True,
         )
+        print(f"Access token: {access_token}", flush=True)
+        print(f"Open: http://{args.host}:{server.server_address[1]}/?token={access_token}", flush=True)
     print(f"OWASP scanner UI running at http://{args.host}:{server.server_address[1]}/  (Ctrl+C to stop)", flush=True)
     try:
         server.serve_forever()
