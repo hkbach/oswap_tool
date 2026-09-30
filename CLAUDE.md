@@ -75,7 +75,7 @@ python -m owasp_scanner.web
 **Ngôn ngữ**
 
 - Mọi text của sản phẩm dùng tiếng Anh: UI, báo cáo HTML, output CLI, thông báo lỗi API, nội dung finding (SRS NFR-USA-03). Test `test_ui_text_is_english` chặn chữ tiếng Việt trong file tĩnh của UI.
-- Tài liệu dự án (SRS, backlog, README, CLAUDE.md) viết tiếng Việt.
+- README viết tiếng Anh (quyết định của chủ sản phẩm ngày 2026-09-30). Các tài liệu dự án còn lại (SRS, backlog, `docs/srs-feedback.md`, CLAUDE.md) viết tiếng Việt.
 
 **Chất lượng và dependency**
 
