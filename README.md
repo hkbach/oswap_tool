@@ -87,8 +87,14 @@ python -m owasp_scanner.web --port 9000 --timeout 15 --workers 8
 
 Nhập URL, tick ô xác nhận quyền quét, bấm **Scan**. Kết quả hiện bên dưới ô
 nhập: bảng tổng hợp theo severity, trạng thái gate (tương đương exit code của
-CLI), lỗi không nghiêm trọng, và danh sách finding có lọc theo mức độ. Nút
-**Tải JSON** tải báo cáo cùng định dạng với `--json` của CLI.
+CLI), lỗi không nghiêm trọng, và danh sách finding có lọc theo mức độ. Giao diện
+dùng tiếng Anh (ngôn ngữ mặc định của hệ thống).
+
+- Link **Download Test result** (ngay dưới ô nhập URL, chỉ hiện sau khi quét
+  xong) tải báo cáo HTML độc lập: CSS nhúng sẵn, không có script, mở được
+  offline, in được. Server chỉ giữ báo cáo của 20 lần quét gần nhất, trong bộ
+  nhớ, mất khi tắt server.
+- Nút **Download JSON** tải báo cáo cùng định dạng với `--json` của CLI.
 
 - Giao diện gọi đúng `run_scan()` của CLI nên kết quả giống hệt nhau.
 - Server chỉ lắng nghe `127.0.0.1` theo mặc định và từ chối request có
@@ -107,6 +113,7 @@ owasp_scanner/
   models.py           # Finding / ScanResult / Severity
   report.py           # In CLI + xuất JSON
   web.py              # Giao diện web local (python -m owasp_scanner.web)
+  html_report.py      # Báo cáo HTML độc lập (link "Download Test result")
   static/             # index.html, app.js, app.css của giao diện web
   checks/
     headers.py        # Security headers

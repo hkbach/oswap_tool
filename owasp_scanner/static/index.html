@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,29 +12,33 @@
     <header class="page-header">
       <h1>OWASP Passive Scanner</h1>
       <p class="subtitle">
-        Kiểm tra cấu hình HTTP/TLS của một website theo khuyến nghị OWASP.
-        Tool chỉ gửi GET thông thường, không gửi payload tấn công.
+        Checks a website's HTTP/TLS configuration against OWASP recommendations.
+        The tool only sends ordinary GET requests, never attack payloads.
       </p>
     </header>
 
     <form id="scan-form" class="card" novalidate>
-      <label for="target" class="field-label">URL hoặc hostname cần quét</label>
+      <label for="target" class="field-label">Target URL or hostname</label>
       <div class="input-row">
         <input id="target" name="target" type="text" inputmode="url" autocomplete="url"
                placeholder="https://example.com" spellcheck="false" required>
         <button id="scan-button" type="submit">Scan</button>
       </div>
+      <p id="report-link-row" class="report-link-row" hidden>
+        <a id="report-link" href="#" download>Download Test result</a>
+        <span class="meta">(HTML report of the last scan)</span>
+      </p>
       <label class="consent">
         <input id="authorized" type="checkbox">
-        <span>Tôi sở hữu hệ thống này hoặc đã có văn bản uỷ quyền để quét nó.
-          Quét hệ thống của bên thứ ba khi chưa được phép có thể vi phạm pháp luật.</span>
+        <span>I own this system or have written authorization to scan it.
+          Scanning third-party systems without permission may be illegal.</span>
       </label>
       <p id="form-error" class="form-error" role="alert" hidden></p>
     </form>
 
     <section id="status" class="status" aria-live="polite" hidden>
       <span class="spinner" aria-hidden="true"></span>
-      <span id="status-text">Đang quét…</span>
+      <span id="status-text">Scanning…</span>
     </section>
 
     <section id="results" hidden>
@@ -44,7 +48,7 @@
             <h2 id="result-target"></h2>
             <p id="result-meta" class="meta"></p>
           </div>
-          <button id="download-json" type="button" class="secondary">Tải JSON</button>
+          <button id="download-json" type="button" class="secondary">Download JSON</button>
         </div>
         <p id="gate" class="gate"></p>
         <ul id="summary" class="summary"></ul>
@@ -52,15 +56,15 @@
       </div>
 
       <div id="errors" class="card errors" hidden>
-        <h3>Lỗi không nghiêm trọng trong khi quét</h3>
+        <h3>Non-fatal errors during scan</h3>
         <ul id="error-list"></ul>
       </div>
 
       <div class="findings-head">
-        <h2>Danh sách lỗi</h2>
-        <label class="filter">Mức độ
+        <h2>Findings</h2>
+        <label class="filter">Severity
           <select id="severity-filter">
-            <option value="ALL">Tất cả</option>
+            <option value="ALL">All</option>
             <option value="CRITICAL">CRITICAL</option>
             <option value="HIGH">HIGH</option>
             <option value="MEDIUM">MEDIUM</option>
@@ -69,13 +73,14 @@
           </select>
         </label>
       </div>
-      <p id="no-findings" class="empty" hidden>Không có finding nào.</p>
+      <p id="no-findings" class="empty" hidden>No findings.</p>
       <ol id="findings" class="findings"></ol>
     </section>
 
     <footer class="page-footer">
-      Passive/config scanner, không phải DAST toàn diện: không phát hiện SQLi/XSS thật,
-      lỗi business logic hay broken authentication. Xem <code>SRS.md</code> mục 10.
+      Passive configuration scanner, not a full DAST assessment: it does not detect real
+      SQL injection/XSS, business-logic flaws or application-level authentication issues.
+      See <code>SRS.md</code> section 10.
     </footer>
   </main>
 </body>
