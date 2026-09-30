@@ -1,6 +1,6 @@
 # PRODUCT BACKLOG – Commercial Web & API Security Scanner
 
-> File này dùng làm **nguồn ngữ cảnh** khi vibe-code cùng Claude trong VS Code. Vị trí trong repo: `docs/PRODUCT-BACKLOG.md`; quy tắc làm việc nằm ở `CLAUDE.md` (thư mục gốc repo); đặc tả hiện trạng ở `docs/SRS-owasp-scanner.md` (v1.2). **Phạm vi:** chỉ các chức năng lõi/backend/API còn thiếu để thương mại hóa; **không** gồm giao diện (UI) vì UI đã có sẵn.
+> File này dùng làm **nguồn ngữ cảnh** khi vibe-code cùng Claude trong VS Code. Vị trí trong repo: `docs/PRODUCT-BACKLOG.md`; quy tắc làm việc nằm ở `CLAUDE.md` (thư mục gốc repo); đặc tả hiện trạng ở `docs/SRS-websec-scanner.md` (v1.2). **Phạm vi:** chỉ các chức năng lõi/backend/API còn thiếu để thương mại hóa; **không** gồm giao diện (UI) vì UI đã có sẵn.
 
 | | |
 |---|---|
@@ -12,7 +12,7 @@
 **Quy ước nhãn trong tài liệu (tách bạch sự thật, giả định, khuyến nghị):**
 
 - `[FACT]` – lấy từ SRS v1.2 (đã đối chiếu code) hoặc từ nguồn đã dẫn.
-- `[ASSUMPTION]` – giả định của TECHVIFY, chưa được khách hàng/thị trường xác nhận.
+- `[ASSUMPTION]` – giả định của đội ngũ phát triển, chưa được khách hàng/thị trường xác nhận.
 - `[REC]` – khuyến nghị kỹ thuật/sản phẩm, có thể đổi khi có bằng chứng.
 - `[CONFIRM]` – cần người có thẩm quyền xác nhận trước khi làm (pháp lý, thương mại, kiến trúc lớn).
 
@@ -38,7 +38,7 @@ Quy tắc cho Claude nằm trong file riêng `CLAUDE.md` ở thư mục gốc re
 ### 0.3 Mẫu prompt
 
 ```text
-@docs/PRODUCT-BACKLOG.md @docs/SRS-owasp-scanner.md
+@docs/PRODUCT-BACKLOG.md @docs/SRS-websec-scanner.md
 Hãy đọc Sprint 4 ở mục 9.1 (FR-DET-01, FR-DET-03). Chưa viết code. Cho tôi: (1) các file sẽ sửa/tạo,
 (2) cách kiểm chứng bằng mock server, (3) rủi ro false positive. Chờ tôi duyệt.
 ```
@@ -64,14 +64,14 @@ sau đó code. Không đổi hành vi các FR khác. Chạy test và báo kết 
 
 ### 1.1 Hiện trạng `[FACT – từ SRS v1.2, đã đối chiếu code v1.1.0 ngày 2026-09-30]`
 
-- CLI Python `python -m owasp_scanner <target>`; module: `cli.py`, `http_utils.py`, `models.py`, `report.py`, `checks/{headers,cookies,tls_check,redirect_check,cors_check,exposure}.py`.
+- CLI Python `python -m websec_scanner <target>`; module: `cli.py`, `http_utils.py`, `models.py`, `report.py`, `checks/{headers,cookies,tls_check,redirect_check,cors_check,exposure}.py`.
 - Chỉ gửi GET thông thường, không payload khai thác; quét **1 trang** (trang chủ) cho hầu hết check.
 - Có consent gate (`--yes` để bỏ qua), exit code 0/1/2 (2 = không xác nhận quyền quét), JSON output có `summary`, `findings`, `errors`, `checks_run`.
 - Mapping OWASP Top 10:2021 (chủ yếu A01, A02, A03, A05); mỗi finding có id ổn định, severity, evidence, recommendation.
 - Đã có từ v1.1.0: TLS kiểm tra 2 bước (đọc hạn chứng chỉ độc lập với trust, `TLS-CERT-EXPIRED`/`TLS-CERT-NOT-YET-VALID`/`TLS-CERT-NOT-TRUSTED`); tách robots.txt và sitemap.xml; HSTS chỉ khi `https://`; `frame-ancestors` loại trừ X-Frame-Options; `Finding.id` khai báo tường minh cho từng path.
 - Đã sửa sau v1.1.0 (SRS v1.2): baseline lỗi ở tầng TLS vẫn chạy nhóm TLS; một check lỗi không dừng cả lần quét; cookie ở các bước redirect cũng được kiểm tra; chuẩn hoá đúng `host:port`; soft-404 áp dụng cho cả `security.txt`.
 - 110 test pytest chạy offline (mock HTTP/HTTPS, chứng chỉ tự sinh), đã chạy trên Python 3.12 và 3.14 (Windows). Chưa có lint và CI.
-- **Web UI cục bộ** `[FACT – đã đối chiếu `web.py` ngày 2026-09-30; đặc tả ở SRS mục 3.3 và 4.10]`: `python -m owasp_scanner.web` chạy `http.server` tại `127.0.0.1:8765` (`web.py`), phục vụ `static/{index.html,app.js,app.css}`. `POST /api/scan` với `{"target", "authorized": true}`; server kiểm tra Host/Origin, Content-Type, kích thước body, cờ authorized, URL target rồi gọi `run_scan(target, timeout, workers)` của `cli.py` **trong thread xử lý request**, mỗi lúc một lần quét. Trả JSON đúng SRS 6.2 + `gate_failed`, `report_id`, `report_url`. `GET /api/report/<id>.html` sinh HTML bằng `render_html()` từ báo cáo trong bộ nhớ (giữ 20 báo cáo gần nhất). UI và báo cáo dùng tiếng Anh.
+- **Web UI cục bộ** `[FACT – đã đối chiếu `web.py` ngày 2026-09-30; đặc tả ở SRS mục 3.3 và 4.10]`: `python -m websec_scanner.web` chạy `http.server` tại `127.0.0.1:8765` (`web.py`), phục vụ `static/{index.html,app.js,app.css}`. `POST /api/scan` với `{"target", "authorized": true}`; server kiểm tra Host/Origin, Content-Type, kích thước body, cờ authorized, URL target rồi gọi `run_scan(target, timeout, workers)` của `cli.py` **trong thread xử lý request**, mỗi lúc một lần quét. Trả JSON đúng SRS 6.2 + `gate_failed`, `report_id`, `report_url`. `GET /api/report/<id>.html` sinh HTML bằng `render_html()` từ báo cáo trong bộ nhớ (giữ 20 báo cáo gần nhất). UI và báo cáo dùng tiếng Anh.
 - Hạn chế đã biết: không phải DAST; không crawl; không auth; không API; có thể false positive (robots, path 200) và false negative (WAF/CDN).
 
 ### 1.2 Vấn đề tồn đọng cần xử lý trước khi thương mại hóa `[FACT – rút ra từ review SRS]`
@@ -162,7 +162,7 @@ Stage 1  CLI + Web UI cục bộ ──►  Stage 2  + Server (API + worker)  �
 ### 4.2 Cấu trúc thư mục gợi ý
 
 ```text
-owasp_scanner/
+websec_scanner/
 ├── core/            # engine: runner, session, rate limiter, scope, redaction
 ├── checks/          # các check (hàm thuần) – gom theo nhóm: config/, api/, active/
 ├── rules/           # dữ liệu khai báo: headers, paths, signatures (YAML/JSON)
@@ -288,7 +288,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-RPT-05** (P1 · Business) Hai mẫu báo cáo: **Executive summary** (không kỹ thuật) và **Technical report** (cho developer).
 - [ ] **FR-RPT-06** (P1 · Pro) Báo cáo **so sánh** hai lần quét: mới / đã sửa / còn tồn tại (dựa trên `fingerprint`).
 - [ ] **FR-RPT-07** (P2 · Enterprise) Báo cáo tuân thủ theo chuẩn (PCI DSS, ISO 27001...) với disclaimer rõ ràng, không thay thế đánh giá của chuyên gia.
-- [x] **FR-RPT-08** (P0 · all) *(xong ở Sprint 9: `output.SCOPE_NOTE`, dùng chung cho console và HTML; SRS AT-57)* Mọi báo cáo có phần **phạm vi & giới hạn** (những gì KHÔNG được kiểm tra) và **không dùng ngôn ngữ đảm bảo tuyệt đối** ("website an toàn").
+- [x] **FR-RPT-08** (P0 · all) *(xong ở Sprint 9: `output.SCOPE_NOTE`, dùng chung cho console và HTML; JSON có trường `disclaimer` từ v1.10.0 (`schema_version` 1.5); SRS AT-57)* Mọi báo cáo có phần **phạm vi & giới hạn** (những gì KHÔNG được kiểm tra) và **không dùng ngôn ngữ đảm bảo tuyệt đối** ("website an toàn").
 
 ### E4. CLI và tích hợp CI/CD
 
@@ -298,7 +298,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-CI-02** (P0 · Pro) `--baseline FILE`: chỉ tính lỗi **mới** so với baseline (theo `fingerprint`) để không chặn pipeline vì nợ cũ.
   Phụ thuộc: FR-MODEL-01, FR-MODEL-02.
 - [x] **FR-CI-03** (P0 · all) *(xong ở Sprint 5: `examples/ci/`, AT-46; chưa chạy trên CI thật)* Template CI/CD: GitHub Actions, GitLab CI, Azure DevOps, Jenkins (trong `examples/ci/`), kèm hướng dẫn upload SARIF/artefact.
-- [x] **FR-CI-04** (P0 · Pro) *(xong ở Sprint 9: `Dockerfile` 2 giai đoạn, user không phải root, job CI `docker` build+smoke-test; sửa luôn Jenkinsfile dùng source archive thay vì `git+apt-get`; SRS AT-59. Chưa publish lên registry nào — `[CONFIRM]` mục 11 roadmap Phase B)* Image Docker chính thức chạy được CLI (`docker run ... scan https://...`), user không phải root.
+- [x] **FR-CI-04** (P0 · Pro) *(xong ở Sprint 9: `Dockerfile` 2 giai đoạn, user không phải root, job CI `docker` build+smoke-test; sửa luôn Jenkinsfile dùng source archive thay vì `git+apt-get`. Publish lên `ghcr.io/hkbach/websec-scanner` thêm ở v1.10.0 theo yêu cầu chủ sản phẩm 2026-09-30 (job `docker-publish`, chỉ chạy khi push tag `v*`); SRS AT-59. Còn việc thủ công của admin: đặt visibility package công khai, xem README mục Docker)* Image Docker chính thức chạy được CLI (`docker run ... scan https://...`), user không phải root.
 - [ ] **FR-CI-05** (P1 · Pro) `--targets-file FILE` và nhiều `target` trong một lần chạy, gộp báo cáo; giới hạn tuần tự/song song có kiểm soát.
 - [ ] **FR-CI-06** (P1 · Pro) File cấu hình (`scanner.yaml`): target, exclusion, rate limit, auth profile, ngưỡng fail, đường dẫn báo cáo; tham số CLI ghi đè cấu hình.
 - [x] **FR-CI-10** (P0 · all) *(xong ở Sprint 5: mặc định kho OS cho cả hai đường, `--ca-bundle`; SRS FR-CLI-06, AT-42)* `--ca-bundle PATH` (và biến môi trường `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE` được tôn trọng) cho **cả** HTTP session và kiểm tra TLS (`ssl.create_default_context(cafile=...)`). Gỡ blocker **B1** `[FACT – quan sát trên máy dev ngày 2026-09-23; đính chính 2026-09-30: thành phần chặn TLS là Avast Web/Mail Shield chạy trên máy, không phải proxy mạng; SRS mục 10]`: `requests` tin kho `certifi`, còn nhóm TLS tin kho chứng chỉ của hệ điều hành. Sau proxy có TLS inspection, `requests` từ chối **mọi** site HTTPS nên baseline thất bại; nhóm TLS vẫn qua vì kho OS tin CA của proxy. Kết quả: 1 lỗi "Could not fetch", 0 finding, exit code `0`.

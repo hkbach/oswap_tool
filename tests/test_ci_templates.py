@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from owasp_scanner import __version__, cli
+from websec_scanner import __version__, cli
 
 TEMPLATES = sorted((Path(__file__).resolve().parents[1] / "examples" / "ci").iterdir())
 
 
 def _scan_command(text: str) -> str:
-    start = text.index("python -m owasp_scanner")
+    start = text.index("python -m websec_scanner")
     lines = []
     for line in text[start:].splitlines():
         if lines and "--" not in line:

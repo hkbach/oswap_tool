@@ -11,13 +11,13 @@ Bộ test chạy trên Python 3.12 và 3.14 (Windows), toàn bộ trên `127.0.0
 
 ## Trạng thái xử lý (cập nhật 2026-09-30)
 
-File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. Requirement hiện hành nằm ở `docs/SRS-owasp-scanner.md` v1.2 và `docs/PRODUCT-BACKLOG.md`.
+File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. Requirement hiện hành nằm ở `docs/SRS-websec-scanner.md` v1.2 và `docs/PRODUCT-BACKLOG.md`. *(Đổi tên file ngày 2026-09-30 khi package đổi thành `websec_scanner`; nội dung review bên dưới giữ nguyên tên sản phẩm cũ để đúng bối cảnh lúc đó.)*
 
 | Mục | Trạng thái | Nằm ở đâu |
 |---|---|---|
 | A1–A5 | Đã sửa trong code, đã đưa vào SRS v1.2 | FR-CLI-01, FR-CLI-03, FR-COOKIE-01, FR-EXP-06, FR-REPORT-05; AT-19…AT-23 |
 | A6 | Đã sửa trong code; không đổi hành vi nên không cần FR | — |
-| B1 | Đã làm ở Sprint 5 (v1.5.0). Đính chính 2026-09-30: thành phần chặn TLS là Avast Web/Mail Shield trên máy dev, không phải proxy mạng TECHVIFY | SRS FR-CLI-06, mục 10; backlog FR-CI-10, FR-DET-16 |
+| B1 | Đã làm ở Sprint 5 (v1.5.0). Đính chính 2026-09-30: thành phần chặn TLS là Avast Web/Mail Shield trên máy dev, không phải proxy mạng công ty | SRS FR-CLI-06, mục 10; backlog FR-CI-10, FR-DET-16 |
 | B2 | Đã làm ở Sprint 5 (v1.5.0): exit code `3` | SRS FR-CLI-04, 7.3 |
 | B3 | Đã làm ở Sprint 3b (FIX-09 + D4) | SRS FR-CLI-05, FR-REDIR-01, NFR-SEC-05 |
 | B4 | Đã làm ở Sprint 3b (FIX-10 + D5) | SRS FR-HDR-01, FR-HDR-11, mục 6.2 |
@@ -40,7 +40,7 @@ File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. R
 
 | # | Vấn đề | Tác động | Đề xuất |
 |---|---|---|---|
-| B1 | **Hai kho chứng chỉ khác nhau.** `requests` dùng `certifi`, còn TLS check dùng kho chứng chỉ của hệ điều hành. Trên mạng có TLS inspection (quan sát ngày 2026-09-23; *đính chính 2026-09-30:* thành phần chặn TLS là Avast Web/Mail Shield chạy trên máy dev, không phải mạng TECHVIFY), `requests` từ chối **mọi** site HTTPS, trong khi `ssl` chấp nhận. | Tool không quét được target HTTPS nào trong mạng công ty. Báo cáo chỉ có 1 lỗi "Could not fetch", 0 finding, exit `0`. Rủi ro ở mục 10 đang đánh giá thấp vấn đề này. | Thống nhất dùng một kho chứng chỉ: (a) thêm tuỳ chọn `--ca-bundle PATH` dùng chung cho cả `requests` và `ssl`; hoặc (b) dùng kho chứng chỉ của hệ điều hành cho `requests` (thư viện `truststore` cần Python ≥ 3.10, xung đột với NFR-PORT-01 ≥ 3.9). |
+| B1 | **Hai kho chứng chỉ khác nhau.** `requests` dùng `certifi`, còn TLS check dùng kho chứng chỉ của hệ điều hành. Trên mạng có TLS inspection (quan sát ngày 2026-09-23; *đính chính 2026-09-30:* thành phần chặn TLS là Avast Web/Mail Shield chạy trên máy dev, không phải mạng công ty), `requests` từ chối **mọi** site HTTPS, trong khi `ssl` chấp nhận. | Tool không quét được target HTTPS nào trong mạng công ty. Báo cáo chỉ có 1 lỗi "Could not fetch", 0 finding, exit `0`. Rủi ro ở mục 10 đang đánh giá thấp vấn đề này. | Thống nhất dùng một kho chứng chỉ: (a) thêm tuỳ chọn `--ca-bundle PATH` dùng chung cho cả `requests` và `ssl`; hoặc (b) dùng kho chứng chỉ của hệ điều hành cho `requests` (thư viện `truststore` cần Python ≥ 3.10, xung đột với NFR-PORT-01 ≥ 3.9). |
 | B2 | **Exit code `0` khi quét không hoàn tất.** Theo đúng FR-CLI-04, target không kết nối được (DNS sai, server sập, hoặc B1) vẫn trả `0`. | Pipeline CI sẽ "xanh" dù không quét được gì. | Thêm exit code `3` = "quét không hoàn tất" (baseline thất bại hoặc có check lỗi). Đây là thay đổi hợp đồng CLI nên cần chủ SRS duyệt. |
 | B3 | FR-REDIR-01 ghi "chỉ chạy khi đã xác nhận TLS hoạt động", nhưng mã luôn chạy redirect check cho target `https://`. | Nhỏ: có thể báo `TLS-NO-HTTPS-REDIRECT` cho site mà TLS đang hỏng. | Chọn một trong hai: bỏ điều kiện trong SRS, hoặc thêm điều kiện vào mã. |
 | B4 | FR-HDR-01 xét `https` theo URL gốc, không theo URL cuối sau redirect. | Nhỏ: target `https://` bị redirect về `http://` vẫn bị yêu cầu HSTS trên response HTTP. | Làm rõ "baseline request" là URL gốc hay URL cuối. |
@@ -49,7 +49,7 @@ File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. R
 
 ## C. Ghi nhận nhỏ, không chặn
 
-- `USER_AGENT` vẫn ghi `TECHVIFY-OWASP-Scanner/1.0` trong khi phiên bản là 1.1.0.
+- `USER_AGENT` vẫn ghi hậu tố phiên bản cố định `/1.0` trong khi phiên bản thật là 1.1.0.
 - `--json PATH` không tự tạo thư mục cha nếu chưa có.
 - Màu ANSI có thể không hiển thị đúng trên console Windows đời cũ (liên quan NFR-PORT-01). Windows Terminal hiển thị bình thường.
 - README ghi "sửa 6 vấn đề", SRS mục 0 ghi 8 (2 điểm chênh là thay đổi chỉ trong tài liệu).

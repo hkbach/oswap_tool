@@ -12,8 +12,8 @@ import pytest
 import requests
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import __version__, cli, output, rule_loader, web
-from owasp_scanner.models import SCHEMA_VERSION
+from websec_scanner import __version__, cli, output, rule_loader, web
+from websec_scanner.models import SCHEMA_VERSION
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "docs" / "report.schema.json"
 WEB_ONLY_FIELDS = set(web.WEB_ONLY_FIELDS)
@@ -27,7 +27,7 @@ def validator():
 
 
 def test_schema_version_matches_the_schema_file(validator):
-    assert validator.schema["properties"]["schema_version"]["const"] == SCHEMA_VERSION == "1.4"
+    assert validator.schema["properties"]["schema_version"]["const"] == SCHEMA_VERSION == "1.5"
 
 
 def test_cli_json_report_matches_schema(validator, http_server, tmp_path):

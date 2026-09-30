@@ -7,8 +7,8 @@ import json
 import pytest
 from conftest import QuietHandler
 
-from owasp_scanner import cli, http_utils, rule_loader
-from owasp_scanner.checks import exposure
+from websec_scanner import cli, http_utils, rule_loader
+from websec_scanner.checks import exposure
 
 GENERIC_HTML = b"<!DOCTYPE html><html><head><title>Welcome</title></head><body>Hello a=1</body></html>"
 

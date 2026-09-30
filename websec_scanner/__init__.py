@@ -1,4 +1,4 @@
-"""OWASP-aligned non-intrusive web security scanner.
+"""Non-intrusive web security scanner.
 
 A lightweight, non-destructive scanner that checks a website's HTTP
 responses against common OWASP guidance (Secure Headers Project,
@@ -7,4 +7,4 @@ attack payloads. Intended for use ONLY on systems you own or have
 explicit written authorization to test.
 """
 
-__version__ = "1.8.0"
+__version__ = "1.11.0"

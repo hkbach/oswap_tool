@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from conftest import QuietHandler
 
-from owasp_scanner import cli, http_utils, soft404
-from owasp_scanner.checks import exposure
+from websec_scanner import cli, http_utils, soft404
+from websec_scanner.checks import exposure
 
 ENV = b"APP_ENV=prod\nDB_PASSWORD=fake\n"
 LISTING = b"<html><head><title>Index of /images</title></head><body><h1>Index of /images</h1></body></html>"
@@ -109,7 +109,7 @@ def test_run_scan_builds_the_profile_once(http_server):
 
     class H(QuietHandler):
         def do_GET(self):
-            if "owasp-scanner-probe" in self.path:
+            if "websec-scanner-probe" in self.path:
                 probes.append(self.path)
             self.send(404)
 

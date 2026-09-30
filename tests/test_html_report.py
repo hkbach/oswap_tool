@@ -1,11 +1,11 @@
-"""Tests for the standalone HTML report (owasp_scanner.html_report)."""
+"""Tests for the standalone HTML report (websec_scanner.html_report)."""
 
 from __future__ import annotations
 
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import catalog, cli, output
-from owasp_scanner.html_report import render_html
+from websec_scanner import catalog, cli, output
+from websec_scanner.html_report import render_html
 
 
 def _report(**overrides):
@@ -50,7 +50,7 @@ def _report(**overrides):
 def test_report_is_standalone_english_html():
     html = render_html(_report())
     assert html.startswith("<!doctype html>") and '<html lang="en">' in html
-    assert "OWASP Non-intrusive Scan Report" in html and "https://t.example/" in html
+    assert "Non-intrusive Web Security Scan Report" in html and "https://t.example/" in html
     assert "<script" not in html and "http://" not in html.replace("https://t.example/", "")
     assert "No findings at or above the --fail-on high threshold" in html
 

@@ -6,6 +6,7 @@ name: ci
 on:
   push:
     branches: [main, "feat/**"]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -77,19 +78,38 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - run: docker build -t owasp-scanner:ci .
-      - run: docker run --rm owasp-scanner:ci --help
-      - run: docker run --rm owasp-scanner:ci --list-checks
+      - run: docker build -t websec-scanner:ci .
+      - run: docker run --rm websec-scanner:ci --help
+      - run: docker run --rm websec-scanner:ci --list-checks
       - name: Refuses to run as root
         run: |
-          uid=$(docker run --rm --entrypoint id owasp-scanner:ci -u)
+          uid=$(docker run --rm --entrypoint id websec-scanner:ci -u)
           test "$uid" -ne 0
       - name: Scan a mock server over --network host
         run: |
           python3 tests/mock_server.py 8899 &
           sleep 1
-          docker run --rm --network host owasp-scanner:ci \
+          docker run --rm --network host websec-scanner:ci \
             http://127.0.0.1:8899 --yes --no-color --fail-on none
+
+  docker-publish:
+    # FR-CI-04: publish the image the "docker" job above already built and smoke-tested,
+    # only for a release tag (v*), to ghcr.io. Uses this run's own GITHUB_TOKEN
+    # (job-scoped packages: write below), not a repository secret anyone has to configure.
+    needs: docker
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/hkbach/websec-scanner
+    steps:
+      - uses: actions/checkout@v7
+      - run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - run: docker build -t "$IMAGE:${{ github.ref_name }}" -t "$IMAGE:latest" .
+      - run: docker push "$IMAGE:${{ github.ref_name }}"
+      - run: docker push "$IMAGE:latest"
 
   secrets:
     runs-on: ubuntu-24.04

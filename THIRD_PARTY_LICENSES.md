@@ -12,7 +12,7 @@ No package below is copyleft in a way that would require releasing this project'
 without extra obligations beyond keeping the package's own license notice with it (standard
 practice; not itself embedded in this repository), **except** `certifi`, flagged below.
 
-## Runtime (shipped to anyone who installs `owasp-scanner`)
+## Runtime (shipped to anyone who installs `websec-scanner`)
 
 Declared in `pyproject.toml` `[project.dependencies]`.
 
@@ -54,7 +54,7 @@ used, unmodified dependency in this project.
 
 ## Data and rule files
 
-`owasp_scanner/rules/sensitive_paths.json` and `owasp_scanner/rules/tls_interceptors.json`
+`websec_scanner/rules/sensitive_paths.json` and `websec_scanner/rules/tls_interceptors.json`
 are written for this project; they do not reproduce a third-party signature database.
 
 ## Checking again

@@ -1,4 +1,4 @@
-"""Tests for the local web UI server (owasp_scanner.web)."""
+"""Tests for the local web UI server (websec_scanner.web)."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ import pytest
 import requests
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import catalog, output, web
-from owasp_scanner.models import ScanResult
+from websec_scanner import catalog, output, web
+from websec_scanner.models import ScanResult
 
 
 @pytest.fixture
@@ -65,8 +65,8 @@ def test_scan_result_links_to_downloadable_html_report(ui, http_server):
     assert resp.status_code == 200
     assert resp.headers["Content-Type"].startswith("text/html")
     disposition = resp.headers["Content-Disposition"]
-    assert disposition.startswith('attachment; filename="owasp-scan-127.0.0.1_') and disposition.endswith('.html"')
-    assert "OWASP Non-intrusive Scan Report" in resp.text
+    assert disposition.startswith('attachment; filename="websec-scan-127.0.0.1_') and disposition.endswith('.html"')
+    assert "Non-intrusive Web Security Scan Report" in resp.text
     assert "EXPOSURE-ENV" in resp.text
 
 
@@ -269,7 +269,7 @@ def test_valid_query_token_sets_a_cookie_used_by_later_same_origin_requests(toke
     first = session.get(token_ui + "/?token=right-token", timeout=5)
     assert first.status_code == 200
     set_cookie = first.headers["Set-Cookie"]
-    assert "owasp_scanner_token=right-token" in set_cookie
+    assert "websec_scanner_token=right-token" in set_cookie
     assert "HttpOnly" in set_cookie and "SameSite=Strict" in set_cookie
     # No header, no query string this time: the cookie alone must be enough.
     assert session.get(token_ui + "/app.js", timeout=5).status_code == 200
@@ -297,7 +297,7 @@ def test_remote_bind_without_allow_remote_refuses_to_start(capsys, monkeypatch):
 
 
 def test_web_ui_headers_pass_the_scanners_own_check(ui):
-    from owasp_scanner.checks import headers as headers_check
+    from websec_scanner.checks import headers as headers_check
 
     resp = requests.get(ui + "/", timeout=5)
     found = headers_check.check_security_headers(ui + "/", dict(resp.headers), is_https=False)

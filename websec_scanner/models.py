@@ -12,7 +12,7 @@ from . import __version__
 # report shape: minor for added fields, major for removed/renamed fields or changed meaning.
 # History: "1.0" = unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0;
 # 1.2 adds final_url and redirect_chain; 1.3 adds gate.
-SCHEMA_VERSION = "1.4"
+SCHEMA_VERSION = "1.5"
 
 
 class Severity(str, Enum):
@@ -93,7 +93,7 @@ class ScanResult:
     errors: list = field(default_factory=list)
     scan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     scanner_version: str = __version__
-    # Version of the rule set in owasp_scanner/rules/ that produced this result.
+    # Version of the rule set in websec_scanner/rules/ that produced this result.
     rules_version: str = field(default_factory=lambda: _rules_version())
     # True once the baseline GET succeeded; False means the scan is incomplete (exit code 3).
     baseline_fetched: bool = False

@@ -8,9 +8,9 @@ import pytest
 from conftest import QuietHandler
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import catalog, cli, rule_loader
-from owasp_scanner.checks import cookies, headers
-from owasp_scanner.models import Finding, Severity
+from websec_scanner import catalog, cli, rule_loader
+from websec_scanner.checks import cookies, headers
+from websec_scanner.models import Finding, Severity
 
 FINGERPRINT = re.compile(r"^[0-9a-f]{32}$")
 

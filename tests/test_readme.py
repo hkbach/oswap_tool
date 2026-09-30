@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_readme_at_range_matches_the_srs():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    srs = (ROOT / "docs" / "SRS-owasp-scanner.md").read_text(encoding="utf-8")
+    srs = (ROOT / "docs" / "SRS-websec-scanner.md").read_text(encoding="utf-8")
 
     stated = re.search(r"acceptance scenarios AT-01 to AT-(\d+)", readme)
     assert stated, "README must say which AT- range the test suite covers"
@@ -28,6 +28,8 @@ def _workflow_required_checks() -> set[str]:
     jobs_section = workflow[workflow.index("\njobs:\n") :]  # "on:"/"push:" also match at 2 spaces
     jobs = set(re.findall(r"^  ([a-z-]+):$", jobs_section, flags=re.MULTILINE))
     jobs.discard("test")  # fans out into one check per matrix entry, not its own check
+    jobs.discard("docker-publish")  # tag-push only (if:); would never run on a PR, so must
+    # not be a required check -- a required check that never runs blocks merging forever.
     matrix = re.findall(r'\{ os: ([\w.-]+), python: "([\d.]+)" \}', workflow)
     assert matrix, "could not find the test job's matrix entries"
     return jobs | {f"test ({os}, {python})" for os, python in matrix}

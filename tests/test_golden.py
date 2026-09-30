@@ -22,7 +22,7 @@ import pytest
 from conftest import _start
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import __version__, cli
+from websec_scanner import __version__, cli
 
 GOLDEN = Path(__file__).resolve().parent / "golden"
 FORMATS = ("json", "sarif", "html")

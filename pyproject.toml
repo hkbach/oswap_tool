@@ -3,9 +3,9 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "owasp-scanner"
+name = "websec-scanner"
 dynamic = ["version"]
-description = "OWASP-aligned non-intrusive web security configuration scanner (CLI + local web UI)"
+description = "Non-intrusive web security configuration scanner (CLI + local web UI)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -22,17 +22,17 @@ dev = [
 ]
 
 [project.scripts]
-owasp-scanner = "owasp_scanner.cli:main"
-owasp-scanner-web = "owasp_scanner.web:main"
+websec-scanner = "websec_scanner.cli:main"
+websec-scanner-web = "websec_scanner.web:main"
 
 [tool.setuptools.dynamic]
-version = { attr = "owasp_scanner.__version__" }
+version = { attr = "websec_scanner.__version__" }
 
 [tool.setuptools.packages.find]
-include = ["owasp_scanner*"]
+include = ["websec_scanner*"]
 
 [tool.setuptools.package-data]
-owasp_scanner = ["static/*", "rules/*.json"]
+websec_scanner = ["static/*", "rules/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

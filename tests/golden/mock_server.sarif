@@ -5,7 +5,7 @@
     {
       "tool": {
         "driver": {
-          "name": "OWASP-Aligned Non-intrusive Web Security Scanner",
+          "name": "Non-intrusive Web Security Scanner",
           "version": "<VERSION>",
           "informationUri": "https://github.com/hkbach/oswap_tool",
           "rules": [
@@ -336,7 +336,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "CRITICAL",
@@ -361,7 +361,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "CRITICAL",
@@ -386,7 +386,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "HIGH",
@@ -411,7 +411,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "MEDIUM",
@@ -436,7 +436,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "MEDIUM",
@@ -461,7 +461,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "MEDIUM",
@@ -486,7 +486,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "MEDIUM",
@@ -511,7 +511,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "LOW",
@@ -536,7 +536,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "LOW",
@@ -561,7 +561,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "INFO",
@@ -586,7 +586,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "INFO",
@@ -611,7 +611,7 @@
             }
           ],
           "partialFingerprints": {
-            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+            "websecScannerFingerprint/v1": "<FINGERPRINT>"
           },
           "properties": {
             "severity": "INFO",
@@ -624,7 +624,7 @@
         "target": "http://127.0.0.1:<PORT>/",
         "final_url": "http://127.0.0.1:<PORT>/",
         "scan_id": "<SCAN_ID>",
-        "schema_version": "1.4",
+        "schema_version": "1.5",
         "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1",
         "scan_groups": [
           "headers",

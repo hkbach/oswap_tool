@@ -11,7 +11,7 @@ from __future__ import annotations
 from ..http_utils import safe_get
 from ..models import Finding, Severity
 
-_TEST_ORIGIN = "https://owasp-scanner-cors-test.invalid"
+_TEST_ORIGIN = "https://websec-scanner-cors-test.invalid"
 
 
 def check_cors(session, url: str) -> list[Finding]:

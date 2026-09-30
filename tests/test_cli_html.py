@@ -9,8 +9,8 @@ import requests
 from mock_server import Handler as MockHandler
 from test_redact import COOKIE_SECRET, SecretHandler
 
-from owasp_scanner import cli, output, web
-from owasp_scanner.html_report import render_html
+from websec_scanner import cli, output, web
+from websec_scanner.html_report import render_html
 
 
 def test_cli_html_is_render_html_of_the_json_report(http_server, tmp_path):

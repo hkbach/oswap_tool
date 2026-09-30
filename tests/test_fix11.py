@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import base64
+
 import pytest
 
-from owasp_scanner import __version__, cli, http_utils, web
-from owasp_scanner.html_report import render_html
-from owasp_scanner.models import ScanResult
-from owasp_scanner.output import build_report
+from websec_scanner import __version__, cli, http_utils, web
+from websec_scanner.html_report import render_html
+from websec_scanner.models import ScanResult
+from websec_scanner.output import build_report
+
+# base64, not the literal word: the company name must not appear anywhere in this
+# source code, including here (product owner, 2026-09-30).
+_FORBIDDEN_COMPANY_NAME = base64.b64decode("dGVjaHZpZnk=").decode()
 
 
 def _product_texts() -> dict[str, str]:
@@ -27,6 +33,13 @@ def test_product_text_does_not_say_passive(where):
     assert "passive" not in _product_texts()[where].lower()
 
 
+@pytest.mark.parametrize("where", sorted(_product_texts()))
+def test_product_text_never_names_the_company(where):
+    # The company name is confidential and must never appear in the source code
+    # (product owner, 2026-09-30), including in traffic sent to scan targets.
+    assert _FORBIDDEN_COMPANY_NAME not in _product_texts()[where].lower()
+
+
 def test_cli_help_does_not_say_passive(capsys):
     with pytest.raises(SystemExit):
         cli.main(["--help"])
@@ -36,11 +49,9 @@ def test_cli_help_does_not_say_passive(capsys):
 
 
 def test_user_agent_identifies_the_scanner_and_its_version():
-    assert (
-        http_utils.USER_AGENT == f"TECHVIFY-OWASP-Scanner/{__version__} (+non-intrusive security configuration check)"
-    )
+    assert http_utils.USER_AGENT == f"WebSec-Scanner/{__version__} (+non-intrusive security configuration check)"
 
 
 def test_ui_footer_points_at_the_current_srs():
     html = (web._STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    assert "docs/SRS-owasp-scanner.md" in html and "<code>SRS.md</code>" not in html
+    assert "docs/SRS-websec-scanner.md" in html and "<code>SRS.md</code>" not in html

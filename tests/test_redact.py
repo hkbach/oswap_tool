@@ -9,7 +9,7 @@ import pytest
 import requests
 from conftest import QuietHandler
 
-from owasp_scanner import cli, output, redact, web
+from websec_scanner import cli, output, redact, web
 
 COOKIE_SECRET = "SeSsIoN-VaLuE-0123456789"  # noqa: S105 - fake value the leak tests search for
 TOKEN_SECRET = "Tok3n-Secret-9876"  # noqa: S105 - fake value the leak tests search for
@@ -108,7 +108,7 @@ def test_show_secrets_is_explicit_and_warns(http_server, tmp_path, capsys):
 
 
 def test_html_report_warns_when_secrets_are_shown(http_server):
-    from owasp_scanner.html_report import render_html
+    from websec_scanner.html_report import render_html
 
     result = cli.run_scan(_target(http_server))
     assert "not redacted" not in render_html(output.build_report(result))

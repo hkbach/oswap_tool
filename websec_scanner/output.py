@@ -41,6 +41,7 @@ def build_report(result: ScanResult, *, show_secrets: bool = False, fail_on: str
     ``show_secrets=True`` (``--show-secrets``); the Web UI never does.
     """
     report = result.to_dict()
+    report["disclaimer"] = SCOPE_NOTE  # FR-RPT-08: scope & limitations, in the JSON report too
     report["secrets_redacted"] = not show_secrets
     report["gate"] = {
         "fail_on": fail_on,

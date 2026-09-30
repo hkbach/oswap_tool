@@ -7,10 +7,10 @@ from contextlib import redirect_stdout
 
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import cli, output
-from owasp_scanner.html_report import render_html
-from owasp_scanner.report import print_report
-from owasp_scanner.sarif import to_sarif
+from websec_scanner import cli, output
+from websec_scanner.html_report import render_html
+from websec_scanner.report import print_report
+from websec_scanner.sarif import to_sarif
 
 # Multi-word so legitimate technical terms ("Secure cookie attribute", "Transport Layer
 # Security") never trip this check; CLAUDE.md names the Vietnamese phrasing, these are its
@@ -73,3 +73,8 @@ def _captured_console(report: dict) -> str:
     with redirect_stdout(buffer):
         print_report(report, use_color=False)
     return buffer.getvalue()
+
+
+def test_json_report_has_a_disclaimer_field():
+    report = output.build_report(cli.run_scan("http://127.0.0.1:1", timeout=1))
+    assert report["disclaimer"] == output.SCOPE_NOTE

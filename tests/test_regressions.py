@@ -8,8 +8,8 @@ import pytest
 from conftest import QuietHandler
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import cli
-from owasp_scanner.checks import exposure
+from websec_scanner import cli
+from websec_scanner.checks import exposure
 
 
 def ids(findings):

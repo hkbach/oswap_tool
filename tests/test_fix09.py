@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from conftest import QuietHandler, skip_if_tls_is_intercepted
 
-from owasp_scanner import cli, http_utils
-from owasp_scanner.checks import redirect_check
+from websec_scanner import cli, http_utils
+from websec_scanner.checks import redirect_check
 
 
 def ids(findings):

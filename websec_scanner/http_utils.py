@@ -25,7 +25,7 @@ from . import __version__
 
 DEFAULT_TIMEOUT = 10  # seconds
 # NFR-SEC-03: identify the scanner and its version so target logs/WAFs can attribute the traffic.
-USER_AGENT = f"TECHVIFY-OWASP-Scanner/{__version__} (+non-intrusive security configuration check)"
+USER_AGENT = f"WebSec-Scanner/{__version__} (+non-intrusive security configuration check)"
 MAX_REDIRECTS = 10
 # Checks that look at file contents never need more than the first few KiB, and an exposed
 # multi-GB dump must not be downloaded (NFR-PERF-04, and it keeps target data off this machine).
