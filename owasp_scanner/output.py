@@ -133,7 +133,7 @@ def owasp_groups(report: dict) -> list[dict]:
     findings = report["findings"]
     by_category: dict[str, list[int]] = {}
     for i, f in enumerate(findings):
-        by_category.setdefault(f["owasp_category"], []).append(i)
+        by_category.setdefault(f.get("owasp_category") or "Unclassified", []).append(i)
     return [
         {"id": title.split(" - ", 1)[0], "title": title, "counts": _counts(findings, indexes), "findings": indexes}
         for title, indexes in sorted(by_category.items())

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import cli, output
+from owasp_scanner import catalog, cli, output
 from owasp_scanner.html_report import render_html
 
 
@@ -13,6 +13,7 @@ def _report(**overrides):
         "target": "https://t.example/",
         "started_at": "2026-09-30T01:00:00.000000Z",
         "finished_at": "2026-09-30T01:00:05.000000Z",
+        "scan_groups": list(catalog.GROUP_IDS),
         "checks_run": ["security-headers", "cookies"],
         "summary": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 1, "LOW": 0, "INFO": 1},
         "findings": [
@@ -41,6 +42,8 @@ def _report(**overrides):
         "gate": {"fail_on": "high", "failed": False, "incomplete": False},
     }
     report.update(overrides)
+    for finding in report["findings"]:  # build_report() output always names the producing check
+        finding.setdefault("check", "security-headers")
     return report
 
 
@@ -123,3 +126,23 @@ def test_classification_and_only_https_references_are_rendered():
     assert "CWE-693" in html and "confidence high" in html
     assert '<a href="https://owasp.org/x">' in html
     assert "javascript:" not in html
+
+
+def test_report_groups_findings_by_test_target_and_summarises_owasp():
+    html = render_html(_report(scan_groups=["headers", "cookies", "tls"]))
+    for title in ("Summary by test target", "Summary by OWASP Top 10", "Findings by test target"):
+        assert title in html
+    # every group has a section; unselected ones say so and are listed as not tested
+    for group in catalog.CHECK_GROUPS:
+        assert f'id="group-{group.id}"' in html
+    assert '<span class="status issues">2 issues</span>' in html
+    assert '<span class="status clean">No issues</span>' in html  # cookies ran, nothing found
+    assert '<span class="status not-run">Not run</span>' in html  # tls selected, did not run
+    assert "<tr><th>Not selected (not tested)</th><td>HTTP to HTTPS redirect, CORS" in html
+    # the OWASP table links to findings that exist in the page
+    assert '<a href="#finding-0">HDR-INFO-SERVER</a>' in html and 'id="finding-0"' in html
+    assert html.index("Missing CSP") < html.index("Server header")  # severity order inside a group
+
+
+def test_full_scan_report_has_no_not_selected_row():
+    assert "Not selected (not tested)" not in render_html(_report())

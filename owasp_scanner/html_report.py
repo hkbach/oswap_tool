@@ -12,9 +12,17 @@ from html import escape
 
 from . import __version__
 from .models import SEVERITY_ORDER
-from .output import gate_message
+from .output import gate_message, group_findings, owasp_groups
 
 _SEVERITIES = SEVERITY_ORDER
+_STATUS_TEXT = {"clean": "No issues", "not-run": "Not run", "not-selected": "Not selected"}
+# Shown in a group without findings (same wording as the web UI).
+_STATUS_NOTE = {
+    "clean": "Checked; nothing to report.",
+    "not-run": "Selected, but it could not run for this target (for example TLS on a plain-HTTP site, "
+    "or the home page could not be fetched).",
+    "not-selected": "Not selected for this scan: not tested.",
+}
 
 _CSS = """
 :root { --text:#1c2127; --muted:#5c6670; --border:#dde1e6; --bg:#f6f7f9; --surface:#fff;
@@ -53,6 +61,23 @@ ul.errors { margin:0; padding-left:20px; overflow-wrap:anywhere; }
 footer { margin-top:32px; font-size:12px; color:var(--muted); }
 .sev-CRITICAL { --c:var(--critical); } .sev-HIGH { --c:var(--high); } .sev-MEDIUM { --c:var(--medium); }
 .sev-LOW { --c:var(--low); } .sev-INFO { --c:var(--info); }
+table.groups { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); }
+table.groups th, table.groups td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--border);
+  vertical-align:top; }
+table.groups th { color:var(--muted); font-weight:500; font-size:12px; }
+table.groups td.n { text-align:center; width:64px; }
+table.groups td.n.zero { color:var(--muted); }
+table.groups a { color:inherit; }
+.status { display:inline-block; font-size:11px; font-weight:700; padding:1px 8px; border-radius:999px;
+  white-space:nowrap; }
+.status.issues { background:var(--fail-bg); color:var(--fail); }
+.status.clean { background:var(--pass-bg); color:var(--pass); }
+.status.not-run { background:var(--warn-bg); color:var(--warn); }
+.status.not-selected { background:var(--bg); color:var(--muted); border:1px solid var(--border); }
+h3.group { font-size:16px; margin:22px 0 4px; } h3.group .status { margin-left:8px; vertical-align:middle; }
+p.group-desc { margin:0 0 10px; }
+.finding h4 { display:inline; font-size:15px; margin:0; }
+.ids a { color:var(--muted); }
 @media print { body { background:#fff; } .card { break-inside:avoid; } }
 """
 
@@ -61,7 +86,7 @@ def _e(value) -> str:
     return escape(str(value if value is not None else ""), quote=True)
 
 
-def _finding(f: dict) -> str:
+def _finding(f: dict, index: int) -> str:
     sev = f.get("severity", "INFO")
     sev_class = sev if sev in _SEVERITIES else "INFO"
     rows = []
@@ -87,18 +112,68 @@ def _finding(f: dict) -> str:
         if part
     )
     return (
-        f'<section class="card finding sev-{sev_class}">'
-        f'<span class="badge">{_e(sev)}</span><h3>{_e(f.get("title"))}</h3>'
+        f'<section class="card finding sev-{sev_class}" id="finding-{index}">'
+        f'<span class="badge">{_e(sev)}</span><h4>{_e(f.get("title"))}</h4>'
         f'<p class="muted">{classification}</p>'
         f"<p>{_e(f.get('description'))}</p>{details}</section>"
     )
 
 
-def render_html(report: dict) -> str:
-    """Render a ScanResult.to_dict()-shaped report as a standalone HTML document."""
-    counts = report.get("summary", {})
+def _count_cells(counts: dict) -> str:
+    return "".join(
+        f'<td class="n{"" if counts.get(sev) else " zero"}">{int(counts.get(sev, 0))}</td>' for sev in _SEVERITIES
+    )
+
+
+def _status(status: str, count: int) -> str:
+    text = f"{count} issue{'' if count == 1 else 's'}" if status == "issues" else _STATUS_TEXT[status]
+    return f'<span class="status {status}">{text}</span>'
+
+
+def _groups_sections(report: dict, groups: list[dict]) -> str:
+    """Summary tables by test target and by OWASP Top 10, then the findings by test target."""
+    findings = report["findings"]
     rank = {sev: i for i, sev in enumerate(_SEVERITIES)}
-    findings = sorted(report.get("findings", []), key=lambda f: rank.get(f.get("severity"), len(rank)))
+    head = "".join(f"<th>{sev}</th>" for sev in _SEVERITIES)
+    target_rows = "".join(
+        f'<tr><td><a href="#group-{g["id"]}">{_e(g["title"])}</a></td>'
+        f"<td>{_status(g['status'], len(g['findings']))}</td>{_count_cells(g['counts'])}</tr>"
+        for g in groups
+    )
+    owasp_rows = (
+        "".join(
+            f'<tr><td>{_e(g["title"])}</td>{_count_cells(g["counts"])}<td class="ids">'
+            + ", ".join(f'<a href="#finding-{i}">{_e(findings[i].get("id"))}</a>' for i in g["findings"])
+            + "</td></tr>"
+            for g in owasp_groups(report)
+        )
+        or f'<tr><td colspan="{len(_SEVERITIES) + 2}" class="muted">No findings.</td></tr>'
+    )
+
+    sections = []
+    for g in groups:
+        ordered = sorted(g["findings"], key=lambda i: rank.get(findings[i].get("severity"), len(rank)))
+        body = "".join(_finding(findings[i], i) for i in ordered)
+        if not body:
+            body = f'<p class="muted">{_e(_STATUS_NOTE[g["status"]])}</p>'
+        sections.append(
+            f'<h3 class="group" id="group-{g["id"]}">{_e(g["title"])}{_status(g["status"], len(g["findings"]))}</h3>'
+            f'<p class="muted group-desc">{_e(g["description"])}</p>{body}'
+        )
+    return (
+        "<h2>Summary by test target</h2>"
+        f'<table class="groups"><tr><th>Test target</th><th>Status</th>{head}</tr>{target_rows}</table>'
+        "<h2>Summary by OWASP Top 10</h2>"
+        f'<table class="groups"><tr><th>OWASP category</th>{head}<th>Findings</th></tr>{owasp_rows}</table>'
+        "<h2>Findings by test target</h2>" + "".join(sections)
+    )
+
+
+def render_html(report: dict) -> str:
+    """Render a report dict of output.build_report() as a standalone HTML document."""
+    counts = report.get("summary", {})
+    findings = report.get("findings", [])
+    groups = group_findings(report)
     gate_class, gate_text = gate_message(report["gate"])
     secrets_banner = (
         '<p class="gate fail">Secrets are not redacted in this report (--show-secrets). Do not share it.</p>'
@@ -118,7 +193,12 @@ def render_html(report: dict) -> str:
         if errors
         else ""
     )
-    findings_html = "".join(_finding(f) for f in findings) or '<p class="muted">No findings.</p>'
+    findings_html = _groups_sections(report, groups)
+    tested = ", ".join(g["title"] for g in groups if g["status"] != "not-selected")
+    skipped = ", ".join(g["title"] for g in groups if g["status"] == "not-selected")
+    scope_rows = f"<tr><th>Test targets</th><td>{_e(tested)}</td></tr>" + (
+        f"<tr><th>Not selected (not tested)</th><td>{_e(skipped)}</td></tr>" if skipped else ""
+    )
     checks = ", ".join(report.get("checks_run", [])) or "None"
     final_url = report.get("final_url") or ""
     final_row = (
@@ -143,14 +223,13 @@ def render_html(report: dict) -> str:
 <table class="meta">
 <tr><th>Started (UTC)</th><td>{_e(report.get("started_at"))}</td></tr>
 <tr><th>Finished (UTC)</th><td>{_e(report.get("finished_at"))}</td></tr>
-{final_row}<tr><th>Checks run</th><td>{_e(checks)}</td></tr>
+{final_row}{scope_rows}<tr><th>Checks run</th><td>{_e(checks)}</td></tr>
 <tr><th>Total findings</th><td>{len(findings)}</td></tr>
 </table>
 {secrets_banner}<p class="gate {gate_class}">{_e(gate_text)}</p>
 <table class="summary"><tr>{summary_cells}</tr></table>
 </div>
 {errors_html}
-<h2>Findings</h2>
 {findings_html}
 <footer>
 Generated by OWASP-Aligned Non-intrusive Web Security Scanner {_e(__version__)}.

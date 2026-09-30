@@ -226,7 +226,7 @@ function renderFindings() {
         : status === "clean"
           ? "Checked; nothing to report."
           : status === "not-run"
-            ? "Selected, but it could not run for this target (for example TLS on an http:// site, or the home page could not be fetched)."
+            ? "Selected, but it could not run for this target (for example TLS on a plain-HTTP site, or the home page could not be fetched)."
             : "Not selected for this scan: not tested.";
       section.append(el("p", "group-note", note));
     }
