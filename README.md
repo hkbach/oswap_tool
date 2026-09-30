@@ -30,6 +30,8 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
 - [`CLAUDE.md`](./CLAUDE.md) — working rules for this repository.
 - [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema of the `--json`
   report (`schema_version` 1.4).
+- [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md) — license of every
+  runtime and dev dependency, direct and transitive.
 
 ## Authorized use only
 
@@ -366,7 +368,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-49 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-60 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -402,6 +404,7 @@ git diff tests/golden/
 | `test` | `test (ubuntu-24.04, 3.12)`, `test (ubuntu-24.04, 3.14)`, `test (windows-latest, 3.14)` | Offline `pytest` on Ubuntu 24.04 (Python 3.12, the oldest supported, and 3.14) and Windows (3.14). |
 | `min-deps` | `min-deps` | Offline `pytest` on Python 3.12 with the lowest dependency versions `pyproject.toml` allows |
 | `audit` | `audit` | `pip-audit` of the runtime dependencies declared in `pyproject.toml` |
+| `docker` | `docker` | Builds the official image, checks it runs as a non-root user, and scans `tests/mock_server.py` from inside the container over `--network host` |
 | `secrets` | `secrets` | gitleaks over the whole git history, binary checksum verified. The allowlist in `.gitleaks.toml` covers only two fake values used by the redaction tests. |
 
 The workflow has only `contents: read` permission and uses no repository
@@ -421,6 +424,7 @@ Required checks:
 lint
 min-deps
 audit
+docker
 secrets
 test (ubuntu-24.04, 3.12)
 test (ubuntu-24.04, 3.14)
@@ -445,7 +449,7 @@ checks too, or pull requests will wait for a check that no longer runs.
      `1` or more when the team has a second reviewer; `0` still forces every
      change through a pull request and its checks.
    - **Require status checks to pass**. Tick *Require branches to be up to
-     date before merging*, then **Add checks** and add the seven check names
+     date before merging*, then **Add checks** and add the eight check names
      above (choose the GitHub Actions source if asked).
 6. Leave **Bypass list** empty, so the rules also apply to admins.
 7. Click **Create**.
@@ -457,7 +461,7 @@ checks too, or pull requests will wait for a check that no longer runs.
 3. Tick **Require a pull request before merging** (set the number of approvals
    as in option A).
 4. Tick **Require status checks to pass before merging**, tick **Require
-   branches to be up to date before merging**, and search for and add the seven
+   branches to be up to date before merging**, and search for and add the eight
    checks above.
 5. Tick **Do not allow bypassing the above settings**.
 6. Leave *Allow force pushes* and *Allow deletions* unticked. Click **Create**.
@@ -471,7 +475,7 @@ gh api --method PUT repos/hkbach/oswap_tool/branches/main/protection --input - <
   "required_status_checks": {
     "strict": true,
     "contexts": [
-      "lint", "min-deps", "audit", "secrets",
+      "lint", "min-deps", "audit", "docker", "secrets",
       "test (ubuntu-24.04, 3.12)", "test (ubuntu-24.04, 3.14)", "test (windows-latest, 3.14)"
     ]
   },
@@ -485,7 +489,7 @@ EOF
 ```
 
 **Check that it works:** open a pull request to `main`. The merge button must
-stay disabled until all seven checks pass, and a direct `git push` to `main`
+stay disabled until all eight checks pass, and a direct `git push` to `main`
 must be rejected.
 
 Rulesets and branch protection are available for public repositories on all
@@ -519,7 +523,9 @@ owasp_scanner/
 examples/ci/        # CI templates for GitHub Actions, GitLab CI, Azure Pipelines, Jenkins
 tests/              # offline test suite, mock servers, golden files
 docs/               # SRS, backlog, JSON Schema of the report
-Dockerfile           # official CLI image, non-root, not published to a registry yet
+Dockerfile          # official CLI image, non-root, not published to a registry yet
+.dockerignore       # keeps the Docker build context to the package itself
+THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog

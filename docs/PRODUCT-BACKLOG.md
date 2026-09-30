@@ -515,7 +515,7 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 
 ### E22. Tài liệu và tài sản đưa ra thị trường
 
-- [ ] **FR-DOC-01** (P0 · all) *(phạm vi/giới hạn và hướng dẫn CI đã có trong README ở Sprint 5; còn rà lại toàn bộ trước khi phát hành)* README nêu rõ **phạm vi và giới hạn** (không phải DAST toàn diện ở giai đoạn 1; không thay thế pentest), hướng dẫn cài đặt/chạy/CI.
+- [x] **FR-DOC-01** (P0 · all) *(xong ở Sprint 9: rà lại toàn bộ README — link `THIRD_PARTY_LICENSES.md`, mục Docker, số AT cập nhật, danh sách branch protection khớp `ci.yml`; hai test đối chiếu tự động `tests/test_readme.py` chặn README lệch với SRS/`ci.yml` sau này)* README nêu rõ **phạm vi và giới hạn** (không phải DAST toàn diện ở giai đoạn 1; không thay thế pentest), hướng dẫn cài đặt/chạy/CI.
 - [ ] **FR-DOC-02** (P0 · Business) Tài liệu pháp lý cần có (do pháp lý soạn/duyệt `[CONFIRM]`): Điều khoản sử dụng, Chính sách sử dụng chấp nhận được (AUP), Chính sách quyền riêng tư, DPA (nếu xử lý dữ liệu cá nhân), SLA.
 - [ ] **FR-DOC-03** (P1 · Business) Tài liệu bảo mật cho khách (security overview): cách bảo vệ dữ liệu, mã hóa, cách ly, retention, quy trình xử lý sự cố; bộ trả lời bảng câu hỏi bảo mật (security questionnaire) mẫu.
 - [ ] **FR-DOC-04** (P1 · Pro) Tài liệu người dùng: bắt đầu nhanh, danh mục check (mỗi check: mô tả, vì sao quan trọng, cách sửa), FAQ false positive, cách cấu hình auth/exclusion.
