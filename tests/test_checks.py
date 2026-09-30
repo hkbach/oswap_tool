@@ -278,6 +278,21 @@ def test_sensitive_paths_respects_worker_limit(http_server, monkeypatch):
     assert created["max_workers"] == 3
 
 
+def test_unknown_charset_does_not_stop_the_directory_listing_check(http_server):
+    listing = b"<html><title>Index of /x</title><body>Index of /x/</body></html>"
+
+    class H(QuietHandler):
+        def do_GET(self):
+            if self.path in ("/images/", "/uploads/"):
+                charset = "x-bogus" if self.path == "/images/" else "utf-8"
+                self.send(200, listing, {"Content-Type": f"text/html; charset={charset}"})
+            else:
+                self.send(404)
+
+    found = exposure.check_directory_listing(build_session(timeout=2), http_server(H))
+    assert sorted(f.instance_key for f in found) == ["images/", "uploads/"]
+
+
 def test_robots_hints_capped_at_ten(http_server):
     body = "\n".join(f"Disallow: /admin{i}/" for i in range(15)).encode()
 

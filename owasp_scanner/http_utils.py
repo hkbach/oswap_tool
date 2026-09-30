@@ -27,8 +27,10 @@ DEFAULT_TIMEOUT = 10  # seconds
 USER_AGENT = f"TECHVIFY-OWASP-Scanner/{__version__} (+non-intrusive security configuration check)"
 MAX_REDIRECTS = 10
 # Checks that look at file contents never need more than the first few KiB, and an exposed
-# multi-GB dump must not be downloaded (NFR-PERF-02, and it keeps target data off this machine).
+# multi-GB dump must not be downloaded (NFR-PERF-04, and it keeps target data off this machine).
 MAX_BODY_BYTES = 8192
+# robots.txt and sitemap.xml are read as lists of paths, so they get a larger but still bounded cap.
+HINT_FILE_MAX_BYTES = 512 * 1024
 
 
 def _canonical_host(host: str | None) -> str:
@@ -179,4 +181,7 @@ def get_limited(session: requests.Session, url: str, max_bytes: int = MAX_BODY_B
 
 
 def decode_body(resp, body: bytes) -> str:
-    return body.decode(resp.encoding or "utf-8", errors="replace")
+    try:
+        return body.decode(resp.encoding or "utf-8", errors="replace")
+    except LookupError:  # unknown charset in Content-Type, e.g. "x-bogus"
+        return body.decode("utf-8", errors="replace")
