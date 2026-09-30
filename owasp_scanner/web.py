@@ -27,7 +27,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .cli import _normalize_target, run_scan
+from .cli import _ca_bundle, _normalize_target, run_scan
 from .html_report import render_html
 from .output import build_report, gate_failed
 
@@ -158,7 +158,12 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         if not self.server.scan_lock.acquire(blocking=False):
             return self._error(429, "A scan is already running; wait for it to finish")
         try:
-            result = run_scan(target, timeout=self.server.scan_timeout, workers=self.server.scan_workers)
+            result = run_scan(
+                target,
+                timeout=self.server.scan_timeout,
+                workers=self.server.scan_workers,
+                ca_bundle=self.server.scan_ca_bundle,
+            )
         finally:
             self.server.scan_lock.release()
 
@@ -194,12 +199,15 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         )
 
 
-def build_server(host: str = "127.0.0.1", port: int = 8765, timeout: int = 10, workers: int = 5) -> ThreadingHTTPServer:
+def build_server(
+    host: str = "127.0.0.1", port: int = 8765, timeout: int = 10, workers: int = 5, ca_bundle: str | None = None
+) -> ThreadingHTTPServer:
     server = ThreadingHTTPServer((host, port), ScanUIHandler)
     server.loopback_only = _is_loopback(host)
     server.scan_lock = threading.Lock()
     server.scan_timeout = timeout
     server.scan_workers = workers
+    server.scan_ca_bundle = ca_bundle
     server.reports = OrderedDict()
     server.reports_lock = threading.Lock()
     return server
@@ -214,9 +222,15 @@ def main(argv=None) -> int:
     parser.add_argument("--port", type=int, default=8765, help="Port to listen on (default: 8765)")
     parser.add_argument("--timeout", type=int, default=10, help="Per-request timeout in seconds (default: 10)")
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
+    parser.add_argument(
+        "--ca-bundle",
+        metavar="PATH",
+        type=_ca_bundle,
+        help="PEM file of CA certificates to trust instead of the OS store (default: env, else OS store)",
+    )
     args = parser.parse_args(argv)
 
-    server = build_server(args.host, args.port, args.timeout, args.workers)
+    server = build_server(args.host, args.port, args.timeout, args.workers, args.ca_bundle)
     if not server.loopback_only:
         print(
             f"WARNING: listening on {args.host}; anyone who can reach this port can start scans "

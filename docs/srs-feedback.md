@@ -17,7 +17,7 @@ File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. R
 |---|---|---|
 | A1–A5 | Đã sửa trong code, đã đưa vào SRS v1.2 | FR-CLI-01, FR-CLI-03, FR-COOKIE-01, FR-EXP-06, FR-REPORT-05; AT-19…AT-23 |
 | A6 | Đã sửa trong code; không đổi hành vi nên không cần FR | — |
-| B1 | Chuyển thành FR, chưa làm. **Đính chính 2026-09-30:** thành phần chặn TLS là Avast Web/Mail Shield trên máy dev, không phải proxy mạng TECHVIFY | Backlog FR-CI-10, FR-DET-16; SRS mục 10 |
+| B1 | Đã làm ở Sprint 5 (v1.5.0). Đính chính 2026-09-30: thành phần chặn TLS là Avast Web/Mail Shield trên máy dev, không phải proxy mạng TECHVIFY | SRS FR-CLI-06, mục 10; backlog FR-CI-10, FR-DET-16 |
 | B2 | Chờ xác nhận | Backlog FR-CI-01 `[CONFIRM]`; SRS mục 13 |
 | B3 | Đã làm ở Sprint 3b (FIX-09 + D4) | SRS FR-CLI-05, FR-REDIR-01, NFR-SEC-05 |
 | B4 | Đã làm ở Sprint 3b (FIX-10 + D5) | SRS FR-HDR-01, FR-HDR-11, mục 6.2 |

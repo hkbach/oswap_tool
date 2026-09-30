@@ -135,7 +135,7 @@ def test_tls_weak_protocol_and_cipher(monkeypatch, tmp_path):
         "_fetch_raw_cert_and_connection_info",
         lambda h, p, t: (der, "TLSv1", ("RC4-MD5", "TLSv1", 128), None),
     )
-    monkeypatch.setattr(tls_check, "_verify_trust", lambda h, p, t: None)
+    monkeypatch.setattr(tls_check, "_verify_trust", lambda *args: None)
     assert ids(tls_check.check_tls("h", 443)) == ["TLS-WEAK-CIPHER", "TLS-WEAK-PROTOCOL"]
 
 

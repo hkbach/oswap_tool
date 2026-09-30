@@ -209,6 +209,7 @@ Quy ước mã: `FR-<NHÓM>-<SỐ>`. Priority: **M**ust / **S**hould / **C**ould
 | FR-CLI-03 | Nếu GET baseline thất bại (lỗi kết nối/DNS/timeout/TLS), tool PHẢI ghi lỗi vào `errors`, KHÔNG được crash, và vẫn in được báo cáo. **Ngoại lệ:** nếu lỗi xảy ra ở tầng TLS (`requests.exceptions.SSLError`), tool PHẢI vẫn chạy nhóm check TLS (mục 4.5) trên **host:cổng của URL HTTPS bị lỗi** (lấy từ request gây lỗi; sau redirect `http://` → `https://` đó là bước HTTPS, không phải URL nhập vào) trước khi dừng. Lỗi kết nối thông thường không chạy nhóm TLS và báo cáo có 0 finding. | M |
 | FR-CLI-04 | Exit code: `0` nếu không có finding CRITICAL/HIGH; `1` nếu có ít nhất 1 finding CRITICAL hoặc HIGH; `2` nếu người dùng không xác nhận quyền quét. *(Đề xuất thêm exit code `3` đang chờ xác nhận — mục 13.)* | M |
 | FR-CLI-05 | Nhóm check TLS (mục 4.5) chạy trên **URL HTTPS đầu tiên trong chuỗi redirect của baseline**: chính target nếu nhập `https://`, hoặc URL mà target `http://` chuyển tới. Nếu chuỗi redirect không có URL HTTPS nào, KHÔNG chạy nhóm TLS. *(Trước FIX-09: không bao giờ chạy TLS cho target `http://`.)* | M |
+| FR-CLI-06 | **Một kho chứng chỉ cho cả hai đường kết nối (FR-CI-10).** Request HTTP và Bước B của nhóm TLS PHẢI dùng **cùng một** `SSLContext`: nếu có `--ca-bundle PATH` (hoặc biến môi trường `REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE`) thì dùng **đúng file đó thay cho kho mặc định**; nếu không thì dùng **kho chứng chỉ của hệ điều hành**, không dùng `certifi`. File không đọc được hoặc không phải chứng chỉ → lỗi tham số (exit code `2` của argparse). *(Trước v1.5.0: request HTTP tin `certifi`, TLS check tin kho OS — nguyên nhân B1.)* | M |
 
 ### 4.2 Nhóm xác nhận quyền quét (Consent Gate)
 
@@ -266,7 +267,7 @@ Kiểm tra gồm **2 bước kết nối độc lập**, vì một context xác 
 | FR-TLS-05 | Tool PHẢI giải mã chứng chỉ DER từ Bước A bằng `cryptography` để đọc `not_valid_before`/`not_valid_after`. Nếu hiện tại sớm hơn `not_valid_before`, PHẢI tạo finding `TLS-CERT-NOT-YET-VALID`. | CRITICAL | A02:2021 | S |
 | FR-TLS-06 | Nếu hiện tại trễ hơn `not_valid_after`, PHẢI tạo finding `TLS-CERT-EXPIRED`, dựa hoàn toàn vào dữ liệu Bước A. | CRITICAL | A02:2021 | M |
 | FR-TLS-07 | Nếu chứng chỉ còn hiệu lực nhưng còn dưới 30 ngày, PHẢI tạo finding `TLS-CERT-EXPIRING-SOON`. Ngưỡng 30 ngày là hằng số `_CERT_EXPIRY_WARN_DAYS` ở đầu module. | MEDIUM | A02:2021 | S |
-| FR-TLS-08 | Tool PHẢI thực hiện Bước B **chỉ khi** FR-TLS-05 và FR-TLS-06 không tạo finding. Nếu Bước B ném `SSLCertVerificationError`, PHẢI tạo finding `TLS-CERT-NOT-TRUSTED` với thông điệp lỗi gốc (gộp các nguyên nhân: tự ký, thiếu intermediate, sai hostname, CA không được tin cậy). Lỗi kết nối ở Bước B không tạo finding. | CRITICAL | A02:2021 | M |
+| FR-TLS-08 | Tool PHẢI thực hiện Bước B (kết nối xác thực bằng kho chứng chỉ của FR-CLI-06, giống hệt request HTTP) **chỉ khi** FR-TLS-05 và FR-TLS-06 không tạo finding. Nếu Bước B ném `SSLCertVerificationError`, PHẢI tạo finding `TLS-CERT-NOT-TRUSTED` với thông điệp lỗi gốc (gộp các nguyên nhân: tự ký, thiếu intermediate, sai hostname, CA không được tin cậy). Lỗi kết nối ở Bước B không tạo finding. | CRITICAL | A02:2021 | M |
 | FR-TLS-09 | Nếu FR-TLS-05 hoặc FR-TLS-06 đã tạo finding, tool PHẢI bỏ qua Bước B, không tạo thêm `TLS-CERT-NOT-TRUSTED`. | — | — | M |
 | FR-TLS-10 | Nếu không giải mã được chứng chỉ, PHẢI tạo finding `TLS-CERT-PARSE-FAILED` và vẫn chạy Bước B. | INFO | A02:2021 | C |
 | FR-TLS-11 | **Phát hiện TLS bị chặn giữa đường (FR-DET-16).** Nếu issuer của chứng chỉ đọc được ở Bước A chứa một từ khoá trong `rules/tls_interceptors.json` (phần mềm diệt virus có web shield, gateway TLS inspection, proxy debug; không bao giờ là tên CA công khai), tool PHẢI ghi **một cảnh báo** vào `errors` (nêu host:port và issuer) và đặt `confidence` của mọi finding TLS của lần kiểm tra đó là `low`. Đây là cảnh báo, không phải finding. | — | — | S |
@@ -489,7 +490,7 @@ AT-12 kiểm tra đúng tập khoá ở cấp gốc, trong `summary` và trong m
 ### 7.1 Cú pháp
 
 ```
-python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no-color] [--yes] [--show-secrets]
+python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no-color] [--yes] [--ca-bundle PATH] [--show-secrets]
 ```
 
 ### 7.2 Bảng tham số
@@ -502,6 +503,7 @@ python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no
 | `--workers N` | Không | `5` | Số luồng song song khi kiểm tra path nhạy cảm. |
 | `--no-color` | Không | tắt | Tắt mã màu ANSI. |
 | `--yes` / `--i-have-authorization` | Không | tắt | Bỏ qua bước hỏi xác nhận tương tác. |
+| `--ca-bundle PATH` | Không | env `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE`, rồi kho OS | File PEM các CA được tin, thay cho kho mặc định, cho cả request HTTP và TLS check (FR-CLI-06). |
 | `--show-secrets` | Không | tắt | Không che giá trị cookie và tham số URL nhạy cảm (chỉ để debug cục bộ; NFR-SEC-04). |
 
 ### 7.3 Exit code
@@ -515,7 +517,7 @@ python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no
 ### 7.4 Web UI cục bộ
 
 ```
-python -m owasp_scanner.web [--host 127.0.0.1] [--port 8765] [--timeout N] [--workers N]
+python -m owasp_scanner.web [--host 127.0.0.1] [--port 8765] [--timeout N] [--workers N] [--ca-bundle PATH]
 ```
 
 | Tham số | Mặc định | Mô tả |
@@ -524,6 +526,7 @@ python -m owasp_scanner.web [--host 127.0.0.1] [--port 8765] [--timeout N] [--wo
 | `--port` | `8765` | Cổng lắng nghe. |
 | `--timeout` | `10` | Timeout mỗi request khi quét. |
 | `--workers` | `5` | Số luồng cho check path nhạy cảm. |
+| `--ca-bundle` | env, rồi kho OS | Như `--ca-bundle` của CLI (FR-CLI-06). |
 
 | Endpoint | Mô tả |
 |---|---|
@@ -598,6 +601,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-39 | Kiểm tra nội dung file nhạy cảm (FR-DET-01) | Mỗi path: nội dung thật; trang HTML chung, rỗng, text, JSON; site trả 200 cho mọi path có và không có `.env` thật; path 200 sai nội dung | Nội dung thật khớp chữ ký; response chung không khớp; site catch-all không có finding nhưng `.env` thật vẫn được báo; 200 sai nội dung không báo; evidence không chứa nội dung file; rules thiếu/sai chữ ký bị từ chối | `test_signature_matches_real_content`, `test_signature_rejects_generic_responses`, `test_catch_all_html_site_has_no_exposure_findings`, `test_real_file_on_a_catch_all_site_is_still_found`, `test_200_with_the_wrong_content_is_not_reported`, `test_evidence_never_contains_the_file_content`, `test_invalid_signatures_are_rejected` |
 | AT-40 | Soft-404 theo vân tay (FR-DET-02) | Site trả cùng một trang (có `Contact:` và `Index of /`) cho mọi path; trang in lại path được hỏi; mọi path redirect về `/login`; `.env` và `/images/` thật trên các site đó; site 404 bình thường | Không có finding từ trang chung; file và listing thật vẫn được báo; site 404 có profile rỗng; path probe ngẫu nhiên mỗi lần; `run_scan` chỉ gửi 2 probe | `test_catch_all_page_that_happens_to_match_a_signature_is_ignored`, `test_catch_all_page_echoing_the_path_is_recognised`, `test_redirect_to_login_is_recognised`, `test_real_files_are_still_found_on_soft_404_sites`, `test_real_file_behind_login_redirects_is_still_found`, `test_normal_404_site_has_an_empty_profile`, `test_probe_paths_are_random_per_scan`, `test_run_scan_builds_the_profile_once` |
 | AT-41 | Confidence và TLS bị chặn (FR-DET-03, FR-DET-16) | Finding lộ file có nội dung khớp; robots/sitemap; chứng chỉ có issuer "Avast Web/Mail Shield Root"/"Zscaler …"; chứng chỉ thường; issuer của CA công khai | Lộ file `high`, gợi ý `low`; issuer phần mềm chặn → 1 cảnh báo trong `errors` và finding TLS `low`, kể cả qua `run_scan`; chứng chỉ thường không cảnh báo; tên CA công khai (GlobalSign, Let's Encrypt, DigiCert, Sectigo) không bị nhận nhầm | `test_content_verified_exposure_findings_are_high_confidence`, `test_hint_only_findings_stay_low_confidence`, `test_scanned_exposure_finding_is_high_confidence`, `test_interceptor_issuers_are_recognised`, `test_intercepted_tls_is_flagged_and_findings_are_low_confidence`, `test_run_scan_reports_the_interception_warning`, `test_normal_certificate_gives_no_warning` |
+| AT-42 | Một kho chứng chỉ (FR-CI-10) | Mặc định; `--ca-bundle` với CA tự tạo; biến môi trường; một request HTTPS qua session; file bundle thiếu/sai | Mặc định là kho OS (khác `certifi`); bundle thay kho mặc định; biến môi trường được dùng; `certifi` không bị nạp thêm vào context dùng chung; không có bundle → baseline lỗi + `TLS-CERT-NOT-TRUSTED`; có bundle → check HTTP chạy đủ, không `NOT-TRUSTED`; bundle hỏng → exit `2` | `test_default_trust_is_the_os_store_not_certifi`, `test_ca_bundle_replaces_the_default_store`, `test_env_variables_are_honoured`, `test_requests_never_adds_certifi_to_the_shared_context`, `test_without_ca_bundle_a_private_ca_is_not_trusted`, `test_ca_bundle_trusts_a_private_ca_for_http_and_tls`, `test_cli_ca_bundle_option`, `test_cli_rejects_a_missing_or_invalid_bundle` |
 
 ---
 
@@ -607,7 +611,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 - **Chỉ quét trang chủ** cho phần lớn check; không crawl, có thể bỏ sót cấu hình khác nhau giữa các route.
 - **False positive:** robots.txt/sitemap.xml (path "nghe nhạy cảm" chưa chắc tồn tại hay lộ). Path nhạy cảm đã kiểm tra nội dung (FR-EXP-04), nhưng chữ ký là heuristic: một file khác vô tình khớp mẫu (ví dụ file text bắt đầu bằng số cho `.svn/entries`) vẫn có thể bị báo, và một file thật có định dạng lạ có thể bị bỏ sót.
 - **False negative:** target dùng CDN/WAF có thể chặn hoặc trả response khác cho User-Agent của scanner. TLS chỉ xét giao thức/cipher **được thương lượng**, không dò các phiên bản cũ server còn bật (FR-DET-04).
-- **Hai kho chứng chỉ khác nhau (B1):** request HTTP (`requests`) tin kho `certifi`, còn nhóm TLS (`ssl.create_default_context()`) tin kho chứng chỉ của hệ điều hành. Nếu có thành phần chặn và ký lại TLS mà CA của nó chỉ nằm trong kho hệ điều hành, `requests` từ chối **mọi** site HTTPS: baseline thất bại ở tầng TLS, nhóm TLS chạy nhưng không báo lỗi, nên báo cáo chỉ có 1 dòng lỗi "Could not fetch", 0 finding, exit code `0`. *Đính chính 2026-09-30:* trên máy dev đã quan sát (2026-09-23), thành phần đó là **phần mềm diệt virus Avast Web/Mail Shield chạy trên chính máy**, không phải proxy mạng như ghi ở bản trước. Sẽ xử lý ở FR-CI-10 (`--ca-bundle` dùng chung).
+- **Kho chứng chỉ (B1, đã xử lý ở v1.5.0):** trước v1.5.0, request HTTP tin `certifi` còn TLS check tin kho hệ điều hành, nên sau một thành phần chặn TLS mà CA chỉ có trong kho OS (trên máy dev là Avast Web/Mail Shield), mọi site HTTPS bị báo "Could not fetch" với 0 finding và exit code `0`. Từ v1.5.0 cả hai dùng cùng một kho (FR-CLI-06): mặc định là kho OS, hoặc `--ca-bundle`. Hạn chế còn lại: nếu kho OS thiếu một CA mà `certifi` có, site đó sẽ bị coi là không tin cậy; khi đó dùng `--ca-bundle`.
 - **TLS bị phần mềm cục bộ chặn giữa đường:** trên máy có phần mềm ký lại TLS (ví dụ Avast Web/Mail Shield, kể cả với `127.0.0.1`), nhóm TLS đo **kết nối tới phần mềm đó** chứ không phải tới server: giao thức và cipher là do phần mềm chọn (có thể bỏ sót `TLS-WEAK-PROTOCOL`/`TLS-WEAK-CIPHER`), chứng chỉ là bản do nó ký lại. Kết quả TLS trên các máy như vậy không đáng tin; nên quét từ máy hoặc CI không có TLS inspection. Tool tự cảnh báo khi issuer thuộc danh sách phần mềm/proxy chặn TLS đã biết (FR-TLS-11); phần mềm không có trong danh sách sẽ không được nhận ra. Test cần bắt tay TLS được tin cậy sẽ tự skip khi phát hiện việc chặn này.
 - **Che secret dựa trên quy tắc:** chỉ che giá trị cookie và tham số URL có tên thuộc danh sách ở NFR-SEC-04. Secret nằm ở chỗ khác (ví dụ trong nội dung CSP hay header `Server`) sẽ không bị che. Báo cáo vẫn chứa URL, header và cấu hình của target nên chỉ chia sẻ trong phạm vi được phép.
 - **TLS mở 2 kết nối** (Bước A và B); chấp nhận được vì chỉ là bắt tay, không lặp.

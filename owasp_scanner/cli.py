@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import ssl
 import sys
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
@@ -85,6 +86,15 @@ def _run_check(result: ScanResult, name: str, check, *args, **kwargs) -> None:
         result.errors.append(f"Check '{name}' failed: {exc!r}")
 
 
+def _ca_bundle(value: str) -> str:
+    """argparse type for --ca-bundle: an existing file that OpenSSL can load."""
+    try:
+        ssl.create_default_context(cafile=value)
+    except (OSError, ssl.SSLError) as exc:
+        raise argparse.ArgumentTypeError(f"cannot load CA bundle {value!r}: {exc}") from exc
+    return value
+
+
 def _confirm_authorization(assume_yes: bool) -> bool:
     print(CONSENT_BANNER)
     if assume_yes:
@@ -96,16 +106,25 @@ def _confirm_authorization(assume_yes: bool) -> bool:
     return answer.strip().lower() in ("y", "yes")
 
 
-def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
+def run_scan(base_url: str, timeout: int = 10, workers: int = 5, ca_bundle: str | None = None) -> ScanResult:
     parsed = urlparse(base_url)
     hostname = parsed.hostname or base_url
 
     result = ScanResult(target=base_url, started_at=_utc_timestamp())
-    session = build_session(timeout=timeout, scope_host=hostname)
+    session = build_session(timeout=timeout, scope_host=hostname, ca_bundle=ca_bundle)
 
     def run_tls(url: str) -> None:
         tls_host, tls_port = _host_port(url)
-        _run_check(result, "tls", tls_check.check_tls, tls_host, port=tls_port, timeout=timeout, warnings=result.errors)
+        _run_check(
+            result,
+            "tls",
+            tls_check.check_tls,
+            tls_host,
+            port=tls_port,
+            timeout=timeout,
+            warnings=result.errors,
+            trust=session.trust_context,  # same trust decision as the HTTP requests (FR-CI-10)
+        )
 
     # 1. Baseline fetch of the target page
     resp, err, tls_error_url = _fetch_baseline(session, base_url)
@@ -187,6 +206,13 @@ def main(argv=None) -> int:
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors in CLI output")
     parser.add_argument(
+        "--ca-bundle",
+        metavar="PATH",
+        type=_ca_bundle,
+        help="PEM file of CA certificates to trust instead of the OS store, for HTTP and TLS checks "
+        "(default: REQUESTS_CA_BUNDLE / SSL_CERT_FILE, else the OS store)",
+    )
+    parser.add_argument(
         "--show-secrets",
         action="store_true",
         help="Do not redact cookie values and sensitive URL parameters (local debugging only).",
@@ -207,7 +233,7 @@ def main(argv=None) -> int:
     target = _normalize_target(args.target)
     print(f"Scanning {target if args.show_secrets else redact(target)} ...\n")
 
-    result = run_scan(target, timeout=args.timeout, workers=args.workers)
+    result = run_scan(target, timeout=args.timeout, workers=args.workers, ca_bundle=args.ca_bundle)
     if args.show_secrets:
         print(
             "WARNING: --show-secrets is set: cookie values and sensitive URL parameters are NOT redacted. "
