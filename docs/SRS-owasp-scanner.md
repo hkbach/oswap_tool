@@ -150,6 +150,8 @@ owasp_scanner/
 ├── catalog.py         # Bảng cwe/confidence/references theo finding id; enrich() + fingerprint
 ├── output.py          # build_report() + gate_failed(): một bộ xử lý đầu ra cho CLI và Web UI
 ├── redact.py          # redact(): che giá trị cookie và tham số URL nhạy cảm (D2)
+├── rule_loader.py     # Nạp + kiểm tra rules/*.json; rules_version
+├── rules/             # Bảng khai báo dạng JSON: sensitive_paths.json (bảng 4.8.1)
 ├── http_utils.py      # HTTP session dùng chung: timeout, User-Agent, retry có kiểm soát, phạm vi redirect (ScopedSession)
 ├── models.py          # Kiểu dữ liệu: Severity, Finding, ScanResult
 ├── report.py          # In báo cáo CLI (màu ANSI) + ghi file JSON
@@ -289,7 +291,7 @@ Chỉ gửi 1 GET với header `Origin` giả lập, rõ ràng là request kiể
 
 | ID | Yêu cầu | Priority |
 |---|---|---|
-| FR-EXP-01 | Tool PHẢI duy trì danh sách path nhạy cảm kèm `Finding.id` và severity (bảng 4.8.1), dạng dữ liệu khai báo, không hard-code logic riêng cho từng path (trừ `security.txt`). | M |
+| FR-EXP-01 | Tool PHẢI duy trì danh sách path nhạy cảm kèm `Finding.id` và severity (bảng 4.8.1) trong file dữ liệu **`owasp_scanner/rules/sensitive_paths.json`**, được kiểm tra khi nạp (thiếu trường, severity lạ, id hoặc path trùng, path tuyệt đối → lỗi rõ ràng). Thêm path chỉ cần sửa file này, không sửa code. Trường `version` của file là `rules_version` trong báo cáo. | M |
 | FR-EXP-02 | Trước khi kiểm tra danh sách, tool PHẢI gửi 1 request probe tới path chắc chắn không tồn tại (`owasp-scanner-nonexistent-probe-4f8c2b/`) để phát hiện soft-404. | M |
 | FR-EXP-03 | Nếu phát hiện soft-404 (probe trả 200), tool KHÔNG được tạo finding lộ file chỉ dựa trên mã 200. | M |
 | FR-EXP-04 | Nếu không có soft-404 và path trả HTTP 200, PHẢI tạo finding với id và severity đã khai báo, category `A01:2021 - Broken Access Control`, evidence gồm mã trạng thái và URL đầy đủ. | M |
@@ -361,6 +363,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | NFR-PERF-01 | Hiệu năng | Mỗi request PHẢI có timeout cấu hình được (mặc định 10 giây). |
 | NFR-PERF-02 | Hiệu năng | Số luồng song song khi kiểm tra path nhạy cảm PHẢI giới hạn qua `--workers` (mặc định 5). |
 | NFR-PERF-03 | Hiệu năng | Không retry khi target trả 4xx/5xx; chỉ retry ở tầng kết nối/đọc, tối đa 1 lần. |
+| NFR-PERF-04 | Hiệu năng | Mọi request kiểm tra path nhạy cảm, probe soft-404 và directory listing PHẢI đọc **tối đa 8 KiB đầu** của body (`http_utils.MAX_BODY_BYTES`) rồi đóng kết nối, để một file dump hay backup lớn bị lộ không bị tải về (giảm tải cho target và không kéo dữ liệu của target về máy quét). |
 | NFR-REL-01 | Độ tin cậy | Một check thất bại không được làm crash cả lần quét (FR-REPORT-05). |
 | NFR-REL-02 | Độ tin cậy | Tool PHẢI xử lý được target không phản hồi ở baseline mà không ném exception ra ngoài. |
 | NFR-USA-01 | Khả dụng | Output CLI có phân cách rõ ràng, bảng tổng hợp theo severity ở đầu, rồi mới tới chi tiết. |
@@ -414,7 +417,7 @@ class ScanResult:
     errors: list[str] = field(default_factory=list)
     scan_id: str             # UUID4, mới cho mỗi lần quét
     scanner_version: str     # owasp_scanner.__version__
-    rules_version: str       # bằng scanner_version cho tới khi rule nằm trong file dữ liệu (FR-DET-01)
+    rules_version: str       # trường "version" của owasp_scanner/rules/sensitive_paths.json
 ```
 
 **Quy tắc bắt buộc:**
@@ -588,6 +591,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-35 | Redirect check luôn chạy (FIX-09) | `http://` không redirect; `http://` → HTTPS cert tự ký/hết hạn/được tin; `https://` với probe redirect sang `https://` không tồn tại, sang HTTP cùng host, sang host lạ | Lần lượt: `TLS-NO-HTTPS-REDIRECT`; `TLS-CERT-NOT-TRUSTED`/`TLS-CERT-EXPIRED` trên đúng cổng HTTPS và không có finding redirect; TLS chạy trên URL cuối; không finding; có finding; không finding + 1 lỗi phạm vi | `test_http_target_without_redirect_is_reported`, `test_http_target_redirected_to_https_with_bad_cert_reports_the_cert_not_the_redirect`, `test_http_target_redirected_to_expired_https_reports_expiry`, `test_http_target_redirected_to_trusted_https_scans_the_https_page` (skip khi TLS bị chặn), `test_probe_counts_a_redirect_to_https_without_loading_it`, `test_probe_follows_http_hops_in_scope`, `test_probe_stops_at_out_of_scope_redirect` |
 | AT-36 | Header xét trên response cuối (FIX-10) | Redirect `/` → `/home`; không redirect; baseline lỗi; `http://` → HTTPS được tin; đổi host với/không có HSTS ở host gốc | `final_url`/`redirect_chain` đúng và được che secret; không đòi HSTS khi response cuối là HTTP, có đòi khi là HTTPS; `HDR-HSTS-MISSING-ON-START-HOST` mức LOW khi host gốc thiếu HSTS; không áp dụng khi cùng host hoặc response cuối là HTTP; host gốc không kết nối được → lỗi, không finding | `test_report_records_final_url_and_redirect_chain`, `test_no_redirect_gives_empty_chain`, `test_failed_baseline_has_no_final_url`, `test_final_url_and_chain_are_redacted`, `test_hsts_is_not_required_when_the_final_response_is_http`, `test_http_target_redirected_to_https_is_held_to_hsts` (skip khi TLS bị chặn), `test_start_host_without_hsts_is_reported`, `test_start_host_with_hsts_is_fine`, `test_start_host_check_does_not_apply`, `test_unreachable_start_host_is_an_error_not_a_finding` |
 | AT-37 | Text sản phẩm không còn "passive" (FIX-11) | Banner CLI, `--help` của CLI và Web UI, file tĩnh của UI, báo cáo HTML, User-Agent | Không chứa "passive"; User-Agent đúng mẫu NFR-SEC-03 với `__version__`; footer UI trỏ tới `docs/SRS-owasp-scanner.md` | `test_product_text_does_not_say_passive`, `test_cli_help_does_not_say_passive`, `test_user_agent_identifies_the_scanner_and_its_version`, `test_ui_footer_points_at_the_current_srs` |
+| AT-38 | Rules dạng dữ liệu và đọc có giới hạn | Bảng path từ `rules/sensitive_paths.json`; file rules sai định dạng; thêm path chỉ bằng file rules; server trả body 20 MB cho mọi path | Bảng khớp 4.8.1; `rules_version` = version của file; lỗi nạp nêu rõ nguyên nhân; path mới được quét; mỗi response chỉ đọc ≤ 8 KiB, check xong trong vài giây | `test_sensitive_paths_come_from_the_rules_file`, `test_report_carries_the_rules_version`, `test_invalid_rules_are_rejected_with_a_clear_message`, `test_a_new_path_needs_only_a_rules_change`, `test_get_limited_reads_at_most_the_cap`, `test_sensitive_path_check_does_not_download_huge_files` |
 
 ---
 

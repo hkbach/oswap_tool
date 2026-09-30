@@ -90,8 +90,8 @@ class ScanResult:
     errors: list = field(default_factory=list)
     scan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     scanner_version: str = __version__
-    # Version of the built-in check tables; follows the scanner until rules move to data files (FR-DET-01).
-    rules_version: str = __version__
+    # Version of the rule set in owasp_scanner/rules/ that produced this result.
+    rules_version: str = field(default_factory=lambda: _rules_version())
 
     def add(self, finding: Finding) -> None:
         self.findings.append(finding)
@@ -122,3 +122,9 @@ class ScanResult:
             ],
             "errors": self.errors,
         }
+
+
+def _rules_version() -> str:
+    from .rule_loader import rules_version  # late import: rule_loader imports this module
+
+    return rules_version()

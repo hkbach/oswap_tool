@@ -24,6 +24,9 @@ DEFAULT_TIMEOUT = 10  # seconds
 # NFR-SEC-03: identify the scanner and its version so target logs/WAFs can attribute the traffic.
 USER_AGENT = f"TECHVIFY-OWASP-Scanner/{__version__} (+non-intrusive security configuration check)"
 MAX_REDIRECTS = 10
+# Checks that look at file contents never need more than the first few KiB, and an exposed
+# multi-GB dump must not be downloaded (NFR-PERF-02, and it keeps target data off this machine).
+MAX_BODY_BYTES = 8192
 
 
 def _canonical_host(host: str | None) -> str:
@@ -107,3 +110,29 @@ def safe_get(session: requests.Session, url: str, **kwargs):
         return resp, None
     except requests.exceptions.RequestException as exc:
         return None, str(exc)
+
+
+def get_limited(session: requests.Session, url: str, max_bytes: int = MAX_BODY_BYTES, **kwargs):
+    """GET that reads at most ``max_bytes`` of the body and then closes the connection.
+
+    Returns ``(response, body_bytes, error_str)``; never raises on network errors.
+    """
+    try:
+        resp = session.get(url, stream=True, **kwargs)
+    except requests.exceptions.RequestException as exc:
+        return None, b"", str(exc)
+    body = b""
+    try:
+        for chunk in resp.iter_content(chunk_size=4096):
+            body += chunk
+            if len(body) >= max_bytes:
+                break
+    except requests.exceptions.RequestException as exc:
+        return None, b"", str(exc)
+    finally:
+        resp.close()
+    return resp, body[:max_bytes], None
+
+
+def decode_body(resp, body: bytes) -> str:
+    return body.decode(resp.encoding or "utf-8", errors="replace")

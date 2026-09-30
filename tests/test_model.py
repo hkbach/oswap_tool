@@ -8,8 +8,8 @@ import pytest
 from conftest import QuietHandler
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import catalog, cli
-from owasp_scanner.checks import cookies, exposure, headers
+from owasp_scanner import catalog, cli, rule_loader
+from owasp_scanner.checks import cookies, headers
 from owasp_scanner.models import Finding, Severity
 
 FINGERPRINT = re.compile(r"^[0-9a-f]{32}$")
@@ -51,7 +51,7 @@ def all_known_ids() -> set[str]:
     ids = {f"HDR-{h.upper()}-MISSING" for h in headers._REQUIRED_HEADERS}
     ids |= {f"HDR-INFO-{h.upper()}" for h in headers._INFO_LEAK_HEADERS}
     ids |= {"HDR-XFO-WEAK", "HDR-CSP-UNSAFE", "HDR-XXP-LEGACY", "COOKIE-FLAGS-MISSING"}
-    ids |= {fid for fid, _, _ in exposure._SENSITIVE_PATHS.values()}
+    ids |= {rule.id for rule in rule_loader.load_sensitive_paths().paths}
     ids |= {"EXPOSURE-DIR-LISTING", "EXPOSURE-ROBOTS-HINTS", "EXPOSURE-SITEMAP-HINTS"}
     ids |= {"CORS-WILDCARD-WITH-CREDENTIALS", "CORS-REFLECTS-ARBITRARY-ORIGIN", "CORS-WILDCARD"}
     ids |= {

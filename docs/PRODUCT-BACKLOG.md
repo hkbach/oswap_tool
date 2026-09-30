@@ -255,7 +255,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-DET-11** (P1 · Pro) Header bổ sung: `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`, `Cross-Origin-Embedder-Policy`, `Cache-Control`/`Pragma` cho trang có cookie phiên, `Clear-Site-Data` (info).
 - [ ] **FR-DET-12** (P1 · Pro) Mixed content và tài nguyên bên thứ ba: `http://` resource trong trang HTTPS; `<script>`/`<link>` bên ngoài thiếu Subresource Integrity (SRI).
 - [ ] **FR-DET-13** (P1 · Pro) Mở rộng danh sách path nhạy cảm (data-driven): file backup/dump, `.htpasswd`, `composer.json`, `package.json`, `.npmrc`, `.aws/credentials`, `WEB-INF/web.xml`, `actuator/*`, `swagger`/`openapi` công khai, admin panel phổ biến, `crossdomain.xml`. Mỗi path có chữ ký nội dung nếu có thể.
-  AC: thêm path chỉ cần sửa file rules, không sửa logic.
+  AC: thêm path chỉ cần sửa file rules, không sửa logic. *(Cơ chế đã có ở Sprint 4: `rules/sensitive_paths.json` + `rule_loader.py`; còn phần mở rộng danh sách.)*
 - [ ] **FR-DET-14** (P2 · Business) Phát hiện banner/thông báo lỗi chi tiết (stack trace, đường dẫn tệp, SQL error) trong response lỗi thông thường (404/500) mà không cố ý gây lỗi bằng payload.
 - [ ] **FR-DET-15** (P2 · Business) Email/DNS hygiene cho domain (SPF, DKIM gợi ý, DMARC, CAA, DNSSEC – chỉ đọc bản ghi công khai).
 

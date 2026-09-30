@@ -1,0 +1,23 @@
+{
+  "version": "2026.09.30.1",
+  "description": "Sensitive paths probed by the sensitive-paths check (SRS table 4.8.1). Adding a path is a data change: add an entry here with a stable, unique id.",
+  "paths": [
+    { "path": ".git/HEAD", "id": "EXPOSURE-GIT-HEAD", "severity": "CRITICAL", "title": "Exposed .git repository metadata" },
+    { "path": ".git/config", "id": "EXPOSURE-GIT-CONFIG", "severity": "CRITICAL", "title": "Exposed .git repository config" },
+    { "path": ".env", "id": "EXPOSURE-ENV", "severity": "CRITICAL", "title": "Exposed .env file (often contains secrets)" },
+    { "path": ".env.local", "id": "EXPOSURE-ENV-LOCAL", "severity": "CRITICAL", "title": "Exposed .env.local file" },
+    { "path": ".env.production", "id": "EXPOSURE-ENV-PRODUCTION", "severity": "CRITICAL", "title": "Exposed .env.production file" },
+    { "path": "wp-config.php.bak", "id": "EXPOSURE-WP-CONFIG-BAK", "severity": "CRITICAL", "title": "Exposed WordPress config backup" },
+    { "path": "config.php.bak", "id": "EXPOSURE-CONFIG-PHP-BAK", "severity": "CRITICAL", "title": "Exposed config backup file" },
+    { "path": "web.config", "id": "EXPOSURE-WEB-CONFIG", "severity": "MEDIUM", "title": "Exposed IIS web.config" },
+    { "path": ".svn/entries", "id": "EXPOSURE-SVN-ENTRIES", "severity": "HIGH", "title": "Exposed Subversion metadata" },
+    { "path": ".DS_Store", "id": "EXPOSURE-DS-STORE", "severity": "LOW", "title": "Exposed macOS .DS_Store (can leak file listing)" },
+    { "path": "docker-compose.yml", "id": "EXPOSURE-DOCKER-COMPOSE", "severity": "HIGH", "title": "Exposed docker-compose.yml" },
+    { "path": "backup.zip", "id": "EXPOSURE-BACKUP-ZIP", "severity": "HIGH", "title": "Exposed backup archive" },
+    { "path": "backup.sql", "id": "EXPOSURE-BACKUP-SQL", "severity": "CRITICAL", "title": "Exposed SQL database dump" },
+    { "path": "phpinfo.php", "id": "EXPOSURE-PHPINFO", "severity": "MEDIUM", "title": "Exposed phpinfo() output" },
+    { "path": "server-status", "id": "EXPOSURE-SERVER-STATUS", "severity": "MEDIUM", "title": "Exposed Apache mod_status page" },
+    { "path": "id_rsa", "id": "EXPOSURE-ID-RSA", "severity": "CRITICAL", "title": "Exposed private SSH key" },
+    { "path": ".well-known/security.txt", "id": "EXPOSURE-SECURITY-TXT", "severity": "INFO", "title": "security.txt present (informational, not a finding)" }
+  ]
+}

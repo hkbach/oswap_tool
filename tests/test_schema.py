@@ -12,7 +12,7 @@ import pytest
 import requests
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import __version__, cli, output, web
+from owasp_scanner import __version__, cli, output, rule_loader, web
 from owasp_scanner.models import SCHEMA_VERSION
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "docs" / "report.schema.json"
@@ -37,7 +37,7 @@ def test_cli_json_report_matches_schema(validator, http_server, tmp_path):
     validator.validate(data)
     assert data["schema_version"] == SCHEMA_VERSION
     assert data["scanner_version"] == __version__
-    assert data["rules_version"] == __version__
+    assert data["rules_version"] == rule_loader.rules_version()
     assert uuid.UUID(data["scan_id"]).version == 4
 
 

@@ -13,35 +13,12 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin, urlparse
 
-from ..http_utils import safe_get
+from ..http_utils import decode_body, get_limited, safe_get
 from ..models import Finding, Severity
+from ..rule_loader import load_sensitive_paths
 
-# path -> (stable finding id, severity, short label)
-# The id is declared explicitly (not derived from the path string) so it
-# stays stable and collision-free regardless of how a path is spelled.
-_SENSITIVE_PATHS = {
-    ".git/HEAD": ("EXPOSURE-GIT-HEAD", Severity.CRITICAL, "Exposed .git repository metadata"),
-    ".git/config": ("EXPOSURE-GIT-CONFIG", Severity.CRITICAL, "Exposed .git repository config"),
-    ".env": ("EXPOSURE-ENV", Severity.CRITICAL, "Exposed .env file (often contains secrets)"),
-    ".env.local": ("EXPOSURE-ENV-LOCAL", Severity.CRITICAL, "Exposed .env.local file"),
-    ".env.production": ("EXPOSURE-ENV-PRODUCTION", Severity.CRITICAL, "Exposed .env.production file"),
-    "wp-config.php.bak": ("EXPOSURE-WP-CONFIG-BAK", Severity.CRITICAL, "Exposed WordPress config backup"),
-    "config.php.bak": ("EXPOSURE-CONFIG-PHP-BAK", Severity.CRITICAL, "Exposed config backup file"),
-    "web.config": ("EXPOSURE-WEB-CONFIG", Severity.MEDIUM, "Exposed IIS web.config"),
-    ".svn/entries": ("EXPOSURE-SVN-ENTRIES", Severity.HIGH, "Exposed Subversion metadata"),
-    ".DS_Store": ("EXPOSURE-DS-STORE", Severity.LOW, "Exposed macOS .DS_Store (can leak file listing)"),
-    "docker-compose.yml": ("EXPOSURE-DOCKER-COMPOSE", Severity.HIGH, "Exposed docker-compose.yml"),
-    "backup.zip": ("EXPOSURE-BACKUP-ZIP", Severity.HIGH, "Exposed backup archive"),
-    "backup.sql": ("EXPOSURE-BACKUP-SQL", Severity.CRITICAL, "Exposed SQL database dump"),
-    "phpinfo.php": ("EXPOSURE-PHPINFO", Severity.MEDIUM, "Exposed phpinfo() output"),
-    "server-status": ("EXPOSURE-SERVER-STATUS", Severity.MEDIUM, "Exposed Apache mod_status page"),
-    "id_rsa": ("EXPOSURE-ID-RSA", Severity.CRITICAL, "Exposed private SSH key"),
-    ".well-known/security.txt": (
-        "EXPOSURE-SECURITY-TXT",
-        Severity.INFO,
-        "security.txt present (informational, not a finding)",
-    ),
-}
+# The sensitive-path table (path, stable id, severity, title) lives in rules/sensitive_paths.json
+# (FR-EXP-01, NFR-MAINT-02); ids are declared there, never derived from the path string.
 
 _SENSITIVE_KEYWORDS = ("admin", "backup", "config", "internal", "private", "secret", "staging", "test")
 
@@ -54,21 +31,24 @@ def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[
     # Baseline: request a clearly-nonexistent path to detect "soft 404" behavior
     # (custom error pages that return HTTP 200), so we don't report false positives.
     probe_url = urljoin(base_url, "owasp-scanner-nonexistent-probe-4f8c2b/")
-    probe_resp, _ = safe_get(session, probe_url)
+    probe_resp, _, _ = get_limited(session, probe_url)
     soft_404 = probe_resp is not None and probe_resp.status_code == 200
+
+    rules = {rule.path: rule for rule in load_sensitive_paths().paths}
 
     def fetch(path):
         url = urljoin(base_url, path)
-        resp, err = safe_get(session, url)
+        resp, body, err = get_limited(session, url)
         return path, url, resp, err
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = [pool.submit(fetch, p) for p in _SENSITIVE_PATHS]
+        futures = [pool.submit(fetch, p) for p in rules]
         for fut in as_completed(futures):
             path, url, resp, err = fut.result()
             if err or resp is None:
                 continue
-            finding_id, severity, label = _SENSITIVE_PATHS[path]
+            rule = rules[path]
+            finding_id, severity, label = rule.id, rule.severity, rule.title
             if path == ".well-known/security.txt":
                 if resp.status_code == 200 and not soft_404:
                     findings.append(
@@ -110,10 +90,10 @@ def check_directory_listing(session, base_url: str, paths: list[str] | None = No
 
     for path in paths:
         url = urljoin(base_url, path)
-        resp, err = safe_get(session, url)
+        resp, raw, err = get_limited(session, url)
         if err or resp is None or resp.status_code != 200:
             continue
-        body = resp.text[:2000] if resp.text else ""
+        body = decode_body(resp, raw)[:2000]
         if any(marker in body for marker in _LISTING_MARKERS):
             findings.append(
                 Finding(
