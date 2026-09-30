@@ -114,6 +114,20 @@ def test_ui_text_is_english():
     assert "Download Test result" in html
 
 
+def test_internal_scan_error_returns_500_and_frees_the_scan_slot(ui, monkeypatch, capsys):
+    def broken_scan(*args, **kwargs):
+        raise RuntimeError("boom while fetching https://scan-user:hunter2@t.example/")
+
+    monkeypatch.setattr(web, "run_scan", broken_scan)
+    resp = scan(ui, {"target": "https://t.example/", "authorized": True})
+    assert resp.status_code == 500
+    assert resp.json() == {"error": "The scan failed with an internal error; see the server console for details."}
+    logged = capsys.readouterr().err
+    assert "RuntimeError" in logged and "hunter2" not in logged and "scan-user" not in logged
+    monkeypatch.setattr(web, "run_scan", lambda *a, **kw: ScanResult(target="https://t.example/", started_at="x"))
+    assert scan(ui, {"target": "https://t.example/", "authorized": True}).status_code == 200  # lock released
+
+
 def test_scan_of_unreachable_target_reports_error(ui, closed_port):
     resp = scan(ui, {"target": f"http://127.0.0.1:{closed_port}", "authorized": True})
     assert resp.status_code == 200

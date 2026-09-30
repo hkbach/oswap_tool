@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 
 import pytest
@@ -13,7 +14,7 @@ from test_acceptance import SoftNotFoundHandler
 from owasp_scanner import cli, output, web
 
 VOLATILE = {"scan_id", "started_at", "finished_at"}
-WEB_ONLY = {"gate_failed", "report_id", "report_url"}
+WEB_ONLY = set(web.WEB_ONLY_FIELDS)
 
 
 @pytest.fixture
@@ -53,7 +54,8 @@ def test_cli_and_web_ui_produce_the_same_report(ui, http_server, tmp_path, monke
 def test_download_json_in_the_ui_strips_exactly_the_web_only_fields():
     # app.js removes these before saving, so the file equals the CLI --json output.
     app_js = (web._STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert "const { gate_failed, report_id, report_url, ...report } = lastResult;" in app_js
+    stripped = re.search(r"const \{ ([\w, ]+), \.\.\.report \} = lastResult;", app_js).group(1)
+    assert set(stripped.split(", ")) == set(web.WEB_ONLY_FIELDS)
 
 
 def test_gate_rule():

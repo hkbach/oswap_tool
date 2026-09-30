@@ -57,19 +57,10 @@ function renderSummary(result) {
     summary.append(item);
   }
 
+  // The server sends the same gate text as the HTML report (output.gate_message).
   const gate = $("gate");
-  const info = result.gate || { fail_on: "high", failed: result.gate_failed, incomplete: false };
-  const threshold = `--fail-on ${info.fail_on}`;
-  if (info.failed) {
-    gate.className = "gate gate-fail";
-    gate.textContent = `Findings at or above the ${threshold} threshold: the CLI exits with code 1 (fails the CI gate).`;
-  } else if (info.incomplete) {
-    gate.className = "gate gate-warn";
-    gate.textContent = "The target home page could not be fetched, so most checks did not run. See the errors below.";
-  } else {
-    gate.className = "gate gate-pass";
-    gate.textContent = `No findings at or above the ${threshold} threshold: the CLI exits with code 0.`;
-  }
+  gate.className = `gate gate-${result.gate_status}`;
+  gate.textContent = result.gate_message;
 }
 
 function renderErrors(result) {
@@ -187,8 +178,8 @@ async function runScan(event) {
 
 function downloadJson() {
   if (!lastResult) return;
-  // Same shape as the CLI --json report: drop the UI-only fields.
-  const { gate_failed, report_id, report_url, ...report } = lastResult;
+  // Same shape as the CLI --json report: drop the UI-only fields (web.WEB_ONLY_FIELDS).
+  const { gate_failed, gate_status, gate_message, report_id, report_url, ...report } = lastResult;
   const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
   const link = el("a");
   link.href = URL.createObjectURL(blob);

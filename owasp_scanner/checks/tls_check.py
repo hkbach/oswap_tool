@@ -28,6 +28,7 @@ from dataclasses import replace
 
 from cryptography import x509
 
+from ..http_utils import url_host
 from ..models import Finding, Severity
 from ..rule_loader import is_interceptor_issuer
 
@@ -35,25 +36,17 @@ _WEAK_PROTOCOLS = {"SSLv2", "SSLv3", "TLSv1", "TLSv1.1"}
 _CERT_EXPIRY_WARN_DAYS = 30
 
 
-def _not_valid_after(cert_obj) -> datetime.datetime:
-    # cryptography >= 42 exposes tz-aware `not_valid_after_utc`; older
-    # versions only have the naive `not_valid_after`.
-    if hasattr(cert_obj, "not_valid_after_utc"):
-        return cert_obj.not_valid_after_utc
-    return cert_obj.not_valid_after.replace(tzinfo=datetime.timezone.utc)
-
-
-def _not_valid_before(cert_obj) -> datetime.datetime:
-    if hasattr(cert_obj, "not_valid_before_utc"):
-        return cert_obj.not_valid_before_utc
-    return cert_obj.not_valid_before.replace(tzinfo=datetime.timezone.utc)
-
-
 def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int):
     """Step 1: non-verifying connection. Returns (der_cert, protocol, cipher, error)."""
     insecure_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     insecure_ctx.check_hostname = False
     insecure_ctx.verify_mode = ssl.CERT_NONE
+    # This connection measures what the server accepts, so it must also reach servers that
+    # only speak TLS 1.0/1.1 or legacy ciphers: Python's defaults (TLS 1.2+, SECLEVEL 2)
+    # would turn TLS-WEAK-PROTOCOL into TLS-CONN-FAILED. DEFAULT stays first, so a modern
+    # server negotiates what it negotiates with any client. Step 2 keeps strict defaults.
+    insecure_ctx.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+    insecure_ctx.set_ciphers("DEFAULT:ALL:@SECLEVEL=0")
 
     try:
         with socket.create_connection((hostname, port), timeout=timeout) as sock:
@@ -62,7 +55,7 @@ def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int):
                 protocol = ssock.version()
                 cipher = ssock.cipher()
         return der_cert, protocol, cipher, None
-    except (socket.timeout, socket.gaierror, ConnectionRefusedError, OSError, ssl.SSLError) as exc:
+    except OSError as exc:  # timeouts, DNS, refused connections and ssl.SSLError are all OSError
         return None, None, None, exc
 
 
@@ -76,7 +69,7 @@ def _verify_trust(hostname: str, port: int, timeout: int, trust: ssl.SSLContext 
         return None
     except ssl.SSLCertVerificationError as exc:
         return exc
-    except (socket.timeout, socket.gaierror, ConnectionRefusedError, OSError, ssl.SSLError):
+    except OSError:  # includes ssl.SSLError; SSLCertVerificationError is handled above
         # Connection-level failure here is not a trust finding; step 1 already
         # reports connectivity problems.
         return None
@@ -91,7 +84,7 @@ def check_tls(
 ) -> list[Finding]:
     """TLS checks; ``warnings`` receives a note when the handshake looks intercepted (FR-DET-16)."""
     findings: list[Finding] = []
-    url = f"https://{hostname}:{port}"
+    url = f"https://{url_host(hostname)}:{port}"
 
     der_cert, protocol, cipher, conn_err = _fetch_raw_cert_and_connection_info(hostname, port, timeout)
     if conn_err is not None:
@@ -143,9 +136,9 @@ def check_tls(
         try:
             cert_obj = x509.load_der_x509_certificate(der_cert)
             issuer = cert_obj.issuer.rfc4514_string()
-            not_after = _not_valid_after(cert_obj)
-            not_before = _not_valid_before(cert_obj)
-            now = datetime.datetime.now(datetime.timezone.utc)
+            not_after = cert_obj.not_valid_after_utc
+            not_before = cert_obj.not_valid_before_utc
+            now = datetime.datetime.now(datetime.UTC)
 
             if now < not_before:
                 cert_time_problem = True

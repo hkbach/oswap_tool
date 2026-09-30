@@ -31,7 +31,7 @@ def test_every_result_points_at_its_rule(report):
     rules = run["tool"]["driver"]["rules"]
     assert len({r["id"] for r in rules}) == len(rules)  # one rule per finding id
     assert len(run["results"]) == len(report["findings"])
-    for result, finding in zip(run["results"], report["findings"]):
+    for result, finding in zip(run["results"], report["findings"], strict=True):
         assert result["ruleId"] == finding["id"] == rules[result["ruleIndex"]]["id"]
         assert result["partialFingerprints"] == {"owaspScannerFingerprint/v1": finding["fingerprint"]}
         assert result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == (

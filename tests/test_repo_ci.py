@@ -20,9 +20,21 @@ def workflow() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_workflow_has_the_four_jobs(workflow):
+def test_workflow_has_the_five_jobs(workflow):
     jobs = set(re.findall(r"^  ([a-z-]+):$", workflow, flags=re.MULTILINE))
-    assert {"lint", "test", "audit", "secrets"} <= jobs
+    assert {"lint", "test", "min-deps", "audit", "secrets"} <= jobs
+
+
+def test_min_deps_job_pins_the_floors_declared_in_pyproject(workflow):
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    runtime = re.search(r"^dependencies = \[(.*?)^\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
+    floors = dict(re.findall(r'"([a-z0-9-]+)>=([\d.]+)"', runtime))
+    assert floors and set(floors) == {"requests", "urllib3", "cryptography"}
+    job = workflow[workflow.index("  min-deps:") : workflow.index("  audit:")]
+    for name, version in floors.items():
+        assert f'"{name}=={version}"' in job, f"min-deps must install {name}=={version}"
+    oldest = re.search(r'requires-python = ">=(\d+\.\d+)"', pyproject).group(1)
+    assert f'python-version: "{oldest}"' in job
 
 
 def test_workflow_runs_lint_and_offline_tests(workflow):

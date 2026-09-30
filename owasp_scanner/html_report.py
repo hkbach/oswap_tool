@@ -11,9 +11,10 @@ from __future__ import annotations
 from html import escape
 
 from . import __version__
-from .output import gate_failed
+from .models import SEVERITY_ORDER
+from .output import gate_message
 
-_SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
+_SEVERITIES = SEVERITY_ORDER
 
 _CSS = """
 :root { --text:#1c2127; --muted:#5c6670; --border:#dde1e6; --bg:#f6f7f9; --surface:#fff;
@@ -60,28 +61,6 @@ def _e(value) -> str:
     return escape(str(value if value is not None else ""), quote=True)
 
 
-def _gate(report: dict) -> tuple[str, str]:
-    gate = report.get("gate") or {
-        # reports without a gate block (older callers): default threshold, incomplete if the home page failed
-        "fail_on": "high",
-        "failed": gate_failed({"summary": report.get("summary", {})}),
-        "incomplete": any(str(e).startswith("Could not fetch") for e in report.get("errors", [])),
-    }
-    threshold = f"--fail-on {gate['fail_on']}"
-    if gate["failed"]:
-        return "fail", f"Findings at or above the {threshold} threshold: the CLI exits with code 1 (fails the CI gate)."
-    if gate["incomplete"]:
-        code = "0 (--fail-on none)" if gate["fail_on"] == "none" else "3"
-        return (
-            "warn",
-            f"The target home page could not be fetched, so most checks did not run. The CLI exits with code {code}. "
-            "See the errors below.",
-        )
-    if gate["fail_on"] == "none":
-        return "pass", "--fail-on none: the gate never fails; the CLI exits with code 0."
-    return "pass", f"No findings at or above the {threshold} threshold: the CLI exits with code 0."
-
-
 def _finding(f: dict) -> str:
     sev = f.get("severity", "INFO")
     sev_class = sev if sev in _SEVERITIES else "INFO"
@@ -120,7 +99,7 @@ def render_html(report: dict) -> str:
     counts = report.get("summary", {})
     rank = {sev: i for i, sev in enumerate(_SEVERITIES)}
     findings = sorted(report.get("findings", []), key=lambda f: rank.get(f.get("severity"), len(rank)))
-    gate_class, gate_text = _gate(report)
+    gate_class, gate_text = gate_message(report["gate"])
     secrets_banner = (
         '<p class="gate fail">Secrets are not redacted in this report (--show-secrets). Do not share it.</p>'
         if report.get("secrets_redacted") is False

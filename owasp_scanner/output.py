@@ -39,7 +39,11 @@ def build_report(result: ScanResult, *, show_secrets: bool = False, fail_on: str
     if show_secrets:
         return report
 
-    pairs_by_fingerprint = {f.fingerprint: f.redactions for f in result.findings}
+    # Findings can share a fingerprint (the same cookie set on a redirect hop and on the final
+    # response), so collect the pairs of all of them instead of keeping only the last.
+    pairs_by_fingerprint: dict[str, list[tuple[str, str]]] = {}
+    for f in result.findings:
+        pairs_by_fingerprint.setdefault(f.fingerprint, []).extend(f.redactions)
     report["target"] = redact(report["target"])
     report["final_url"] = redact(report["final_url"])
     report["redirect_chain"] = [dict(hop, url=redact(hop["url"])) for hop in report["redirect_chain"]]
@@ -54,6 +58,27 @@ def build_report(result: ScanResult, *, show_secrets: bool = False, fail_on: str
 def gate_failed(report: dict, fail_on: str = DEFAULT_FAIL_ON) -> bool:
     """True when a finding is at or above the ``fail_on`` threshold (CLI exit code 1, Web UI ``gate_failed``)."""
     return any(report["summary"].get(sev, 0) for sev in FAIL_ON_SEVERITIES[fail_on])
+
+
+def gate_message(gate: dict) -> tuple[str, str]:
+    """``(status, text)`` shown for a report's ``gate`` by the HTML report and the Web UI.
+
+    ``status`` is ``"fail"``, ``"warn"`` (scan incomplete) or ``"pass"``; the text names the
+    threshold and the CLI exit code, so both views say the same thing.
+    """
+    threshold = f"--fail-on {gate['fail_on']}"
+    if gate["failed"]:
+        return "fail", f"Findings at or above the {threshold} threshold: the CLI exits with code 1 (fails the CI gate)."
+    if gate["incomplete"]:
+        code = "0 (--fail-on none)" if gate["fail_on"] == "none" else "3"
+        return (
+            "warn",
+            f"The target home page could not be fetched, so most checks did not run. The CLI exits with code {code}. "
+            "See the errors below.",
+        )
+    if gate["fail_on"] == "none":
+        return "pass", "--fail-on none: the gate never fails; the CLI exits with code 0."
+    return "pass", f"No findings at or above the {threshold} threshold: the CLI exits with code 0."
 
 
 def exit_code(report: dict) -> int:

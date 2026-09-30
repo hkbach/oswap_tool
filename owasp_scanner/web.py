@@ -21,6 +21,7 @@ import ipaddress
 import json
 import re
 import secrets
+import sys
 import threading
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -29,7 +30,8 @@ from urllib.parse import urlsplit
 
 from .cli import _ca_bundle, _normalize_target, run_scan
 from .html_report import render_html
-from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report
+from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, gate_message
+from .redact import redact
 
 _STATIC_DIR = Path(__file__).with_name("static")
 _STATIC_FILES = {
@@ -40,6 +42,9 @@ _STATIC_FILES = {
 _MAX_BODY_BYTES = 4096
 _MAX_DRAIN_BYTES = 65536  # how much of an oversized body we read before replying 413
 _MAX_STORED_REPORTS = 20
+# Fields the Web UI adds to the report dict of output.build_report() (SRS 6.3); everything else
+# is the same JSON as the CLI's --json.
+WEB_ONLY_FIELDS = ("gate_failed", "gate_status", "gate_message", "report_id", "report_url")
 _REPORT_PATH = re.compile(r"^/api/report/([A-Za-z0-9_-]{16,64})\.html$")
 _SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
@@ -64,7 +69,9 @@ def _is_loopback(host: str) -> bool:
 
 
 def _report_filename(report: dict) -> str:
-    host = urlsplit(report.get("target", "")).netloc or "target"
+    # Host and port only: never the userinfo part of the target (credentials).
+    parts = urlsplit(report.get("target", ""))
+    host = (parts.hostname or "target") + (f":{parts.port}" if parts.port else "")
     stamp = re.sub(r"\D", "", report.get("started_at", ""))[:14] or "report"
     return f"owasp-scan-{re.sub(r'[^A-Za-z0-9.-]', '_', host)}-{stamp}.html"
 
@@ -164,13 +171,18 @@ class ScanUIHandler(BaseHTTPRequestHandler):
                 workers=self.server.scan_workers,
                 ca_bundle=self.server.scan_ca_bundle,
             )
+            report = build_report(result, fail_on=self.server.scan_fail_on)  # same pipeline as the CLI (FR-WEB-01)
+        except Exception as exc:  # a bug must still answer the browser instead of dropping the connection
+            # One redacted line on the server console; the message can contain the target URL.
+            print(f"Scan failed: {type(exc).__name__}: {redact(str(exc))}", file=sys.stderr)
+            return self._error(500, "The scan failed with an internal error; see the server console for details.")
         finally:
             self.server.scan_lock.release()
 
-        report = build_report(result, fail_on=self.server.scan_fail_on)  # same pipeline as the CLI (FR-WEB-01)
         report_id = self._store_report(report)
         data = dict(report, report_id=report_id, report_url=f"/api/report/{report_id}.html")
         data["gate_failed"] = report["gate"]["failed"]
+        data["gate_status"], data["gate_message"] = gate_message(report["gate"])  # same text as the HTML report
         self._json(200, data)
 
     # --- stored reports ----------------------------------------------------------

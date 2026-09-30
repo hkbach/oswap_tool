@@ -510,7 +510,7 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 - [ ] **FR-QA-04** (P1 · Pro) **Corpus false positive**: mỗi false positive khách báo → thêm test hồi quy; mục tiêu độ chính xác đặt sau khi có số đo baseline `[CONFIRM]` (không hứa con số khi chưa đo).
 - [ ] **FR-QA-05** (P1 · Pro) Kiểm thử tải/an toàn: chứng minh scanner tuân thủ giới hạn tốc độ và không gây tải bất thường lên mock server.
 - [ ] **FR-QA-06** (P1 · Business) Kiểm thử phân quyền/đa tenant tự động (không đọc chéo org, chống IDOR trên chính API của nền tảng).
-- [ ] **FR-QA-07** (P0 · all) *(cấu hình xong ở Sprint 3; workflow `.github/workflows/ci.yml` ở Sprint 6, SRS AT-47. Chưa tick: còn chờ workflow chạy xanh trên GitHub và admin bật branch protection cho `main`)* CI cho repo: `ruff check` + `ruff format --check`, `pytest` (offline), quét phụ thuộc (ví dụ `pip-audit`), quét secret; ma trận Python 3.9 và bản mới nhất; chặn merge khi fail. Type-check (mypy/pyright) và build image thêm sau.
+- [ ] **FR-QA-07** (P0 · all) *(cấu hình xong ở Sprint 3; workflow `.github/workflows/ci.yml` ở Sprint 6, SRS AT-47. CI xanh trên GitHub ngày 2026-09-30. Chưa tick: còn chờ admin bật branch protection cho `main`, xem README "Branch protection for main")* CI cho repo: `ruff check` + `ruff format --check`, `pytest` (offline), quét phụ thuộc (ví dụ `pip-audit`), quét secret; ma trận Python 3.9 và bản mới nhất; chặn merge khi fail. Type-check (mypy/pyright) và build image thêm sau.
   AC: cấu hình ruff trong `pyproject.toml`; workflow CI chạy được trên nhánh mẫu; README ghi lệnh chạy cục bộ.
 
 ### E22. Tài liệu và tài sản đưa ra thị trường
@@ -583,7 +583,8 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 3b | Scope khi theo redirect (D4); redirect check luôn chạy; header/HSTS xét trên response cuối; bỏ chữ "Passive" trong code | FR-FIX-09, FR-FIX-10, FR-FIX-11 (+ FR-AUTHZ-03 phần D4) | Xong (v1.3.0) trên branch `feat/sprint-3b`, chờ review |
 | 4 | Kiểm tra nội dung file nhạy cảm + confidence | FR-DET-01, FR-DET-02, FR-DET-03 (+ FR-DET-16, FR-EXP-01 dạng rules, đọc body có giới hạn) | Xong (v1.4.0) trên branch `feat/sprint-4`, chờ review |
 | 5 | `--ca-bundle` (gỡ B1), `--fail-on`, SARIF, `--html`, template CI | FR-CI-10, FR-CI-01 (+ exit code 3), FR-RPT-02, FR-RPT-09, FR-CI-03 | Xong (v1.5.0) trên branch `feat/sprint-5`, chờ review |
-| 6 | Lint (ruff) + CI cho repo | FR-QA-07 (+ FR-QA-01/02) | Xong (v1.5.1) trên branch `feat/sprint-6`, chờ review; workflow chưa chạy trên GitHub |
+| 6 | Lint (ruff) + CI cho repo | FR-QA-07 (+ FR-QA-01/02) | Xong (v1.5.1) trên branch `feat/sprint-6`, chờ review; CI xanh trên GitHub ngày 2026-09-30 |
+| 7 | README tiếng Anh + hướng dẫn CI/CD và branch protection; Python ≥ 3.12; sửa lỗi từ code review (redact, TLS cũ, cookie, giới hạn đọc, Web UI 500, IPv6); refactor gate/severity | FR-DOC-01 (một phần), NFR-PORT-01, NFR-SEC-04, FR-TLS-01, FR-COOKIE-01, NFR-PERF-04, FR-UI-05 | Xong (v1.6.0) trên branch `feat/sprint-7`, chờ review |
 
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
 
@@ -664,7 +665,7 @@ Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên l�
 | E11 | – | ☐ | ☐ | |
 | E12a | ☐ | ☐ | – | Web UI cục bộ; WEB-01 xong (Sprint 3), còn WEB-02 |
 | E12–E14, E16–E20 | ☐ | ☐ | ☐ | E15 (UI) đã loại; E12 chỉ khi SaaS |
-| E21–E22 | ☐ | ☐ | – | QA-01, QA-02 xong (Sprint 6); QA-07 chờ chạy CI thật + branch protection |
+| E21–E22 | ☐ | ☐ | – | QA-01, QA-02 xong (Sprint 6); QA-07 chờ branch protection; README tiếng Anh (Sprint 7) |
 
 *Tài liệu này là backlog định hướng, không phải cam kết với khách hàng. Mọi quyết định về giá, thời gian, SLA, pháp lý và kiến trúc lớn cần con người có thẩm quyền xem xét trước khi thực hiện.*
 

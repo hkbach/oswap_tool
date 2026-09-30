@@ -28,7 +28,7 @@ def test_web_download_uses_the_same_renderer(http_server):
         data = requests.post(
             f"{ui}/api/scan", json={"target": http_server(MockHandler), "authorized": True}, timeout=60
         )
-        report = {k: v for k, v in data.json().items() if k not in ("gate_failed", "report_id", "report_url")}
+        report = {k: v for k, v in data.json().items() if k not in web.WEB_ONLY_FIELDS}
         downloaded = requests.get(ui + data.json()["report_url"], timeout=5).text
     finally:
         server.shutdown()

@@ -56,7 +56,7 @@ def _normalize_target(target: str) -> str:
 
 
 def _utc_timestamp() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
+    return datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat() + "Z"
 
 
 def _fetch_baseline(session, url: str):

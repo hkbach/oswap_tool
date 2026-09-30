@@ -13,7 +13,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin, urlparse
 
-from ..http_utils import decode_body, get_limited, safe_get
+from ..http_utils import HINT_FILE_MAX_BYTES, decode_body, get_limited
 from ..models import Finding, Severity
 from ..rule_loader import load_sensitive_paths
 from ..soft404 import Soft404Profile, build_profile
@@ -124,11 +124,11 @@ def _check_robots_txt(session, base_url: str) -> list[Finding]:
     """robots.txt uses 'Disallow: <path>' directives."""
     findings: list[Finding] = []
     url = urljoin(base_url, "robots.txt")
-    resp, err = safe_get(session, url)
+    resp, raw, err = get_limited(session, url, max_bytes=HINT_FILE_MAX_BYTES)
     if err or resp is None or resp.status_code != 200:
         return findings
 
-    body = resp.text or ""
+    body = decode_body(resp, raw)
     disallowed = [
         line.split(":", 1)[1].strip()
         for line in body.splitlines()
@@ -161,11 +161,11 @@ def _check_sitemap_xml(session, base_url: str) -> list[Finding]:
     """sitemap.xml lists URLs inside <loc>...</loc> tags (not Disallow: lines)."""
     findings: list[Finding] = []
     url = urljoin(base_url, "sitemap.xml")
-    resp, err = safe_get(session, url)
+    resp, raw, err = get_limited(session, url, max_bytes=HINT_FILE_MAX_BYTES)
     if err or resp is None or resp.status_code != 200:
         return findings
 
-    body = resp.text or ""
+    body = decode_body(resp, raw)
     locations = re.findall(r"<loc>\s*(.*?)\s*</loc>", body, re.IGNORECASE | re.DOTALL)
     interesting = []
     for loc in locations:

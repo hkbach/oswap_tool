@@ -16,7 +16,7 @@ from owasp_scanner import __version__, cli, output, rule_loader, web
 from owasp_scanner.models import SCHEMA_VERSION
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "docs" / "report.schema.json"
-WEB_ONLY_FIELDS = {"gate_failed", "report_id", "report_url"}
+WEB_ONLY_FIELDS = set(web.WEB_ONLY_FIELDS)
 
 
 @pytest.fixture(scope="module")

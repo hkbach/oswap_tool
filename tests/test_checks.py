@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import socket
+import ssl
+
 import pytest
+import requests
 from conftest import CERT_WINDOWS, QuietHandler, make_self_signed_cert
 
 from owasp_scanner.checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
@@ -99,6 +103,32 @@ def test_cookie_flags(raw, severity, missing):
     assert found[0].evidence == raw  # FR-COOKIE-04: verbatim Set-Cookie
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        # Attributes the scanner does not check must not become cookies or hide the real one.
+        "sid=1; Secure; HttpOnly; SameSite=Lax; Priority=High",
+        "sid=1; Secure; HttpOnly; SameSite=Lax; Partitioned",
+        "sid=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Max-Age=60; Domain=t; Path=/; Secure; HttpOnly; SameSite=Strict",
+        # Attribute names are case-insensitive and may have spaces around "=".
+        "sid=1; secure; HTTPONLY; samesite = lax",
+    ],
+)
+def test_cookie_attributes_are_parsed_like_a_browser(raw):
+    assert cookies.check_cookies("https://t/", [raw]) == []
+
+
+def test_unchecked_attributes_do_not_hide_missing_flags():
+    (finding,) = cookies.check_cookies("https://t/", ["sid=1; Partitioned; Priority=High"])
+    assert finding.instance_key == "sid"
+    assert "Secure, HttpOnly, SameSite" in finding.description
+
+
+@pytest.mark.parametrize("raw", ["novalue; Secure", "=1; HttpOnly", "a b=1; Secure", ""])
+def test_set_cookie_without_a_valid_name_is_skipped(raw):
+    assert cookies.check_cookies("https://t/", [raw]) == []
+
+
 # --- TLS (real handshakes against local servers) ---------------------------------
 
 
@@ -141,12 +171,67 @@ def test_tls_unparsable_certificate_is_reported_and_trust_is_still_checked(https
     assert parse_failed.severity.value == "INFO" and "malformed certificate" in parse_failed.description
 
 
+def test_ipv6_hosts_are_bracketed_in_urls(closed_port):
+    (finding,) = tls_check.check_tls("::1", closed_port, timeout=2)
+    assert finding.id == "TLS-CONN-FAILED" and finding.url == f"https://[::1]:{closed_port}"
+
+    class RecordingSession:
+        scope_host = "::1"
+
+        def __init__(self):
+            self.urls = []
+
+        def get(self, url, **kwargs):
+            self.urls.append(url)
+            raise requests.exceptions.ConnectionError("no plain HTTP")
+
+    session = RecordingSession()
+    assert redirect_check.check_http_to_https_redirect(session, "::1") == []
+    assert session.urls == ["http://[::1]/"]
+
+
 def test_tls_connection_failure_stops_tls_checks(closed_port):
     assert ids(tls_check.check_tls("127.0.0.1", closed_port, timeout=2)) == ["TLS-CONN-FAILED"]
 
 
+def _client_can_negotiate(port: int) -> bool:
+    """Independent of the scanner: can this OpenSSL reach the legacy server at all?"""
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
+    ctx.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+    ctx.set_ciphers("ALL:@SECLEVEL=0")
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as sock, ctx.wrap_socket(sock):
+            return True
+    except (ssl.SSLError, OSError):
+        return False
+
+
+@pytest.mark.parametrize("version", ["TLSv1", "TLSv1_1"])
+def test_tls_weak_protocol_is_detected_on_a_real_legacy_server(https_server, version):
+    # Python's default client context refuses anything below TLS 1.2; the measuring
+    # connection must still reach such a server, or the finding could never fire.
+    _, port = https_server(_Ok, cert="valid", only_version=ssl.TLSVersion[version])
+    if not _client_can_negotiate(port):
+        pytest.skip(f"this OpenSSL ({ssl.OPENSSL_VERSION}) cannot negotiate {version} as a client")
+    found = tls_check.check_tls("127.0.0.1", port, timeout=5)
+    weak = [f for f in found if f.id == "TLS-WEAK-PROTOCOL"]
+    assert len(weak) == 1 and weak[0].severity.value == "HIGH", ids(found)
+    assert version.replace("_", ".") in weak[0].title
+    # Step 2 keeps strict defaults, cannot connect below TLS 1.2 and so gives no trust verdict;
+    # the weak protocol is the finding.
+    assert ids(found) == ["TLS-WEAK-PROTOCOL"]
+
+
+def test_tls_modern_server_still_negotiates_a_modern_protocol(https_server):
+    _, port = https_server(_Ok, cert="valid")
+    _, protocol, cipher, err = tls_check._fetch_raw_cert_and_connection_info("127.0.0.1", port, 5)
+    assert err is None and protocol in ("TLSv1.2", "TLSv1.3")
+    assert not any(weak in cipher[0] for weak in ("RC4", "3DES", "MD5", "NULL", "EXPORT"))
+
+
 def test_tls_weak_protocol_and_cipher(monkeypatch, tmp_path):
-    # Modern OpenSSL refuses to negotiate these, so feed step A's result directly.
+    # OpenSSL 3 ships without RC4/EXPORT suites, so feed step A's result directly.
     certfile, _ = make_self_signed_cert(tmp_path, *CERT_WINDOWS["valid"]())
     from cryptography import x509
     from cryptography.hazmat.primitives.serialization import Encoding
@@ -276,6 +361,21 @@ def test_sensitive_paths_respects_worker_limit(http_server, monkeypatch):
 
     exposure.check_sensitive_paths(build_session(timeout=2), http_server(H), max_workers=3)
     assert created["max_workers"] == 3
+
+
+def test_unknown_charset_does_not_stop_the_directory_listing_check(http_server):
+    listing = b"<html><title>Index of /x</title><body>Index of /x/</body></html>"
+
+    class H(QuietHandler):
+        def do_GET(self):
+            if self.path in ("/images/", "/uploads/"):
+                charset = "x-bogus" if self.path == "/images/" else "utf-8"
+                self.send(200, listing, {"Content-Type": f"text/html; charset={charset}"})
+            else:
+                self.send(404)
+
+    found = exposure.check_directory_listing(build_session(timeout=2), http_server(H))
+    assert sorted(f.instance_key for f in found) == ["images/", "uploads/"]
 
 
 def test_robots_hints_capped_at_ten(http_server):

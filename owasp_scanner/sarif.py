@@ -10,6 +10,7 @@ repository, because this is a web scanner.
 from __future__ import annotations
 
 from . import __version__
+from .models import SEVERITY_ORDER
 
 SARIF_VERSION = "2.1.0"
 SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
@@ -20,7 +21,7 @@ FINGERPRINT_KEY = "owaspScannerFingerprint/v1"
 _LEVEL = {"CRITICAL": "error", "HIGH": "error", "MEDIUM": "warning", "LOW": "note", "INFO": "note"}
 # GitHub code scanning reads "security-severity" (0.0-10.0) to rank security results.
 _SECURITY_SEVERITY = {"CRITICAL": "9.5", "HIGH": "8.0", "MEDIUM": "5.5", "LOW": "3.0", "INFO": "0.0"}
-_RANK = {sev: i for i, sev in enumerate(("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"))}
+_RANK = {sev: i for i, sev in enumerate(SEVERITY_ORDER)}
 
 
 def _rule(finding: dict, severity: str) -> dict:

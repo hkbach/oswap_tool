@@ -129,6 +129,26 @@ def test_get_limited_reads_at_most_the_cap(http_server):
     assert 0 < len(body) <= http_utils.MAX_BODY_BYTES == 8192
 
 
+@pytest.mark.parametrize("name", ["robots.txt", "sitemap.xml"])
+def test_robots_and_sitemap_are_read_up_to_their_cap(http_server, name):
+    # A hint near the start is read; one after HINT_FILE_MAX_BYTES of padding is not.
+    early, late = "/admin-early/", "/admin-late/"
+    padding = "#" * (http_utils.HINT_FILE_MAX_BYTES + 1024) + "\n"
+    if name == "robots.txt":
+        body = f"Disallow: {early}\n{padding}Disallow: {late}\n"
+    else:
+        body = (
+            f"<urlset><url><loc>https://t{early}</loc></url>\n{padding}<url><loc>https://t{late}</loc></url></urlset>"
+        )
+
+    class H(QuietHandler):
+        def do_GET(self):
+            self.send(200 if self.path == f"/{name}" else 404, body.encode())
+
+    (finding,) = exposure.check_robots_and_sitemap(http_utils.build_session(timeout=5), http_server(H))
+    assert early in finding.evidence and late not in finding.evidence
+
+
 def test_sensitive_path_check_does_not_download_huge_files(http_server):
     start = time.monotonic()
     exposure.check_sensitive_paths(http_utils.build_session(timeout=10), http_server(HugeHandler))

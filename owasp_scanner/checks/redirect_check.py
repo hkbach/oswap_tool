@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from urllib.parse import urljoin, urlsplit
 
-from ..http_utils import MAX_REDIRECTS, in_scope, safe_get
+from ..http_utils import MAX_REDIRECTS, in_scope, safe_get, url_host
 from ..models import Finding, Severity
 
 
@@ -35,7 +35,7 @@ def check_http_to_https_redirect(session, hostname: str) -> list[Finding]:
     answer. That keeps certificate problems (reported by the TLS check) from being
     mistaken for a missing redirect.
     """
-    start = f"http://{hostname}/"
+    start = f"http://{url_host(hostname)}/"
     scope = getattr(session, "scope_host", None) or urlsplit(start).hostname or hostname
     url = start
     for _ in range(MAX_REDIRECTS):

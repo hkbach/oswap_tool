@@ -7,11 +7,11 @@ name = "owasp-scanner"
 dynamic = ["version"]
 description = "OWASP-aligned non-intrusive web security configuration scanner (CLI + local web UI)"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
-    "requests>=2.31.0",
+    "requests>=2.32.3",  # _TrustAdapter relies on build_connection_pool_key_attributes() behaviour of 2.32.3
     "urllib3>=2.0.0",
-    "cryptography>=41.0.0",
+    "cryptography>=42.0.0",  # not_valid_before_utc / not_valid_after_utc
 ]
 
 [project.optional-dependencies]
@@ -40,7 +40,7 @@ pythonpath = ["."]
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S"]

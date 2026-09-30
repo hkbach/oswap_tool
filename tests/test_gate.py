@@ -114,3 +114,22 @@ def test_cli_rejects_an_unknown_threshold(capsys):
     with pytest.raises(SystemExit):
         cli.main(["https://example.invalid", "--yes", "--fail-on", "severe"])
     assert "--fail-on" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("fail_on", ["high", "none"])
+def test_web_ui_and_html_report_show_the_same_gate_message(closed_port, fail_on):
+    # An unreachable target is incomplete; with "none" the two views used to disagree.
+    server = web.build_server("127.0.0.1", 0, timeout=2, fail_on=fail_on)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    ui = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        target = f"http://127.0.0.1:{closed_port}/"
+        data = requests.post(f"{ui}/api/scan", json={"target": target, "authorized": True}, timeout=60).json()
+        html = requests.get(ui + data["report_url"], timeout=5).text
+    finally:
+        server.shutdown()
+        server.server_close()
+    status, message = output.gate_message(data["gate"])
+    assert (data["gate_status"], data["gate_message"]) == (status, message) and status == "warn"
+    assert message in html
+    assert ("code 0 (--fail-on none)" in message) is (fail_on == "none")

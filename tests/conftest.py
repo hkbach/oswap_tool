@@ -10,6 +10,7 @@ import datetime
 import ipaddress
 import ssl
 import threading
+import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -104,19 +105,30 @@ def make_self_signed_cert(tmp_path, not_before, not_after, name="cert", common_n
 
 
 def _utcnow():
-    return datetime.datetime.now(datetime.timezone.utc)
+    return datetime.datetime.now(datetime.UTC)
 
 
 CERT_WINDOWS = {
     # expired since 2020, as in the SRS AT-10 verification
     "expired": lambda: (
-        datetime.datetime(2019, 1, 1, tzinfo=datetime.timezone.utc),
-        datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
+        datetime.datetime(2019, 1, 1, tzinfo=datetime.UTC),
+        datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC),
     ),
     "valid": lambda: (_utcnow() - datetime.timedelta(days=1), _utcnow() + datetime.timedelta(days=365)),
     "expiring": lambda: (_utcnow() - datetime.timedelta(days=1), _utcnow() + datetime.timedelta(days=10)),
     "not_yet_valid": lambda: (_utcnow() + datetime.timedelta(days=10), _utcnow() + datetime.timedelta(days=400)),
 }
+
+
+def _only_legacy_version(ctx: ssl.SSLContext, version: ssl.TLSVersion) -> None:
+    """Make a server accept only ``version`` (e.g. TLS 1.0), or skip if this OpenSSL cannot."""
+    try:
+        with warnings.catch_warnings():  # TLSv1/TLSv1_1 are deprecated: exactly what the test needs
+            warnings.simplefilter("ignore", DeprecationWarning)
+            ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+            ctx.minimum_version = ctx.maximum_version = version
+    except (ssl.SSLError, ValueError) as exc:
+        pytest.skip(f"this OpenSSL ({ssl.OPENSSL_VERSION}) cannot serve {version.name}: {exc}")
 
 
 @pytest.fixture
@@ -128,11 +140,13 @@ def https_server(tmp_path):
     """
     servers = []
 
-    def factory(handler_cls, cert="valid", common_name="owasp-scanner-test"):
+    def factory(handler_cls, cert="valid", common_name="owasp-scanner-test", only_version=None):
         not_before, not_after = CERT_WINDOWS[cert]()
         certfile, keyfile = make_self_signed_cert(tmp_path, not_before, not_after, name=cert, common_name=common_name)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(certfile=str(certfile), keyfile=str(keyfile))
+        if only_version is not None:
+            _only_legacy_version(ctx, only_version)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler_cls)
         server.socket = ctx.wrap_socket(server.socket, server_side=True)
         _start(server)
