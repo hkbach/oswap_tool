@@ -1,71 +1,146 @@
-# oswap_tool
+# OWASP-Aligned Passive Web Security Scanner
 
-Security testing tool based on OWASP guidelines, written in Python.
+Công cụ dòng lệnh (Python) quét một website và đối chiếu với các khuyến nghị
+của OWASP: [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/),
+[OWASP Top 10:2021](https://owasp.org/Top10/) và một phần [OWASP ASVS](https://owasp.org/www-project-application-security-verification-standard/).
 
-> Only run this tool against systems you own or are explicitly authorized to test.
+**Đặc tả yêu cầu chi tiết:** xem [`SRS.md`](./SRS.md) trong cùng thư mục này —
+đây là baseline "as-built" duy nhất, đã được đối chiếu và kiểm thử cùng mã
+nguồn (không phải tài liệu rời rạc).
 
-## Requirements
+## Changelog
 
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/)
+- **v1.1.0** — sửa 6 vấn đề phát hiện khi review SRS v1.0: (1) TLS check tách
+  thành 2 bước kết nối để không bỏ lỡ finding hết hạn chứng chỉ khi trust
+  chain cũng lỗi; (2) sitemap.xml được parse đúng cú pháp `<loc>` thay vì áp
+  nhầm cú pháp `Disallow:` của robots.txt; (3) X-Frame-Options không còn bị
+  báo "thiếu" khi CSP đã có `frame-ancestors`; (4) HSTS không còn bị yêu cầu
+  khi quét qua `http://`; (5) `Finding.id` của các path nhạy cảm nay khai báo
+  tường minh thay vì suy ra từ chuỗi; (6) thêm dependency `cryptography` để
+  đọc hạn chứng chỉ độc lập với xác thực trust chain. Chi tiết đầy đủ ở mục 0
+  của `SRS.md`.
+- **v1.0.0** — bản đầu tiên.
 
-## Setup
+## ⚠️ Chỉ dùng cho hệ thống bạn được phép kiểm tra
 
-```sh
-uv sync
+Tool này **chỉ gửi các request GET thông thường**, không gửi payload tấn công
+(không SQLi, không brute-force, không fuzzing). Tuy nhiên việc quét một
+website mà không có sự cho phép vẫn có thể vi phạm pháp luật hoặc điều khoản
+dịch vụ của bên sở hữu. Trước khi chạy:
+
+- Chỉ quét domain/hệ thống của chính bạn, hoặc
+- Đã có xác nhận bằng văn bản (authorization letter / rules of engagement) từ
+  chủ sở hữu hệ thống.
+
+Tool sẽ hỏi xác nhận trước khi chạy; dùng `--yes` để bỏ qua xác nhận tương tác
+(ví dụ khi chạy trong CI/CD với hệ thống nội bộ đã được phê duyệt).
+
+## Phạm vi kiểm tra (Passive / Header scan)
+
+| Check | Nội dung | OWASP mapping |
+|---|---|---|
+| Security headers | HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, header rò rỉ thông tin (Server, X-Powered-By...) | A05:2021, A03:2021 |
+| Cookies | Thiếu cờ Secure / HttpOnly / SameSite | A05:2021 |
+| TLS/SSL | Giao thức yếu (TLS &lt; 1.2), cipher yếu, chứng chỉ hết hạn/sắp hết hạn/không hợp lệ | A02:2021 |
+| HTTP → HTTPS | Có redirect HTTP sang HTTPS hay không | A02:2021 |
+| CORS | `Access-Control-Allow-Origin` phản xạ origin tuỳ ý, kết hợp với credentials | A05:2021 |
+| Exposed files | `.git/`, `.env`, backup file, `id_rsa`, `docker-compose.yml`, `phpinfo.php`... | A01:2021 |
+| Directory listing | Thư mục cho phép liệt kê file (`Index of /`) | A05:2021 |
+| robots.txt | Có `Disallow:` tiết lộ đường dẫn nhạy cảm (admin, backup, staging...) không | A01:2021 |
+| sitemap.xml | Có `<loc>` tiết lộ URL nhạy cảm (staging, internal...) không | A01:2021 |
+
+**Giới hạn:** đây là quét passive/config-check, KHÔNG phải DAST toàn diện.
+Tool không phát hiện injection (SQLi/XSS thực sự cần test chủ động), business
+logic flaw, broken authentication ở tầng ứng dụng, v.v. Với các hạng mục đó,
+nên dùng thêm công cụ chuyên sâu như OWASP ZAP, Burp Suite, hoặc pentest thủ
+công — sau khi đã có phạm vi và cho phép rõ ràng.
+
+## Cài đặt
+
+```bash
+cd owasp-scanner
+pip install -r requirements.txt
 ```
 
-## Usage
+## Sử dụng
 
-```sh
-uv run owasp-tool list-checks
-uv run owasp-tool scan https://target.example --authorized
-uv run owasp-tool scan https://target.example --authorized --format json -o reports/scan.json
-uv run owasp-tool scan https://target.example --authorized --checks security-headers
+```bash
+# Quét cơ bản, in kết quả ra terminal
+python -m owasp_scanner https://example.com
+
+# Xuất thêm báo cáo JSON, bỏ qua câu hỏi xác nhận (đã có authorization)
+python -m owasp_scanner https://example.com --json report.json --yes
+
+# Tuỳ chỉnh timeout / số luồng khi kiểm tra các đường dẫn nhạy cảm
+python -m owasp_scanner https://example.com --timeout 15 --workers 8
 ```
 
-`--authorized` is required and confirms you have permission to test the target.
-TLS verification is always on and uses the OS trust store; pass `--ca-bundle path.pem`
-if you need a custom CA (e.g. a corporate proxy).
+Exit code: `0` nếu không có finding mức CRITICAL/HIGH, `1` nếu có, `2` nếu
+người dùng không xác nhận quyền quét.
 
-Exit codes: `0` scan completed, `1` one or more checks failed to run, `2` usage error.
+## Giao diện web (chạy trên máy local)
 
-## Development
-
-```sh
-uv run pytest        # run tests
-uv run ruff check .  # lint
-uv run ruff format . # format
+```bash
+python -m owasp_scanner.web        # mở http://127.0.0.1:8765/
+python -m owasp_scanner.web --port 9000 --timeout 15 --workers 8
 ```
 
-## Project layout
+Nhập URL, tick ô xác nhận quyền quét, bấm **Scan**. Kết quả hiện bên dưới ô
+nhập: bảng tổng hợp theo severity, trạng thái gate (tương đương exit code của
+CLI), lỗi không nghiêm trọng, và danh sách finding có lọc theo mức độ. Nút
+**Tải JSON** tải báo cáo cùng định dạng với `--json` của CLI.
+
+- Giao diện gọi đúng `run_scan()` của CLI nên kết quả giống hệt nhau.
+- Server chỉ lắng nghe `127.0.0.1` theo mặc định và từ chối request có
+  `Host`/`Origin` lạ (chống DNS rebinding và request chéo site). Mỗi lúc chỉ
+  chạy 1 lần quét. Không dùng `--host 0.0.0.0` trừ khi thật sự cần — khi đó
+  bất kỳ ai truy cập được cổng này đều có thể ra lệnh quét từ máy của bạn.
+- Không cần thêm thư viện: server dùng `http.server` của Python, giao diện là
+  HTML/CSS/JS tĩnh trong `owasp_scanner/static/`, không tải gì từ internet.
+
+## Cấu trúc project
 
 ```
-src/owasp_tool/
-  cli.py              # argparse CLI (list-checks, scan)
-  config.py           # ScanConfig (timeout, user agent, CA bundle)
-  http.py             # shared httpx client factory
-  models.py           # Severity, Finding, CheckError, ScanResult
-  scanner.py          # runs checks, collects findings and errors
+owasp_scanner/
+  cli.py            # Entry point, điều phối các check
+  http_utils.py      # HTTP session dùng chung (timeout, User-Agent, không retry-storm)
+  models.py           # Finding / ScanResult / Severity
+  report.py           # In CLI + xuất JSON
+  web.py              # Giao diện web local (python -m owasp_scanner.web)
+  static/             # index.html, app.js, app.css của giao diện web
   checks/
-    base.py           # Check base class
-    __init__.py       # check registry (ALL_CHECKS)
-    security_headers.py
-  reporting/          # console and JSON reporters (REPORTERS)
-tests/                # pytest tests, no network access (httpx.MockTransport)
+    headers.py        # Security headers
+    cookies.py         # Cookie flags
+    tls_check.py        # TLS/certificate
+    cors_check.py        # CORS misconfiguration
+    exposure.py           # File/path exposure, directory listing, robots.txt
+    redirect_check.py      # HTTP -> HTTPS redirect
 ```
 
-## Adding a check
+## Kiểm thử offline (không cần internet)
 
-1. Create `src/owasp_tool/checks/<name>.py` with a `Check` subclass that sets `id`, `name`
-   and `owasp`, and implements `run(client, target) -> list[Finding]`.
-2. Add the class to `ALL_CHECKS` in `src/owasp_tool/checks/__init__.py`.
-3. Add tests under `tests/checks/` using the `mock_client` fixture.
+`tests/mock_server.py` dựng một server giả lập có sẵn các lỗi cấu hình phổ
+biến (thiếu header, cookie thiếu cờ, `.env`/`.git` bị lộ, bật directory
+listing...) để kiểm thử nhanh mà không cần quét một site thật:
 
-Checks should use the provided `client` (shared timeout, TLS and User-Agent settings) and
-raise on unexpected errors; the scanner records the error and continues with other checks.
+```bash
+python3 tests/mock_server.py 8899 &
+python3 -m owasp_scanner http://127.0.0.1:8899 --yes
+```
 
-## Adding a report format
+Bộ test tự động (pytest) phủ các kịch bản AT-01…AT-18 của `SRS.md` mục 9,
+tự dựng HTTP/HTTPS server trên `127.0.0.1` và tự sinh chứng chỉ test (hết hạn,
+chưa hiệu lực, sắp hết hạn, tự ký) — không cần internet:
 
-Add a module in `src/owasp_tool/reporting/` with `render(result: ScanResult) -> str` and
-register it in `REPORTERS`.
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+## Gợi ý mở rộng sau này
+
+- Thêm chế độ "Active nhẹ" (crawl link nội bộ, kiểm tra form login, phát hiện
+  open redirect) — cần xác nhận phạm vi rõ ràng hơn.
+- Tích hợp vào pipeline CI/CD nội bộ (chạy `--yes` với `--json` rồi parse kết
+  quả để gate build).
+- Xuất báo cáo HTML cho khách hàng nếu cần trình bày trực quan hơn JSON.
