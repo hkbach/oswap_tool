@@ -29,7 +29,7 @@ from urllib.parse import urlsplit
 
 from .cli import _ca_bundle, _normalize_target, run_scan
 from .html_report import render_html
-from .output import build_report, gate_failed
+from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report
 
 _STATIC_DIR = Path(__file__).with_name("static")
 _STATIC_FILES = {
@@ -167,10 +167,10 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         finally:
             self.server.scan_lock.release()
 
-        report = build_report(result)  # same pipeline as the CLI (FR-WEB-01)
+        report = build_report(result, fail_on=self.server.scan_fail_on)  # same pipeline as the CLI (FR-WEB-01)
         report_id = self._store_report(report)
         data = dict(report, report_id=report_id, report_url=f"/api/report/{report_id}.html")
-        data["gate_failed"] = gate_failed(report)
+        data["gate_failed"] = report["gate"]["failed"]
         self._json(200, data)
 
     # --- stored reports ----------------------------------------------------------
@@ -200,7 +200,12 @@ class ScanUIHandler(BaseHTTPRequestHandler):
 
 
 def build_server(
-    host: str = "127.0.0.1", port: int = 8765, timeout: int = 10, workers: int = 5, ca_bundle: str | None = None
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    timeout: int = 10,
+    workers: int = 5,
+    ca_bundle: str | None = None,
+    fail_on: str = DEFAULT_FAIL_ON,
 ) -> ThreadingHTTPServer:
     server = ThreadingHTTPServer((host, port), ScanUIHandler)
     server.loopback_only = _is_loopback(host)
@@ -208,6 +213,7 @@ def build_server(
     server.scan_timeout = timeout
     server.scan_workers = workers
     server.scan_ca_bundle = ca_bundle
+    server.scan_fail_on = fail_on
     server.reports = OrderedDict()
     server.reports_lock = threading.Lock()
     return server
@@ -223,6 +229,12 @@ def main(argv=None) -> int:
     parser.add_argument("--timeout", type=int, default=10, help="Per-request timeout in seconds (default: 10)")
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
     parser.add_argument(
+        "--fail-on",
+        choices=FAIL_ON_CHOICES,
+        default=DEFAULT_FAIL_ON,
+        help="Lowest severity shown as a failed gate, as for the CLI (default: high)",
+    )
+    parser.add_argument(
         "--ca-bundle",
         metavar="PATH",
         type=_ca_bundle,
@@ -230,7 +242,7 @@ def main(argv=None) -> int:
     )
     args = parser.parse_args(argv)
 
-    server = build_server(args.host, args.port, args.timeout, args.workers, args.ca_bundle)
+    server = build_server(args.host, args.port, args.timeout, args.workers, args.ca_bundle, args.fail_on)
     if not server.loopback_only:
         print(
             f"WARNING: listening on {args.host}; anyone who can reach this port can start scans "

@@ -207,7 +207,7 @@ Quy ước mã: `FR-<NHÓM>-<SỐ>`. Priority: **M**ust / **S**hould / **C**ould
 | FR-CLI-01 | Tool PHẢI nhận một tham số bắt buộc `target` (URL hoặc hostname). Nếu chuỗi nhập không chứa `://`, tool PHẢI thêm `https://` (kể cả dạng `host:port`, ví dụ `example.com:8443` → `https://example.com:8443/`). Tool PHẢI thêm `/` vào cuối **phần path** nếu chưa có, giữ nguyên query string (ví dụ `https://a.example/app?q=1` → `https://a.example/app/?q=1`). | M |
 | FR-CLI-02 | Tool PHẢI hỗ trợ các tham số tuỳ chọn: `--json PATH`, `--timeout N` (giây, mặc định 10), `--workers N` (số luồng cho check path nhạy cảm, mặc định 5), `--no-color`, `--yes`/`--i-have-authorization`. | M |
 | FR-CLI-03 | Nếu GET baseline thất bại (lỗi kết nối/DNS/timeout/TLS), tool PHẢI ghi lỗi vào `errors`, KHÔNG được crash, và vẫn in được báo cáo. **Ngoại lệ:** nếu lỗi xảy ra ở tầng TLS (`requests.exceptions.SSLError`), tool PHẢI vẫn chạy nhóm check TLS (mục 4.5) trên **host:cổng của URL HTTPS bị lỗi** (lấy từ request gây lỗi; sau redirect `http://` → `https://` đó là bước HTTPS, không phải URL nhập vào) trước khi dừng. Lỗi kết nối thông thường không chạy nhóm TLS và báo cáo có 0 finding. | M |
-| FR-CLI-04 | Exit code: `0` nếu không có finding CRITICAL/HIGH; `1` nếu có ít nhất 1 finding CRITICAL hoặc HIGH; `2` nếu người dùng không xác nhận quyền quét. *(Đề xuất thêm exit code `3` đang chờ xác nhận — mục 13.)* | M |
+| FR-CLI-04 | Exit code (FR-CI-01): `1` nếu có ít nhất 1 finding **bằng hoặc cao hơn ngưỡng `--fail-on`** (mặc định `high` = CRITICAL/HIGH); nếu không, `3` nếu **quét không hoàn tất** (GET baseline tới trang chủ thất bại), trừ khi `--fail-on none`; `2` nếu người dùng không xác nhận quyền quét; còn lại `0`. Finding vượt ngưỡng được ưu tiên hơn "không hoàn tất" (ví dụ chứng chỉ hết hạn làm baseline lỗi nhưng `TLS-CERT-EXPIRED` là CRITICAL → `1`). Báo cáo ghi ngưỡng và kết quả ở trường `gate`. *(Trước v1.5.0: không có `--fail-on`; target không kết nối được trả `0`.)* | M |
 | FR-CLI-05 | Nhóm check TLS (mục 4.5) chạy trên **URL HTTPS đầu tiên trong chuỗi redirect của baseline**: chính target nếu nhập `https://`, hoặc URL mà target `http://` chuyển tới. Nếu chuỗi redirect không có URL HTTPS nào, KHÔNG chạy nhóm TLS. *(Trước FIX-09: không bao giờ chạy TLS cho target `http://`.)* | M |
 | FR-CLI-06 | **Một kho chứng chỉ cho cả hai đường kết nối (FR-CI-10).** Request HTTP và Bước B của nhóm TLS PHẢI dùng **cùng một** `SSLContext`: nếu có `--ca-bundle PATH` (hoặc biến môi trường `REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE`) thì dùng **đúng file đó thay cho kho mặc định**; nếu không thì dùng **kho chứng chỉ của hệ điều hành**, không dùng `certifi`. File không đọc được hoặc không phải chứng chỉ → lỗi tham số (exit code `2` của argparse). *(Trước v1.5.0: request HTTP tin `certifi`, TLS check tin kho OS — nguyên nhân B1.)* | M |
 
@@ -351,7 +351,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | FR-UI-06 | Sau mỗi lần quét, server PHẢI lưu báo cáo trong bộ nhớ dưới một id ngẫu nhiên không đoán được (`secrets.token_urlsafe(16)`), giữ tối đa 20 báo cáo gần nhất. `GET /api/report/<id>.html` PHẢI trả báo cáo HTML dạng tệp đính kèm (`Content-Disposition: attachment`, tên `owasp-scan-<host>-<thời điểm>.html`); id không tồn tại → 404. | M |
 | FR-UI-07 | Báo cáo HTML (`render_html()`) PHẢI là một tệp độc lập: CSS nhúng, không có script, không tải tài nguyên ngoài; mọi giá trị lấy từ target PHẢI được HTML-escape. Nội dung gồm thời gian, check đã chạy, trạng thái gate, bảng tổng hợp, lỗi non-fatal, danh sách finding, và phần giới hạn phạm vi. | M |
 | FR-UI-08 | Trang UI PHẢI gửi các header: `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. Dữ liệu quét trên trang chỉ được hiển thị bằng `textContent` (không `innerHTML`). | M |
-| FR-UI-09 | Trường `gate_failed` PHẢI dùng cùng quy tắc với exit code `1` của CLI (FR-CLI-04), qua cùng hàm `output.gate_failed()`. Ngoài `gate_failed`, `report_id`, `report_url` và các trường thay đổi theo lần quét (`scan_id`, thời gian), JSON của Web UI PHẢI giống hệt JSON `--json` của CLI cho cùng target. Lỗi của cả hai endpoint trả `application/json` dạng `{"error": "..."}`. | M |
+| FR-UI-09 | Trường `gate_failed` PHẢI bằng `gate.failed` của báo cáo, tính bằng cùng hàm `output.gate_failed()` và cùng ngưỡng `--fail-on` (khai báo khi khởi động server) như CLI. Ngoài `gate_failed`, `report_id`, `report_url` và các trường thay đổi theo lần quét (`scan_id`, thời gian), JSON của Web UI PHẢI giống hệt JSON `--json` của CLI cho cùng target và cùng ngưỡng. Lỗi của cả hai endpoint trả `application/json` dạng `{"error": "..."}`. | M |
 
 ---
 
@@ -434,15 +434,16 @@ class ScanResult:
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
 
-Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.2`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`. Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
+Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.3`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01). Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
 
 ```json
 {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "scanner_version": "1.1.0",
   "rules_version": "1.1.0",
   "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "secrets_redacted": true,
+  "gate": { "fail_on": "high", "failed": true, "incomplete": false },
   "target": "https://example.com/",
   "final_url": "https://www.example.com/",
   "redirect_chain": [{ "url": "https://example.com/", "status": 301 }],
@@ -490,7 +491,7 @@ AT-12 kiểm tra đúng tập khoá ở cấp gốc, trong `summary` và trong m
 ### 7.1 Cú pháp
 
 ```
-python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no-color] [--yes] [--ca-bundle PATH] [--show-secrets]
+python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no-color] [--yes] [--fail-on LEVEL] [--ca-bundle PATH] [--show-secrets]
 ```
 
 ### 7.2 Bảng tham số
@@ -503,6 +504,7 @@ python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no
 | `--workers N` | Không | `5` | Số luồng song song khi kiểm tra path nhạy cảm. |
 | `--no-color` | Không | tắt | Tắt mã màu ANSI. |
 | `--yes` / `--i-have-authorization` | Không | tắt | Bỏ qua bước hỏi xác nhận tương tác. |
+| `--fail-on LEVEL` | Không | `high` | Mức thấp nhất làm fail gate (exit `1`): `critical`, `high`, `medium`, `low`, hoặc `none` (không bao giờ fail, kể cả khi quét không hoàn tất). |
 | `--ca-bundle PATH` | Không | env `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE`, rồi kho OS | File PEM các CA được tin, thay cho kho mặc định, cho cả request HTTP và TLS check (FR-CLI-06). |
 | `--show-secrets` | Không | tắt | Không che giá trị cookie và tham số URL nhạy cảm (chỉ để debug cục bộ; NFR-SEC-04). |
 
@@ -510,14 +512,15 @@ python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no
 
 | Code | Ý nghĩa |
 |---|---|
-| `0` | Quét xong, không có finding CRITICAL/HIGH. Lưu ý: target không kết nối được cũng trả `0` (mục 13). |
-| `1` | Có ít nhất 1 finding CRITICAL hoặc HIGH. |
-| `2` | Người dùng không xác nhận quyền quét — không có request nào được gửi. |
+| `0` | Quét xong, không có finding nào bằng hoặc cao hơn ngưỡng `--fail-on`; hoặc `--fail-on none`. |
+| `1` | Có ít nhất 1 finding bằng hoặc cao hơn ngưỡng `--fail-on` (mặc định CRITICAL/HIGH). |
+| `2` | Người dùng không xác nhận quyền quét — không có request nào được gửi. Cũng là exit code của argparse khi tham số sai. |
+| `3` | Quét không hoàn tất: không lấy được trang chủ (DNS, kết nối, TLS…) và không có finding nào vượt ngưỡng. Không dùng khi `--fail-on none`. |
 
 ### 7.4 Web UI cục bộ
 
 ```
-python -m owasp_scanner.web [--host 127.0.0.1] [--port 8765] [--timeout N] [--workers N] [--ca-bundle PATH]
+python -m owasp_scanner.web [--host 127.0.0.1] [--port 8765] [--timeout N] [--workers N] [--fail-on LEVEL] [--ca-bundle PATH]
 ```
 
 | Tham số | Mặc định | Mô tả |
@@ -526,6 +529,7 @@ python -m owasp_scanner.web [--host 127.0.0.1] [--port 8765] [--timeout N] [--wo
 | `--port` | `8765` | Cổng lắng nghe. |
 | `--timeout` | `10` | Timeout mỗi request khi quét. |
 | `--workers` | `5` | Số luồng cho check path nhạy cảm. |
+| `--fail-on` | `high` | Ngưỡng cho `gate_failed` và trường `gate` (FR-CI-01). |
 | `--ca-bundle` | env, rồi kho OS | Như `--ca-bundle` của CLI (FR-CLI-06). |
 
 | Endpoint | Mô tả |
@@ -570,7 +574,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-08 | robots.txt | `Disallow: /admin/`, `Disallow: /backup/` | Finding LOW, evidence `/admin/, /backup/` | `test_at08_robots_txt_hints` |
 | AT-09 | CORS phản xạ origin + credentials | Server echo `Origin`, `Allow-Credentials: true` | Finding HIGH `CORS-REFLECTS-ARBITRARY-ORIGIN` | `test_at09_*` |
 | AT-10 | Chứng chỉ hết hạn, chạy qua CLI | HTTPS với cert tự ký hết hạn năm 2020 | Có `TLS-CERT-EXPIRED`; không có `TLS-CERT-NOT-TRUSTED`; exit code `1` | `test_at10_expired_certificate_end_to_end` |
-| AT-11 | Target không phản hồi | Cổng đóng | `errors` có 1 dòng; 0 finding; báo cáo vẫn in; exit code `0` | `test_at11_unreachable_target` |
+| AT-11 | Target không phản hồi | Cổng đóng | `errors` có 1 dòng; 0 finding; báo cáo vẫn in; exit code `3` (quét không hoàn tất; `0` trước v1.5.0) | `test_at11_unreachable_target` |
 | AT-12 | Xuất JSON hợp lệ | `--json out.json` | Parse được; đúng tập khoá mục 6.2; finding đã sắp xếp | `test_at12_json_report` |
 | AT-13 | Exit code | Có ít nhất 1 CRITICAL | Exit code `1` | `test_at13_exit_code_1_on_critical` |
 | AT-14 | `--no-color` | `--no-color` | Không có `\x1b[` | `test_at14_no_color_output` |
@@ -602,6 +606,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-40 | Soft-404 theo vân tay (FR-DET-02) | Site trả cùng một trang (có `Contact:` và `Index of /`) cho mọi path; trang in lại path được hỏi; mọi path redirect về `/login`; `.env` và `/images/` thật trên các site đó; site 404 bình thường | Không có finding từ trang chung; file và listing thật vẫn được báo; site 404 có profile rỗng; path probe ngẫu nhiên mỗi lần; `run_scan` chỉ gửi 2 probe | `test_catch_all_page_that_happens_to_match_a_signature_is_ignored`, `test_catch_all_page_echoing_the_path_is_recognised`, `test_redirect_to_login_is_recognised`, `test_real_files_are_still_found_on_soft_404_sites`, `test_real_file_behind_login_redirects_is_still_found`, `test_normal_404_site_has_an_empty_profile`, `test_probe_paths_are_random_per_scan`, `test_run_scan_builds_the_profile_once` |
 | AT-41 | Confidence và TLS bị chặn (FR-DET-03, FR-DET-16) | Finding lộ file có nội dung khớp; robots/sitemap; chứng chỉ có issuer "Avast Web/Mail Shield Root"/"Zscaler …"; chứng chỉ thường; issuer của CA công khai | Lộ file `high`, gợi ý `low`; issuer phần mềm chặn → 1 cảnh báo trong `errors` và finding TLS `low`, kể cả qua `run_scan`; chứng chỉ thường không cảnh báo; tên CA công khai (GlobalSign, Let's Encrypt, DigiCert, Sectigo) không bị nhận nhầm | `test_content_verified_exposure_findings_are_high_confidence`, `test_hint_only_findings_stay_low_confidence`, `test_scanned_exposure_finding_is_high_confidence`, `test_interceptor_issuers_are_recognised`, `test_intercepted_tls_is_flagged_and_findings_are_low_confidence`, `test_run_scan_reports_the_interception_warning`, `test_normal_certificate_gives_no_warning` |
 | AT-42 | Một kho chứng chỉ (FR-CI-10) | Mặc định; `--ca-bundle` với CA tự tạo; biến môi trường; một request HTTPS qua session; file bundle thiếu/sai | Mặc định là kho OS (khác `certifi`); bundle thay kho mặc định; biến môi trường được dùng; `certifi` không bị nạp thêm vào context dùng chung; không có bundle → baseline lỗi + `TLS-CERT-NOT-TRUSTED`; có bundle → check HTTP chạy đủ, không `NOT-TRUSTED`; bundle hỏng → exit `2` | `test_default_trust_is_the_os_store_not_certifi`, `test_ca_bundle_replaces_the_default_store`, `test_env_variables_are_honoured`, `test_requests_never_adds_certifi_to_the_shared_context`, `test_without_ca_bundle_a_private_ca_is_not_trusted`, `test_ca_bundle_trusts_a_private_ca_for_http_and_tls`, `test_cli_ca_bundle_option`, `test_cli_rejects_a_missing_or_invalid_bundle` |
+| AT-43 | Ngưỡng `--fail-on` và exit code `3` (FR-CI-01) | Ma trận ngưỡng × severity; target chỉ có MEDIUM với từng ngưỡng; target có CRITICAL với `none`; target không kết nối được (mặc định và `none`); chứng chỉ hết hạn; Web UI khởi động với `--fail-on medium`; tham số sai | Đúng bảng ngưỡng; exit `1`/`0` theo ngưỡng; `none` → `0`; không kết nối → `3`, với `none` → `0`; chứng chỉ hết hạn → `1` (ưu tiên hơn `3`); JSON `gate` đúng; Web UI `gate_failed` theo ngưỡng của server; báo cáo HTML nêu ngưỡng; tham số sai bị từ chối | `test_threshold`, `test_exit_code_follows_the_threshold`, `test_critical_target_with_fail_on_none_passes`, `test_unreachable_target_exits_3`, `test_unreachable_target_with_fail_on_none_exits_0`, `test_findings_over_the_threshold_win_over_incomplete`, `test_json_records_the_gate`, `test_web_ui_uses_the_server_threshold`, `test_html_report_names_the_threshold`, `test_cli_rejects_an_unknown_threshold` |
 
 ---
 
@@ -639,9 +644,7 @@ Các quyết định dưới đây đã được chủ sản phẩm chốt ngày
 
 ## 13. Điểm chờ xác nhận
 
-| # | Nội dung | Trạng thái |
-|---|---|---|
-| Q1 | **Exit code `3` = "quét không hoàn tất"** (baseline thất bại hoặc có check lỗi), để pipeline CI không "xanh" khi không quét được gì. Là thay đổi hợp đồng CLI (FR-CLI-04). | `[CONFIRM]` — ghi ở FR-CI-01 trong backlog |
+Hiện không có điểm nào. Exit code `3` (Q1 cũ) đã được xác nhận và triển khai ở v1.5.0 (FR-CLI-04).
 
 ---
 

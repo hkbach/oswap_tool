@@ -193,7 +193,7 @@ def test_at11_unreachable_target(closed_port, capsys):
     exit_code = cli.main([target, "--yes", "--no-color", "--timeout", "2"])
     out = capsys.readouterr().out
     assert "No findings." in out and "Non-fatal errors during scan" in out
-    assert exit_code == 0  # per FR-CLI-04 as written; see docs/srs-feedback.md
+    assert exit_code == 3  # FR-CI-01: the scan could not run (was 0 before v1.5.0)
 
 
 def test_at12_json_report(http_server, tmp_path):
@@ -205,6 +205,7 @@ def test_at12_json_report(http_server, tmp_path):
         "schema_version", "scanner_version", "rules_version", "scan_id",  # FR-MODEL-02
         "secrets_redacted",  # FR-AUTH-02
         "final_url", "redirect_chain",  # FR-FIX-10
+        "gate",  # FR-CI-01
     }  # fmt: skip
     assert set(data["summary"]) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
     assert set(data["findings"][0]) == {

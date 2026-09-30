@@ -48,7 +48,7 @@ def test_report_is_standalone_english_html():
     assert html.startswith("<!doctype html>") and '<html lang="en">' in html
     assert "OWASP Non-intrusive Scan Report" in html and "https://t.example/" in html
     assert "<script" not in html and "http://" not in html.replace("https://t.example/", "")
-    assert "No CRITICAL/HIGH findings" in html
+    assert "No findings at or above the --fail-on high threshold" in html
 
 
 def test_findings_sorted_by_severity():

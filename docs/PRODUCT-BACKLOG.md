@@ -292,7 +292,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 ### E4. CLI và tích hợp CI/CD
 
-- [ ] **FR-CI-01** (P0 · all) Tham số `--fail-on {critical,high,medium,low,none}` để điều khiển exit code (mặc định `high` = giữ FR-CLI-04). Web UI dùng cùng logic cho `gate_failed`.
+- [x] **FR-CI-01** (P0 · all) *(xong ở Sprint 5 cùng exit code `3` đã xác nhận; SRS FR-CLI-04, 7.3, AT-43)* Tham số `--fail-on {critical,high,medium,low,none}` để điều khiển exit code (mặc định `high` = giữ FR-CLI-04). Web UI dùng cùng logic cho `gate_failed`.
   AC: test cho từng ngưỡng; `gate_failed` của Web UI khớp exit code của CLI với cùng ngưỡng.
   `[CONFIRM]` Thêm exit code `3` = "quét không hoàn tất" (baseline thất bại hoặc có check lỗi), để pipeline không "xanh" khi không quét được gì (B2 trong `docs/srs-feedback.md`; SRS mục 13). Là thay đổi hợp đồng CLI, cần chủ SRS duyệt trước khi làm.
 - [ ] **FR-CI-02** (P0 · Pro) `--baseline FILE`: chỉ tính lỗi **mới** so với baseline (theo `fingerprint`) để không chặn pipeline vì nợ cũ.

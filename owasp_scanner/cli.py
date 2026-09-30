@@ -22,7 +22,7 @@ from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
 from .http_utils import build_session
 from .models import ScanResult
-from .output import build_report, gate_failed
+from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, exit_code
 from .redact import redact
 from .report import print_report, write_json
 from .soft404 import build_profile
@@ -141,6 +141,7 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5, ca_bundle: str 
         result.finished_at = _utc_timestamp()
         return result
 
+    result.baseline_fetched = True
     # FR-FIX-10: header checks judge the page the user actually gets (the final response),
     # and HSTS is only meaningful when that response came over HTTPS.
     result.final_url = resp.url
@@ -206,6 +207,13 @@ def main(argv=None) -> int:
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors in CLI output")
     parser.add_argument(
+        "--fail-on",
+        choices=FAIL_ON_CHOICES,
+        default=DEFAULT_FAIL_ON,
+        help="Lowest severity that fails the scan with exit code 1 (default: high). "
+        "Exit code 3 means the target could not be scanned; 'none' never fails.",
+    )
+    parser.add_argument(
         "--ca-bundle",
         metavar="PATH",
         type=_ca_bundle,
@@ -240,14 +248,14 @@ def main(argv=None) -> int:
             "Do not share this output.",
             file=sys.stderr,
         )
-    report = build_report(result, show_secrets=args.show_secrets)
+    report = build_report(result, show_secrets=args.show_secrets, fail_on=args.fail_on)
     print_report(report, use_color=not args.no_color)
 
     if args.json:
         write_json(report, args.json)
         print(f"\nFull JSON report written to: {args.json}")
 
-    return 1 if gate_failed(report) else 0
+    return exit_code(report)
 
 
 if __name__ == "__main__":

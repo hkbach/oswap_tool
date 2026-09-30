@@ -37,7 +37,7 @@ def ids(findings):
 def test_report_records_final_url_and_redirect_chain(http_server):
     base = http_server(_redirect_to("/home"))
     report = output.build_report(cli.run_scan(base, timeout=5))
-    assert report["schema_version"] == SCHEMA_VERSION == "1.2"
+    assert report["schema_version"] == SCHEMA_VERSION
     assert report["final_url"] == base + "home"
     assert report["redirect_chain"] == [{"url": base, "status": 302}]
 
