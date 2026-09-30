@@ -1,0 +1,11 @@
+# Gitleaks configuration for the repository secret scan (FR-QA-07).
+# Uses the default rules and allowlists only the obviously fake values that the
+# redaction tests search for in the scanner output (tests/test_redact.py).
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fake secrets used by the redaction tests"
+paths = ['''^tests/test_redact\.py$''']
+regexes = ['''^Tok3n-Secret-9876$''', '''^SeSsIoN-VaLuE-0123456789$''']
+condition = "AND"
