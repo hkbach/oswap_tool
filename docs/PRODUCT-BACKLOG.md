@@ -259,7 +259,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 ### E2. Mô hình finding và ánh xạ tuân thủ
 
-- [ ] **FR-MODEL-01** (P0 · all) Mở rộng `Finding`: `cwe`, `confidence`, `references[]` (link OWASP/MDN/RFC), `instance_key` (khóa vị trí: URL/tên cookie/tên header/path), `fingerprint = hash(id + instance_key + target)`.
+- [x] **FR-MODEL-01** (P0 · all) *(xong ở Sprint 3: `catalog.py`, SRS 6.1, AT-29)* Mở rộng `Finding`: `cwe`, `confidence`, `references[]` (link OWASP/MDN/RFC), `instance_key` (khóa vị trí: URL/tên cookie/tên header/path), `fingerprint = hash(id + instance_key + target)`.
   AC: cùng một lỗi ở lần quét sau cho cùng `fingerprint`; hai cookie thiếu cờ khác nhau cho hai fingerprint khác nhau; fingerprint không phụ thuộc giá trị bị redact hay thời gian quét.
   Là tiền đề cho: FR-CI-02 (baseline), FR-RPT-06 (so sánh), FR-RPT-02 (SARIF).
 - [ ] **FR-MODEL-02** (P0 · all) Thêm `schema_version`, `scanner_version`, `scan_id` (UUID), `rules_version` vào JSON; giữ tương thích ngược hoặc nâng version có changelog.

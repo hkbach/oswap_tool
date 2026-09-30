@@ -78,11 +78,25 @@ def _finding(f: dict) -> str:
         rows.append(f"<dt>Recommendation</dt><dd>{_e(f['recommendation'])}</dd>")
     if f.get("url"):
         rows.append(f"<dt>URL</dt><dd><code>{_e(f['url'])}</code></dd>")
+    links = [ref for ref in f.get("references") or [] if str(ref).startswith("https://")]
+    if links:
+        items = "<br>".join(f'<a href="{_e(ref)}">{_e(ref)}</a>' for ref in links)
+        rows.append(f"<dt>References</dt><dd>{items}</dd>")
     details = f"<dl>{''.join(rows)}</dl>" if rows else ""
+    classification = " &middot; ".join(
+        _e(part)
+        for part in (
+            f.get("owasp_category"),
+            f.get("cwe"),
+            f"confidence {f['confidence']}" if f.get("confidence") else "",
+            f.get("id"),
+        )
+        if part
+    )
     return (
         f'<section class="card finding sev-{sev_class}">'
         f'<span class="badge">{_e(sev)}</span><h3>{_e(f.get("title"))}</h3>'
-        f'<p class="muted">{_e(f.get("owasp_category"))} &middot; {_e(f.get("id"))}</p>'
+        f'<p class="muted">{classification}</p>'
         f"<p>{_e(f.get('description'))}</p>{details}</section>"
     )
 

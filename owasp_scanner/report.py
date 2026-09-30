@@ -39,7 +39,8 @@ def print_report(result: ScanResult, use_color: bool = True) -> None:
         for f in sorted(result.findings, key=lambda x: x.severity.rank):
             tag = _colorize(f"[{f.severity.value}]", f.severity, use_color)
             print(f" {tag} {f.title}")
-            print(f"     OWASP: {f.owasp_category}")
+            classification = " | ".join(filter(None, (f.cwe, f"confidence: {f.confidence}" if f.confidence else "")))
+            print(f"     OWASP: {f.owasp_category}" + (f" | {classification}" if classification else ""))
             print(f"     {f.description}")
             if f.evidence:
                 print(f"     Evidence: {f.evidence}")

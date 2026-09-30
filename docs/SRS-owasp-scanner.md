@@ -145,6 +145,7 @@ owasp_scanner/
 ├── web.py             # Web UI cục bộ: http.server, /api/scan, /api/report/<id>.html
 ├── static/            # index.html, app.js, app.css của Web UI
 ├── html_report.py     # render_html(): báo cáo HTML độc lập từ JSON mục 6.2
+├── catalog.py         # Bảng cwe/confidence/references theo finding id; enrich() + fingerprint
 ├── http_utils.py      # HTTP session dùng chung: timeout mặc định, User-Agent, retry có kiểm soát
 ├── models.py          # Kiểu dữ liệu: Severity, Finding, ScanResult
 ├── report.py          # In báo cáo CLI (màu ANSI) + ghi file JSON
@@ -388,6 +389,11 @@ class Finding:
     evidence: str = ""
     recommendation: str = ""
     url: str = ""
+    instance_key: str = ""  # vị trí: tên header, tên cookie, path, host:port, URL (do check đặt)
+    cwe: str = ""           # VD "CWE-693"; rỗng với finding thông tin không phải điểm yếu
+    confidence: str = ""    # "high" | "medium" | "low"
+    references: list[str] = field(default_factory=list)  # link OWASP/CWE, chỉ https://
+    fingerprint: str = ""   # 32 hex, ổn định giữa các lần quét
 
 @dataclass
 class ScanResult:
@@ -401,12 +407,15 @@ class ScanResult:
 
 **Quy tắc bắt buộc:**
 
-- `Finding.id` là mã ổn định theo **loại** lỗi, không đổi giữa các lần chạy. Lưu ý: hiện chưa phân biệt được hai **vị trí** khác nhau của cùng một loại lỗi (ví dụ hai cookie cùng thiếu cờ đều có id `COOKIE-FLAGS-MISSING`). Khoá theo vị trí (`instance_key`, `fingerprint`) là FR-MODEL-01 trong backlog.
+- `Finding.id` là mã ổn định theo **loại** lỗi, không đổi giữa các lần chạy. Hai **vị trí** khác nhau của cùng một loại lỗi (ví dụ hai cookie cùng thiếu cờ) có cùng `id` nhưng khác `instance_key` và `fingerprint` (FR-MODEL-01).
+- `fingerprint` = 32 ký tự hex đầu của SHA-256(`id|instance_key|origin`), với `origin` = `scheme://host:port` của target (chữ thường, cổng mặc định 80/443). Không phụ thuộc path, thời gian quét hay giá trị bị che, nên cùng một lỗi ở cùng một chỗ luôn cho cùng fingerprint.
+- `cwe`, `confidence`, `references` lấy từ bảng khai báo `catalog.FINDING_CATALOG` (mỗi finding id một dòng). Mọi id tool sinh ra PHẢI có trong bảng. `cwe` để trống cho 3 finding thông tin không phải điểm yếu: `TLS-CONN-FAILED`, `TLS-CERT-PARSE-FAILED`, `EXPOSURE-SECURITY-TXT`. `COOKIE-FLAGS-MISSING` lấy CWE theo thuộc tính quan trọng nhất đang thiếu: Secure → CWE-614, HttpOnly → CWE-1004, SameSite → CWE-1275.
+- `confidence`: `high` = quan sát trực tiếp từ response/bắt tay (header, cookie, TLS, CORS, directory listing có dấu hiệu nội dung); `medium` = chỉ dựa trên HTTP 200 (path nhạy cảm, `security.txt`); `low` = chỉ là gợi ý (robots.txt, sitemap.xml). FR-DET-03 sẽ tinh chỉnh.
 - Khi xuất ra (CLI/JSON/HTML), `findings` được sắp theo `severity.rank` tăng dần (CRITICAL trước).
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
 
-JSON hiện **chưa có** `schema_version` (sẽ thêm ở FR-MODEL-02).
+JSON hiện **chưa có** `schema_version` (sẽ thêm ở FR-MODEL-02). Các trường `cwe`, `confidence`, `references`, `instance_key`, `fingerprint` của mỗi finding có từ FR-MODEL-01.
 
 ```json
 {
@@ -421,10 +430,15 @@ JSON hiện **chưa có** `schema_version` (sẽ thêm ở FR-MODEL-02).
       "title": "Exposed .env file (often contains secrets)",
       "severity": "CRITICAL",
       "owasp_category": "A01:2021 - Broken Access Control",
+      "cwe": "CWE-538",
+      "confidence": "medium",
       "description": "GET .env returned HTTP 200, suggesting the file/path is publicly accessible.",
       "evidence": "HTTP 200 for https://example.com/.env",
       "recommendation": "Remove the file from the web root or block access at the web server/proxy layer.",
-      "url": "https://example.com/.env"
+      "url": "https://example.com/.env",
+      "references": ["https://owasp.org/Top10/A01_2021-Broken_Access_Control/", "https://cwe.mitre.org/data/definitions/538.html"],
+      "instance_key": ".env",
+      "fingerprint": "<32 ký tự hex>"
     }
   ],
   "errors": []
@@ -545,6 +559,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-26 | Web UI: một lần quét mỗi lúc | Gửi lần quét thứ hai khi lần đầu chưa xong | HTTP 429 | `test_only_one_scan_at_a_time` |
 | AT-27 | Web UI: tải báo cáo HTML | Quét mock rồi mở `report_url` | 200, `Content-Disposition: attachment`; nội dung từ target được escape | `test_scan_result_links_to_downloadable_html_report`, `test_values_from_target_are_escaped` |
 | AT-28 | Web UI: tiếng Anh | File tĩnh của UI | `lang="en"`, không có ký tự tiếng Việt | `test_ui_text_is_english` |
+| AT-29 | Mô hình finding | Quét mock có nhiều loại lỗi; quét lại lần 2 | Mọi finding có `instance_key`, `fingerprint` 32 hex, `confidence`, `references`, `cwe` (trừ 3 id thông tin); 2 cookie thiếu cờ có 2 fingerprint khác nhau; fingerprint giống nhau giữa 2 lần quét và không phụ thuộc path | `test_every_finding_of_a_real_scan_is_enriched`, `test_same_type_in_two_places_gets_two_fingerprints`, `test_fingerprints_are_stable_across_scans`, `test_fingerprint_uses_origin_not_path_or_time`, `test_catalog_covers_every_finding_id` |
 
 ---
 

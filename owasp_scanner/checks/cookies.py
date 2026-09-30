@@ -9,6 +9,9 @@ from http.cookies import CookieError, SimpleCookie
 
 from ..models import Finding, Severity
 
+# CWE for the most important missing attribute (they are listed Secure, HttpOnly, SameSite).
+_CWE_BY_ATTRIBUTE = {"Secure": "CWE-614", "HttpOnly": "CWE-1004", "SameSite": "CWE-1275"}
+
 
 def check_cookies(url: str, set_cookie_headers: list[str]) -> list[Finding]:
     findings: list[Finding] = []
@@ -46,6 +49,8 @@ def check_cookies(url: str, set_cookie_headers: list[str]) -> list[Finding]:
                             "SameSite=Lax/Strict on all session/auth cookies."
                         ),
                         url=url,
+                        instance_key=name,
+                        cwe=_CWE_BY_ATTRIBUTE[missing[0].split("(")[0]],
                     )
                 )
 

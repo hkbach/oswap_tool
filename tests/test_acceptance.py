@@ -211,6 +211,12 @@ def test_at12_json_report(http_server, tmp_path):
         "evidence",
         "recommendation",
         "url",
+        # FR-MODEL-01
+        "cwe",
+        "confidence",
+        "references",
+        "instance_key",
+        "fingerprint",
     }
     ranks = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
     order = [ranks.index(f["severity"]) for f in data["findings"]]

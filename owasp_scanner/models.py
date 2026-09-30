@@ -37,6 +37,14 @@ class Finding:
     evidence: str = ""
     recommendation: str = ""
     url: str = ""
+    # Where on the target this finding applies (header name, cookie name, path, host:port...).
+    # Set by the check; together with id and the target origin it forms the fingerprint.
+    instance_key: str = ""
+    # Filled from catalog.FINDING_CATALOG by catalog.enrich(); a check may set cwe itself.
+    cwe: str = ""  # e.g. "CWE-693"; empty for informational findings that are not weaknesses
+    confidence: str = ""  # "high" | "medium" | "low"
+    references: list[str] = field(default_factory=list)
+    fingerprint: str = ""  # stable across scans, see catalog.fingerprint()
 
     def to_dict(self) -> dict:
         return {
@@ -44,10 +52,15 @@ class Finding:
             "title": self.title,
             "severity": self.severity.value,
             "owasp_category": self.owasp_category,
+            "cwe": self.cwe,
+            "confidence": self.confidence,
             "description": self.description,
             "evidence": self.evidence,
             "recommendation": self.recommendation,
             "url": self.url,
+            "references": list(self.references),
+            "instance_key": self.instance_key,
+            "fingerprint": self.fingerprint,
         }
 
 

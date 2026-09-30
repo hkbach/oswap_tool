@@ -218,3 +218,4 @@ code {
   .result-head { flex-direction: column; }
   .detail { grid-template-columns: 1fr; gap: 2px; }
 }
+.detail dd.references a { display: block; overflow-wrap: anywhere; }

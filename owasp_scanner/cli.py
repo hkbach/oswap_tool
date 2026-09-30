@@ -17,6 +17,7 @@ from urllib.parse import urlparse, urlsplit, urlunsplit
 
 import requests
 
+from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
 from .http_utils import build_session
 from .models import ScanResult
@@ -66,7 +67,7 @@ def _run_check(result: ScanResult, name: str, check, *args, **kwargs) -> None:
     result.checks_run.append(name)
     try:
         for f in check(*args, **kwargs):
-            result.add(f)
+            result.add(enrich(f, result.target))
     except Exception as exc:  # one broken check must not abort the scan (FR-REPORT-05)
         result.errors.append(f"Check '{name}' failed: {exc!r}")
 

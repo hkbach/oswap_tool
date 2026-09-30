@@ -36,6 +36,7 @@ def check_cors(session, url: str) -> list[Finding]:
                 ),
                 evidence="Access-Control-Allow-Origin: *, Access-Control-Allow-Credentials: true",
                 url=url,
+                instance_key=url,
             )
         )
     elif acao == _TEST_ORIGIN:
@@ -53,6 +54,7 @@ def check_cors(session, url: str) -> list[Finding]:
                 evidence=f"Origin sent: {_TEST_ORIGIN} -> Access-Control-Allow-Origin: {acao}",
                 recommendation="Validate Origin against an explicit allow-list server-side; never reflect it verbatim.",
                 url=url,
+                instance_key=url,
             )
         )
     elif acao == "*":
@@ -67,6 +69,7 @@ def check_cors(session, url: str) -> list[Finding]:
                 ),
                 recommendation="Confirm this endpoint truly serves only public, non-sensitive data.",
                 url=url,
+                instance_key=url,
             )
         )
 

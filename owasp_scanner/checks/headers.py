@@ -78,6 +78,7 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
                     description=f"The response did not include a '{header}' header.",
                     recommendation=advice,
                     url=url,
+                    instance_key=header,
                 )
             )
         elif header == "x-frame-options":
@@ -92,6 +93,7 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
                         description=f"X-Frame-Options value observed: '{lower_headers[header]}'.",
                         recommendation="Use 'DENY' or 'SAMEORIGIN', or migrate to CSP frame-ancestors.",
                         url=url,
+                        instance_key=header,
                     )
                 )
 
@@ -107,6 +109,7 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
                 evidence=csp_value,
                 recommendation="Remove 'unsafe-inline'/'unsafe-eval'; use nonces or hashes instead.",
                 url=url,
+                instance_key="content-security-policy",
             )
         )
     # Legacy header that should be actively disabled, not just absent
@@ -125,6 +128,7 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
                 ),
                 evidence=f"X-XSS-Protection: {xxp}",
                 url=url,
+                instance_key="x-xss-protection",
             )
         )
 
@@ -140,6 +144,7 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
                     evidence=f"{h}: {lower_headers[h]}",
                     recommendation="Suppress or generalize this header at the reverse proxy/web server level.",
                     url=url,
+                    instance_key=h,
                 )
             )
 

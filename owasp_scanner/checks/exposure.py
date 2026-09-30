@@ -79,6 +79,7 @@ def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[
                             owasp_category="A05:2021 - Security Misconfiguration",
                             description="A security.txt disclosure policy was found (good practice).",
                             url=url,
+                            instance_key=path,
                         )
                     )
                 continue
@@ -96,6 +97,7 @@ def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[
                             "Remove the file from the web root or block access at the web server/proxy layer."
                         ),
                         url=url,
+                        instance_key=path,
                     )
                 )
 
@@ -123,6 +125,7 @@ def check_directory_listing(session, base_url: str, paths: list[str] | None = No
                     evidence=url,
                     recommendation="Disable autoindex/directory listing in the web server configuration.",
                     url=url,
+                    instance_key=path,
                 )
             )
 
@@ -160,6 +163,7 @@ def _check_robots_txt(session, base_url: str) -> list[Finding]:
                     "Enforce access control on these paths server-side; don't rely on robots.txt to hide them."
                 ),
                 url=url,
+                instance_key="robots.txt",
             )
         )
     return findings
@@ -198,6 +202,7 @@ def _check_sitemap_xml(session, base_url: str) -> list[Finding]:
                     "Remove sensitive/internal URLs from the public sitemap; enforce access control server-side."
                 ),
                 url=url,
+                instance_key="sitemap.xml",
             )
         )
     return findings

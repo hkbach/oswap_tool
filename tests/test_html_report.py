@@ -103,3 +103,20 @@ def test_renders_a_real_scan(http_server):
     html = render_html(report)
     for finding in report["findings"]:
         assert finding["id"] in html
+
+
+def test_classification_and_only_https_references_are_rendered():
+    finding = {
+        "id": "HDR-CSP-UNSAFE",
+        "title": "t",
+        "severity": "MEDIUM",
+        "owasp_category": "A03:2021 - Injection",
+        "cwe": "CWE-693",
+        "confidence": "high",
+        "description": "d",
+        "references": ["https://owasp.org/x", "javascript:alert(1)"],
+    }
+    html = render_html(_report(findings=[finding]))
+    assert "CWE-693" in html and "confidence high" in html
+    assert '<a href="https://owasp.org/x">' in html
+    assert "javascript:" not in html
