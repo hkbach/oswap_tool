@@ -16,6 +16,24 @@ Công cụ Python (CLI + Web UI cục bộ) quét cấu hình bảo mật của 
 
 ## Changelog
 
+- **v1.3.0** (Sprint 3b) — thay đổi hành vi cần lưu ý:
+  - **Quét `http://` giờ luôn kiểm tra redirect sang HTTPS (FIX-09).** Site HTTP
+    không chuyển sang HTTPS có finding `TLS-NO-HTTPS-REDIRECT` (HIGH), nên
+    **exit code thành `1`**. Nếu `http://` chuyển sang HTTPS, nhóm TLS chạy trên
+    URL HTTPS đó.
+  - **Không theo redirect ra ngoài phạm vi (D4):** chỉ theo tới cùng host hoặc
+    host chỉ khác `www.`; host khác không nhận request nào, `errors` có 1 dòng
+    cho mỗi host bị chặn. Tối đa 10 bước redirect.
+  - **Header xét trên response cuối (FIX-10):** HSTS chỉ đòi khi response cuối
+    là HTTPS; khi redirect đổi host, kiểm tra thêm HSTS ở host gốc
+    (`HDR-HSTS-MISSING-ON-START-HOST`, LOW).
+  - **JSON `schema_version` 1.2** (chỉ thêm trường): `final_url`,
+    `redirect_chain`; tên check mới `hsts-start-host`.
+  - **User-Agent mới:** `TECHVIFY-OWASP-Scanner/1.3.0 (+non-intrusive security
+    configuration check)`. Cập nhật luật lọc log/WAF nếu đang dựa vào chuỗi cũ.
+  - Text sản phẩm đổi "Passive" thành "Non-intrusive" (FIX-11).
+  - Lưu ý môi trường: phần mềm chặn TLS cục bộ (ví dụ Avast Web/Mail Shield) làm
+    kết quả nhóm TLS không đáng tin; xem SRS mục 10.
 - **v1.2.0** (Sprint 3) — thay đổi hành vi cần lưu ý:
   - **Che secret mặc định (D2):** giá trị cookie và tham số URL nhạy cảm
     (`token`, `key`, `session`, `password`, `sig`…) được thay bằng

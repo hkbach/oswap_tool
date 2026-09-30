@@ -64,6 +64,7 @@ def all_known_ids() -> set[str]:
         "TLS-CERT-NOT-TRUSTED",
         "TLS-CERT-PARSE-FAILED",
         "TLS-NO-HTTPS-REDIRECT",
+        "HDR-HSTS-MISSING-ON-START-HOST",
     }
     return ids
 

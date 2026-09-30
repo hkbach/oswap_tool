@@ -66,7 +66,7 @@ def test_scan_result_links_to_downloadable_html_report(ui, http_server):
     assert resp.headers["Content-Type"].startswith("text/html")
     disposition = resp.headers["Content-Disposition"]
     assert disposition.startswith('attachment; filename="owasp-scan-127.0.0.1_') and disposition.endswith('.html"')
-    assert "OWASP Passive Scan Report" in resp.text
+    assert "OWASP Non-intrusive Scan Report" in resp.text
     assert "EXPOSURE-ENV" in resp.text
 
 

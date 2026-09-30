@@ -17,12 +17,12 @@ File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. R
 |---|---|---|
 | A1–A5 | Đã sửa trong code, đã đưa vào SRS v1.2 | FR-CLI-01, FR-CLI-03, FR-COOKIE-01, FR-EXP-06, FR-REPORT-05; AT-19…AT-23 |
 | A6 | Đã sửa trong code; không đổi hành vi nên không cần FR | — |
-| B1 | Chuyển thành FR, chưa làm | Backlog FR-CI-10; SRS mục 10 |
+| B1 | Chuyển thành FR, chưa làm. **Đính chính 2026-09-30:** thành phần chặn TLS là Avast Web/Mail Shield trên máy dev, không phải proxy mạng TECHVIFY | Backlog FR-CI-10, FR-DET-16; SRS mục 10 |
 | B2 | Chờ xác nhận | Backlog FR-CI-01 `[CONFIRM]`; SRS mục 13 |
-| B3 | Đã chốt (FIX-09 + D4), chưa làm | Backlog FR-FIX-09; SRS mục 12 |
-| B4 | Đã chốt (FIX-10 + D5), chưa làm | Backlog FR-FIX-10; SRS mục 12 |
+| B3 | Đã làm ở Sprint 3b (FIX-09 + D4) | SRS FR-CLI-05, FR-REDIR-01, NFR-SEC-05 |
+| B4 | Đã làm ở Sprint 3b (FIX-10 + D5) | SRS FR-HDR-01, FR-HDR-11, mục 6.2 |
 | B5 | Đã giải quyết bằng D1 | SRS mục 3.3, 4.10 |
-| C (User-Agent `/1.0`) | Chuyển thành FR, chưa làm | Backlog FR-FIX-11 |
+| C (User-Agent `/1.0`) | Đã làm ở Sprint 3b | Backlog FR-FIX-11; SRS NFR-SEC-03 |
 | C (các mục còn lại) | Ghi nhận; `--json` không tự tạo thư mục cha đã ghi ở SRS mục 7.2 | — |
 
 ## A. Đã sửa trong mã để khớp SRS 1.1 — cần cập nhật câu chữ SRS
@@ -40,7 +40,7 @@ File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. R
 
 | # | Vấn đề | Tác động | Đề xuất |
 |---|---|---|---|
-| B1 | **Hai kho chứng chỉ khác nhau.** `requests` dùng `certifi`, còn TLS check dùng kho chứng chỉ của hệ điều hành. Trên mạng có TLS inspection (đã xác minh trên mạng TECHVIFY, 2026-09-23), `requests` từ chối **mọi** site HTTPS, trong khi `ssl` chấp nhận. | Tool không quét được target HTTPS nào trong mạng công ty. Báo cáo chỉ có 1 lỗi "Could not fetch", 0 finding, exit `0`. Rủi ro ở mục 10 đang đánh giá thấp vấn đề này. | Thống nhất dùng một kho chứng chỉ: (a) thêm tuỳ chọn `--ca-bundle PATH` dùng chung cho cả `requests` và `ssl`; hoặc (b) dùng kho chứng chỉ của hệ điều hành cho `requests` (thư viện `truststore` cần Python ≥ 3.10, xung đột với NFR-PORT-01 ≥ 3.9). |
+| B1 | **Hai kho chứng chỉ khác nhau.** `requests` dùng `certifi`, còn TLS check dùng kho chứng chỉ của hệ điều hành. Trên mạng có TLS inspection (quan sát ngày 2026-09-23; *đính chính 2026-09-30:* thành phần chặn TLS là Avast Web/Mail Shield chạy trên máy dev, không phải mạng TECHVIFY), `requests` từ chối **mọi** site HTTPS, trong khi `ssl` chấp nhận. | Tool không quét được target HTTPS nào trong mạng công ty. Báo cáo chỉ có 1 lỗi "Could not fetch", 0 finding, exit `0`. Rủi ro ở mục 10 đang đánh giá thấp vấn đề này. | Thống nhất dùng một kho chứng chỉ: (a) thêm tuỳ chọn `--ca-bundle PATH` dùng chung cho cả `requests` và `ssl`; hoặc (b) dùng kho chứng chỉ của hệ điều hành cho `requests` (thư viện `truststore` cần Python ≥ 3.10, xung đột với NFR-PORT-01 ≥ 3.9). |
 | B2 | **Exit code `0` khi quét không hoàn tất.** Theo đúng FR-CLI-04, target không kết nối được (DNS sai, server sập, hoặc B1) vẫn trả `0`. | Pipeline CI sẽ "xanh" dù không quét được gì. | Thêm exit code `3` = "quét không hoàn tất" (baseline thất bại hoặc có check lỗi). Đây là thay đổi hợp đồng CLI nên cần chủ SRS duyệt. |
 | B3 | FR-REDIR-01 ghi "chỉ chạy khi đã xác nhận TLS hoạt động", nhưng mã luôn chạy redirect check cho target `https://`. | Nhỏ: có thể báo `TLS-NO-HTTPS-REDIRECT` cho site mà TLS đang hỏng. | Chọn một trong hai: bỏ điều kiện trong SRS, hoặc thêm điều kiện vào mã. |
 | B4 | FR-HDR-01 xét `https` theo URL gốc, không theo URL cuối sau redirect. | Nhỏ: target `https://` bị redirect về `http://` vẫn bị yêu cầu HSTS trên response HTTP. | Làm rõ "baseline request" là URL gốc hay URL cuối. |

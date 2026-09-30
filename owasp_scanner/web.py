@@ -208,7 +208,7 @@ def build_server(host: str = "127.0.0.1", port: int = 8765, timeout: int = 10, w
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="owasp-scanner-web",
-        description="Local web UI for the OWASP-aligned passive web security scanner.",
+        description="Local web UI for the OWASP-aligned non-intrusive web security scanner.",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Interface to bind (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8765, help="Port to listen on (default: 8765)")

@@ -220,13 +220,13 @@ Cách đọc: `- [ ] **ID** (Ưu tiên · Tier) Mô tả.` theo sau là `AC:` (a
   AC: test cho 4 tổ hợp; description/recommendation của từng finding giải thích lý do mức độ; SRS mục 4.7 và mục 12 cập nhật khi code xong; exit code thay đổi được ghi changelog (`*`+credentials không còn làm exit 1).
 - [x] **FR-FIX-08** (P0 · all) *(xong: SRS v1.2 mục 3.3, 4.10, 6.3, 7.4 đã đối chiếu `web.py`)* Cập nhật SRS để mô tả Web UI cục bộ (đã có trong code) và đối chiếu lại với code thật.
   AC: SRS mô tả khớp với `web.py`; mọi khác biệt được sửa ở tài liệu hoặc code.
-- [ ] **FR-FIX-09** (P0 · all) **Điều kiện chạy redirect check** (B3, SRS mục 12). Luôn chạy redirect check cho hostname của target, kể cả khi nhập `http://`. Nếu `http://` được chuyển sang `https://` trong phạm vi **D4**, chạy nhóm TLS trên URL cuối; nếu không được chuyển, báo `TLS-NO-HTTPS-REDIRECT`. Lỗi chứng chỉ không chặn redirect check, hai loại lỗi báo riêng. Redirect ra ngoài phạm vi thì dừng và ghi vào `errors`.
+- [x] **FR-FIX-09** (P0 · all) *(xong ở Sprint 3b: SRS FR-CLI-05, FR-REDIR-01/03, AT-35)* **Điều kiện chạy redirect check** (B3, SRS mục 12). Luôn chạy redirect check cho hostname của target, kể cả khi nhập `http://`. Nếu `http://` được chuyển sang `https://` trong phạm vi **D4**, chạy nhóm TLS trên URL cuối; nếu không được chuyển, báo `TLS-NO-HTTPS-REDIRECT`. Lỗi chứng chỉ không chặn redirect check, hai loại lỗi báo riêng. Redirect ra ngoài phạm vi thì dừng và ghi vào `errors`.
   AC: mock `http://` redirect sang `https://` cùng host → có kết quả nhóm TLS; mock `http://` không redirect → có `TLS-NO-HTTPS-REDIRECT`; mock redirect sang host khác → không gửi request tới host đó, có lỗi trong `errors`; cert hết hạn + không redirect → có cả hai finding. SRS sửa FR-CLI-05, FR-REDIR-01; changelog ghi rõ target `http://` có thể đổi exit code.
   Phụ thuộc: D4.
-- [ ] **FR-FIX-10** (P0 · all) **HSTS và header xét theo URL nào** (B4, SRS mục 12). Check header chạy trên response cuối; HSTS chỉ xét khi response cuối là HTTPS. Cookie vẫn xét trên toàn chuỗi redirect (**D5**). Nếu redirect đổi host (ví dụ `example.com` → `www.example.com`), kiểm tra thêm HSTS ở host gốc qua HTTPS; thiếu thì tạo finding mức LOW. JSON thêm `final_url`, `redirect_chain`; nâng `schema_version`.
+- [x] **FR-FIX-10** (P0 · all) *(xong ở Sprint 3b: SRS FR-HDR-01, FR-HDR-11, 6.2 `schema_version` 1.2, AT-36)* **HSTS và header xét theo URL nào** (B4, SRS mục 12). Check header chạy trên response cuối; HSTS chỉ xét khi response cuối là HTTPS. Cookie vẫn xét trên toàn chuỗi redirect (**D5**). Nếu redirect đổi host (ví dụ `example.com` → `www.example.com`), kiểm tra thêm HSTS ở host gốc qua HTTPS; thiếu thì tạo finding mức LOW. JSON thêm `final_url`, `redirect_chain`; nâng `schema_version`.
   AC: target `https://` redirect về `http://` → không đòi HSTS trên response HTTP; `example.com` → `www.example.com` có HSTS ở www nhưng thiếu ở gốc → 1 finding LOW; JSON có `final_url`, `redirect_chain` và `schema_version` mới; SRS sửa FR-HDR-01 và mục 6.2.
   Phụ thuộc: FR-MODEL-01, FR-MODEL-02, D4, D5.
-- [ ] **FR-FIX-11** (P1 · all) Bỏ chữ "Passive" khỏi text sản phẩm cho khớp FR-FIX-04: banner CLI (`cli.py`), tiêu đề và footer Web UI (`static/index.html`, footer còn trỏ tới `SRS.md` cũ), tiêu đề/footer báo cáo HTML (`html_report.py`), User-Agent (`http_utils.py`, đồng thời sửa `/1.0` thành phiên bản thật).
+- [x] **FR-FIX-11** (P1 · all) *(xong ở Sprint 3b: SRS NFR-SEC-03, AT-37)* Bỏ chữ "Passive" khỏi text sản phẩm cho khớp FR-FIX-04: banner CLI (`cli.py`), tiêu đề và footer Web UI (`static/index.html`, footer còn trỏ tới `SRS.md` cũ), tiêu đề/footer báo cáo HTML (`html_report.py`), User-Agent (`http_utils.py`, đồng thời sửa `/1.0` thành phiên bản thật).
   AC: `grep -i passive owasp_scanner/` chỉ còn trong comment/docstring; test UI và báo cáo HTML được cập nhật; text vẫn là tiếng Anh (NFR-USA-03).
 
 ### E1. Độ chính xác và chiều sâu của các check hiện có
@@ -241,6 +241,8 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
   AC: trường `confidence` có trong JSON; finding có xác thực nội dung (FR-DET-01) là high.
 - [ ] **FR-DET-04** (P0 · all) TLS: **dò chủ động** các phiên bản (SSLv3, TLS1.0, 1.1, 1.2, 1.3) và cipher server hỗ trợ, không chỉ giao thức được thương lượng (sửa FR-TLS-04/05).
   AC: mock TLS server bật TLS1.0/1.1 → finding `TLS-WEAK-PROTOCOL` dù client thương lượng được 1.3. Nếu môi trường Python/OpenSSL không cho phép dò bản cũ, ghi rõ trong `errors` là "không kiểm tra được", không im lặng bỏ qua. `[REC]` đánh giá dùng thư viện chuyên dụng (sslyze) nếu license phù hợp.
+- [ ] **FR-DET-16** (P1 · all) `[REC]` **Phát hiện TLS bị chặn giữa đường** (phần mềm diệt virus, proxy TLS inspection): so issuer/chuỗi chứng chỉ thấy được với dấu hiệu đã biết, hoặc so với kết quả từ môi trường tham chiếu; khi phát hiện thì ghi cảnh báo vào `errors` và đánh dấu kết quả nhóm TLS là không đáng tin (hạ `confidence`). Phát hiện ngày 2026-09-30: Avast Web/Mail Shield ký lại cả TLS tới `127.0.0.1`.
+  AC: mock mô phỏng chứng chỉ bị ký lại → có cảnh báo, finding TLS có `confidence` thấp; không chặn → không cảnh báo.
 - [ ] **FR-DET-05** (P1 · Pro) TLS nâng cao: hostname mismatch, chuỗi chứng chỉ thiếu intermediate, self-signed, độ mạnh khóa/chữ ký (RSA < 2048, SHA-1), hỗ trợ forward secrecy, HTTP/2, OCSP stapling (info).
   AC: mỗi loại lỗi có finding riêng với id ổn định, evidence là giá trị quan sát được.
 - [ ] **FR-DET-06** (P1 · Pro) Chất lượng HSTS: `max-age` < 15552000 (~180 ngày), thiếu `includeSubDomains`, thiếu `preload` (info).
@@ -299,7 +301,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-CI-04** (P0 · Pro) Image Docker chính thức chạy được CLI (`docker run ... scan https://...`), user không phải root.
 - [ ] **FR-CI-05** (P1 · Pro) `--targets-file FILE` và nhiều `target` trong một lần chạy, gộp báo cáo; giới hạn tuần tự/song song có kiểm soát.
 - [ ] **FR-CI-06** (P1 · Pro) File cấu hình (`scanner.yaml`): target, exclusion, rate limit, auth profile, ngưỡng fail, đường dẫn báo cáo; tham số CLI ghi đè cấu hình.
-- [ ] **FR-CI-10** (P0 · all) `--ca-bundle PATH` (và biến môi trường `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE` được tôn trọng) cho **cả** HTTP session và kiểm tra TLS (`ssl.create_default_context(cafile=...)`). Gỡ blocker **B1** `[FACT – đã xác minh trên mạng TECHVIFY ngày 2026-09-23; SRS mục 10]`: `requests` tin kho `certifi`, còn nhóm TLS tin kho chứng chỉ của hệ điều hành. Sau proxy có TLS inspection, `requests` từ chối **mọi** site HTTPS nên baseline thất bại; nhóm TLS vẫn qua vì kho OS tin CA của proxy. Kết quả: 1 lỗi "Could not fetch", 0 finding, exit code `0`.
+- [ ] **FR-CI-10** (P0 · all) `--ca-bundle PATH` (và biến môi trường `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE` được tôn trọng) cho **cả** HTTP session và kiểm tra TLS (`ssl.create_default_context(cafile=...)`). Gỡ blocker **B1** `[FACT – quan sát trên máy dev ngày 2026-09-23; đính chính 2026-09-30: thành phần chặn TLS là Avast Web/Mail Shield chạy trên máy, không phải proxy mạng; SRS mục 10]`: `requests` tin kho `certifi`, còn nhóm TLS tin kho chứng chỉ của hệ điều hành. Sau proxy có TLS inspection, `requests` từ chối **mọi** site HTTPS nên baseline thất bại; nhóm TLS vẫn qua vì kho OS tin CA của proxy. Kết quả: 1 lỗi "Could not fetch", 0 finding, exit code `0`.
   AC: mock HTTPS server ký bởi CA tự tạo → không có `--ca-bundle` thì baseline thất bại và có `TLS-CERT-NOT-TRUSTED`; có `--ca-bundle` trỏ tới CA đó thì baseline thành công, các check HTTP chạy đủ, không có `TLS-CERT-NOT-TRUSTED`; Web UI dùng cùng cấu hình (tham số khi khởi động server).
   `[REC]` Phương án thay thế: dùng kho chứng chỉ của OS cho `requests` (thư viện `truststore`). Cần Python ≥ 3.10, xung đột với NFR-PORT-01 (≥ 3.9); cần kiểm tra license.
 - [ ] **FR-CI-07** (P1 · Pro) Tham số vận hành: `--proxy`, `--header K:V` (lặp được), `--cookie`, `--user-agent`, `--version`, `--quiet`/`--verbose`.
@@ -313,7 +315,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-AUTHZ-02** (P0 · Business) Chế độ **consent theo mức**: config (non-intrusive) (mặc định) / crawl / active. Mỗi mức hiển thị banner riêng và yêu cầu xác nhận riêng, ghi lại ai xác nhận, lúc nào, cho mức nào.
 - [ ] **FR-AUTHZ-03** (P0 · all) **Scope guard**: chỉ gửi request tới host/port trong phạm vi khai báo; không theo redirect sang host ngoài phạm vi; cảnh báo khi redirect đi ra ngoài.
   AC: mock server redirect sang host khác → tool không gửi request tới host đó, ghi vào `errors`/`notes`.
-  Phần tối thiểu cho redirect đã chốt ở **D4** và làm cùng FR-FIX-09: cùng host hoặc chỉ khác tiền tố `www.`.
+  Phần tối thiểu cho redirect (**D4**: cùng host hoặc chỉ khác tiền tố `www.`) **đã xong ở Sprint 3b** (`ScopedSession`, SRS NFR-SEC-05, AT-34). Còn phạm vi khai báo nhiều host và cảnh báo trong UI.
 - [ ] **FR-AUTHZ-04** (P0 · Business – bắt buộc khi có dịch vụ dùng chung) **Chống SSRF cho dịch vụ**: từ chối target phân giải ra IP loopback, private (RFC1918), link-local (kể cả `169.254.169.254`), multicast, IPv6 tương đương; kiểm tra lại sau mỗi redirect và **ghim IP đã phân giải** (chống DNS rebinding).
   AC: test với `localhost`, `127.0.0.1`, `10.0.0.1`, `169.254.169.254`, hostname trỏ về IP private → đều bị từ chối. Cho phép cấu hình ngoại lệ chỉ cho bản on-premise nội bộ, với cờ tường minh.
 - [ ] **FR-AUTHZ-05** (P0 · all) **Giới hạn tốc độ** toàn cục và theo host: `--rate-limit` (request/giây), `--max-requests`, `--max-duration`; tự giảm tốc khi gặp 429/503.
@@ -578,7 +580,7 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 1 | Chốt 3 câu hỏi: UI, redact cookie, mức CORS | D1, D2, D3 (mục 1.4) | Xong |
 | 2 | Thêm `CLAUDE.md`, đưa backlog + SRS vào `docs/`; SRS v1.2; sửa FIX-01/02/04/08 và README | FR-FIX-01/02/04/08 | Xong trên branch `docs/sprint-2-srs-v1.2`, chờ review |
 | 3 | Cấu hình `ruff` + `pyproject.toml`; `redact()` + mô hình finding (fingerprint, `schema_version`) + Web UI dùng chung đầu ra; CORS theo D3 | FR-QA-07 (phần cấu hình), FR-AUTH-02, FR-MODEL-01, FR-MODEL-02, FR-WEB-01, FR-FIX-07 | Xong (v1.2.0) trên branch `feat/sprint-3`, chờ review |
-| 3b | Scope khi theo redirect (D4); redirect check luôn chạy; header/HSTS xét trên response cuối; bỏ chữ "Passive" trong code | FR-FIX-09, FR-FIX-10, FR-FIX-11 | Chưa làm; FIX-10 cần xong FR-MODEL-02 |
+| 3b | Scope khi theo redirect (D4); redirect check luôn chạy; header/HSTS xét trên response cuối; bỏ chữ "Passive" trong code | FR-FIX-09, FR-FIX-10, FR-FIX-11 (+ FR-AUTHZ-03 phần D4) | Xong (v1.3.0) trên branch `feat/sprint-3b`, chờ review |
 | 4 | Kiểm tra nội dung file nhạy cảm + confidence | FR-DET-01, FR-DET-02, FR-DET-03 | Chưa làm |
 | 5 | `--ca-bundle` (gỡ B1), `--fail-on`, SARIF, `--html`, template CI | FR-CI-10, FR-CI-01, FR-RPT-02, FR-RPT-09, FR-CI-03 | Chưa làm |
 | 6 | Lint (ruff) + CI cho repo | FR-QA-07 (+ FR-QA-01/02) | Chưa làm |
@@ -648,12 +650,12 @@ Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên l�
 
 | Epic | P0 xong | P1 xong | P2 xong | Ghi chú |
 |---|---|---|---|---|
-| E0 | ☐ | – | – | FIX-01…08 xong; còn FIX-09, 10, 11 |
+| E0 | ☑ | – | – | FIX-01…11 xong (Sprint 2–3b) |
 | E1 | ☐ | ☐ | ☐ | |
 | E2 | ☑ | ☐ | – | MODEL-01, 02 xong (Sprint 3) |
 | E3 | ☐ | ☐ | ☐ | |
 | E4 | ☐ | ☐ | – | |
-| E5 | ☐ | ☐ | – | |
+| E5 | ☐ | ☐ | – | AUTHZ-03 phần D4 xong (Sprint 3b) |
 | E6 | ☐ | ☐ | ☐ | |
 | E7 | ☐ | ☐ | ☐ | |
 | E8 | ☐ | ☐ | ☐ | AUTH-02 xong (Sprint 3) |

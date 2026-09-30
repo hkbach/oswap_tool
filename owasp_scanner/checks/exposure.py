@@ -1,4 +1,4 @@
-"""Passive checks for accidentally exposed sensitive files/paths and
+"""Non-intrusive checks for accidentally exposed sensitive files/paths and
 directory listings.
 
 Only ordinary GET requests to well-known, publicly-documented paths

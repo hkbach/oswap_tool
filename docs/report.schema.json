@@ -12,6 +12,8 @@
     "scan_id",
     "secrets_redacted",
     "target",
+    "final_url",
+    "redirect_chain",
     "started_at",
     "finished_at",
     "checks_run",
@@ -20,7 +22,7 @@
     "errors"
   ],
   "properties": {
-    "schema_version": { "const": "1.1" },
+    "schema_version": { "const": "1.2" },
     "scanner_version": { "type": "string", "minLength": 1 },
     "rules_version": { "type": "string", "minLength": 1 },
     "scan_id": {
@@ -32,6 +34,23 @@
       "type": "boolean"
     },
     "target": { "type": "string", "pattern": "^https?://" },
+    "final_url": {
+      "description": "Where the baseline GET ended after in-scope redirects; empty if it failed (FR-FIX-10)",
+      "anyOf": [{ "type": "string", "pattern": "^https?://" }, { "const": "" }]
+    },
+    "redirect_chain": {
+      "description": "Redirect responses before final_url, in order",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["url", "status"],
+        "properties": {
+          "url": { "type": "string" },
+          "status": { "type": "integer", "minimum": 300, "maximum": 399 }
+        }
+      }
+    },
     "started_at": { "$ref": "#/$defs/timestamp" },
     "finished_at": {
       "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "const": "" }]
@@ -44,6 +63,7 @@
           "cookies",
           "tls",
           "http-to-https-redirect",
+          "hsts-start-host",
           "cors",
           "sensitive-paths",
           "directory-listing",

@@ -27,7 +27,7 @@ from .report import print_report, write_json
 
 CONSENT_BANNER = """
 ==========================================================================
- OWASP-Aligned Passive Web Security Scanner
+ OWASP-Aligned Non-intrusive Web Security Scanner
 ==========================================================================
  This tool sends ordinary, non-destructive HTTP GET requests to check
  security headers, TLS configuration, cookie flags, CORS behavior, and
@@ -56,13 +56,23 @@ def _utc_timestamp() -> str:
 
 
 def _fetch_baseline(session, url: str):
-    """GET that never raises; returns (response, error_str, failed_in_tls_layer)."""
+    """GET that never raises; returns (response, error_str, tls_error_url).
+
+    ``tls_error_url`` is the URL whose TLS handshake failed — after an http -> https
+    redirect that is the HTTPS hop, not the URL we started from.
+    """
     try:
-        return session.get(url), None, False
+        return session.get(url), None, None
     except requests.exceptions.SSLError as exc:
-        return None, str(exc), True
+        failed = getattr(getattr(exc, "request", None), "url", None) or url
+        return None, str(exc), failed
     except requests.exceptions.RequestException as exc:
-        return None, str(exc), False
+        return None, str(exc), None
+
+
+def _host_port(url: str) -> tuple[str, int]:
+    parts = urlparse(url)
+    return parts.hostname or url, parts.port or 443
 
 
 def _run_check(result: ScanResult, name: str, check, *args, **kwargs) -> None:
@@ -90,44 +100,65 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
     hostname = parsed.hostname or base_url
 
     result = ScanResult(target=base_url, started_at=_utc_timestamp())
-    session = build_session(timeout=timeout)
-    tls_args = (tls_check.check_tls, hostname)
-    tls_kwargs = {"port": parsed.port or 443, "timeout": timeout}
+    session = build_session(timeout=timeout, scope_host=hostname)
+
+    def run_tls(url: str) -> None:
+        tls_host, tls_port = _host_port(url)
+        _run_check(result, "tls", tls_check.check_tls, tls_host, port=tls_port, timeout=timeout)
 
     # 1. Baseline fetch of the target page
-    resp, err, tls_failure = _fetch_baseline(session, base_url)
+    resp, err, tls_error_url = _fetch_baseline(session, base_url)
     if err or resp is None:
         result.errors.append(f"Could not fetch {base_url}: {err}")
         # An expired/untrusted certificate makes the verifying baseline GET fail;
         # the TLS check opens its own connections and is exactly what explains it.
-        if tls_failure:
-            _run_check(result, "tls", *tls_args, **tls_kwargs)
+        if tls_error_url:
+            run_tls(tls_error_url)
+            if parsed.scheme == "http" and tls_error_url.lower().startswith("https://"):
+                # We were redirected to HTTPS; the certificate problem is the TLS check's finding (FIX-09).
+                _run_check(result, "http-to-https-redirect", lambda: [])
+        result.errors.extend(session.blocked_redirects.values())
         result.finished_at = _utc_timestamp()
         return result
 
+    # FR-FIX-10: header checks judge the page the user actually gets (the final response),
+    # and HSTS is only meaningful when that response came over HTTPS.
+    result.final_url = resp.url
+    result.redirect_chain = [{"url": hop.url, "status": hop.status_code} for hop in resp.history]
+    final_is_https = resp.url.lower().startswith("https://")
     _run_check(
         result,
         "security-headers",
         headers.check_security_headers,
         base_url,
         dict(resp.headers),
-        is_https=(parsed.scheme == "https"),
+        is_https=final_is_https,
     )
+    if final_is_https and (urlparse(resp.url).hostname or "").lower() != hostname.lower():
+        _run_check(result, "hsts-start-host", headers.check_start_host_hsts, session, base_url, resp.url)
 
     # requests folds repeated Set-Cookie headers into one string, so read them from
     # the raw urllib3 headers — of the final response and of every redirect hop.
     set_cookie_headers = [raw for r in (*resp.history, resp) for raw in r.raw.headers.getlist("Set-Cookie")]
     _run_check(result, "cookies", cookies.check_cookies, base_url, set_cookie_headers)
 
+    # FIX-09: TLS runs on the first HTTPS URL of the baseline chain (the target itself,
+    # or where an http:// target redirected to), and the redirect check always runs.
+    chain = [r.url for r in (*resp.history, resp)]
+    https_url = next((url for url in chain if url.lower().startswith("https://")), None)
+    if https_url:
+        run_tls(https_url)
     if parsed.scheme == "https":
-        _run_check(result, "tls", *tls_args, **tls_kwargs)
         _run_check(result, "http-to-https-redirect", redirect_check.check_http_to_https_redirect, session, hostname)
+    elif not resp.is_redirect:  # a redirect stopped by the scope guard gives no verdict
+        _run_check(result, "http-to-https-redirect", redirect_check.evaluate_redirect_chain, base_url, chain)
 
     _run_check(result, "cors", cors_check.check_cors, session, base_url)
     _run_check(result, "sensitive-paths", exposure.check_sensitive_paths, session, base_url, max_workers=workers)
     _run_check(result, "directory-listing", exposure.check_directory_listing, session, base_url)
     _run_check(result, "robots-sitemap", exposure.check_robots_and_sitemap, session, base_url)
 
+    result.errors.extend(session.blocked_redirects.values())
     result.finished_at = _utc_timestamp()
     return result
 
@@ -135,7 +166,7 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="owasp-scanner",
-        description="OWASP-aligned passive web security scanner (headers, TLS, cookies, CORS, exposure).",
+        description="OWASP-aligned non-intrusive web security scanner (headers, TLS, cookies, CORS, exposure).",
     )
     parser.add_argument("target", help="Target URL or hostname, e.g. https://example.com")
     parser.add_argument("--json", metavar="PATH", help="Write full JSON report to PATH")

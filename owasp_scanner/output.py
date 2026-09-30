@@ -27,6 +27,8 @@ def build_report(result: ScanResult, *, show_secrets: bool = False) -> dict:
 
     pairs_by_fingerprint = {f.fingerprint: f.redactions for f in result.findings}
     report["target"] = redact(report["target"])
+    report["final_url"] = redact(report["final_url"])
+    report["redirect_chain"] = [dict(hop, url=redact(hop["url"])) for hop in report["redirect_chain"]]
     report["errors"] = [redact(error) for error in report["errors"]]
     for finding in report["findings"]:
         pairs = pairs_by_fingerprint.get(finding["fingerprint"], ())
