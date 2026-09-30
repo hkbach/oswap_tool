@@ -121,14 +121,21 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
         result.finished_at = _utc_timestamp()
         return result
 
+    # FR-FIX-10: header checks judge the page the user actually gets (the final response),
+    # and HSTS is only meaningful when that response came over HTTPS.
+    result.final_url = resp.url
+    result.redirect_chain = [{"url": hop.url, "status": hop.status_code} for hop in resp.history]
+    final_is_https = resp.url.lower().startswith("https://")
     _run_check(
         result,
         "security-headers",
         headers.check_security_headers,
         base_url,
         dict(resp.headers),
-        is_https=(parsed.scheme == "https"),
+        is_https=final_is_https,
     )
+    if final_is_https and (urlparse(resp.url).hostname or "").lower() != hostname.lower():
+        _run_check(result, "hsts-start-host", headers.check_start_host_hsts, session, base_url, resp.url)
 
     # requests folds repeated Set-Cookie headers into one string, so read them from
     # the raw urllib3 headers — of the final response and of every redirect hop.

@@ -5,6 +5,9 @@ security-header portions of OWASP ASVS chapter V14 (Configuration).
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
+from ..http_utils import safe_get
 from ..models import Finding, Severity
 
 # Each entry: header name (case-insensitive) -> (severity if missing, owasp category, guidance)
@@ -149,3 +152,44 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
             )
 
     return findings
+
+
+def check_start_host_hsts(session, start_url: str, final_url: str) -> list[Finding]:
+    """FR-FIX-10: when the redirect changed host and ended on HTTPS, the start host needs HSTS too.
+
+    Browsers only apply includeSubDomains/preload from the host the user types, e.g.
+    ``example.com`` redirecting to ``www.example.com``. One GET to the start host over
+    HTTPS, without following redirects. Raises RuntimeError when the start host cannot
+    be reached, so the scan records an error instead of a finding.
+    """
+    start, final = urlsplit(start_url), urlsplit(final_url)
+    start_host = (start.hostname or "").lower()
+    if final.scheme.lower() != "https" or not start_host or start_host == (final.hostname or "").lower():
+        return []
+    port = f":{start.port}" if start.scheme.lower() == "https" and start.port else ""
+    url = f"https://{start_host}{port}/"
+    resp, err = safe_get(session, url, allow_redirects=False)
+    if err or resp is None:
+        raise RuntimeError(f"could not check HSTS on {url}: {err}")
+    if any(name.lower() == "strict-transport-security" for name in resp.headers):
+        return []
+    return [
+        Finding(
+            id="HDR-HSTS-MISSING-ON-START-HOST",
+            title=f"Missing 'strict-transport-security' on the start host {start_host}",
+            severity=Severity.LOW,
+            owasp_category="A02:2021 - Cryptographic Failures",
+            description=(
+                f"{start_url} redirects to {final_url}, but {url} does not send Strict-Transport-Security. "
+                "Browsers apply includeSubDomains and preload only from the host that sends the header, "
+                "so the host users type should send it too."
+            ),
+            evidence=f"HTTP {resp.status_code} from {url} without Strict-Transport-Security",
+            recommendation=(
+                f"Send 'Strict-Transport-Security: max-age=31536000; includeSubDomains' from {start_host} "
+                "over HTTPS, including on its redirect responses."
+            ),
+            url=url,
+            instance_key=start_host,
+        )
+    ]

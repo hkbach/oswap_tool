@@ -55,6 +55,7 @@ _EXPOSED = (_TOP10_A01,)
 FINDING_CATALOG: dict[str, FindingMeta] = {
     # security headers
     "HDR-STRICT-TRANSPORT-SECURITY-MISSING": _meta("CWE-319", "high", _CS_HSTS, _SECURE_HEADERS, _TOP10_A02),
+    "HDR-HSTS-MISSING-ON-START-HOST": _meta("CWE-319", "high", _CS_HSTS, _TOP10_A02),
     "HDR-CONTENT-SECURITY-POLICY-MISSING": _meta("CWE-693", "high", _CS_CSP, *_HDR),
     "HDR-X-CONTENT-TYPE-OPTIONS-MISSING": _meta("CWE-693", "high", *_HDR),
     "HDR-X-FRAME-OPTIONS-MISSING": _meta("CWE-1021", "high", _CS_CLICKJACKING, *_HDR),

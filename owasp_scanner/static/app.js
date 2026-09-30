@@ -136,9 +136,9 @@ function renderResult(result) {
   $("result-meta").textContent =
     `Started ${formatTime(result.started_at)} · Finished ${formatTime(result.finished_at)} · ` +
     plural(result.findings.length, "finding");
-  $("checks-run").textContent = result.checks_run.length
-    ? `Checks run: ${result.checks_run.join(", ")}`
-    : "No checks ran.";
+  const checks = result.checks_run.length ? `Checks run: ${result.checks_run.join(", ")}` : "No checks ran.";
+  const redirected = result.final_url && result.final_url !== result.target;
+  $("checks-run").textContent = redirected ? `Final URL: ${result.final_url} · ${checks}` : checks;
   renderSummary(result);
   renderErrors(result);
   $("severity-filter").value = "ALL";

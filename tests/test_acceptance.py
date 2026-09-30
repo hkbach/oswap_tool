@@ -204,6 +204,7 @@ def test_at12_json_report(http_server, tmp_path):
         "target", "started_at", "finished_at", "checks_run", "summary", "findings", "errors",
         "schema_version", "scanner_version", "rules_version", "scan_id",  # FR-MODEL-02
         "secrets_redacted",  # FR-AUTH-02
+        "final_url", "redirect_chain",  # FR-FIX-10
     }  # fmt: skip
     assert set(data["summary"]) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
     assert set(data["findings"][0]) == {

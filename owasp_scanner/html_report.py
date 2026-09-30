@@ -127,6 +127,12 @@ def render_html(report: dict) -> str:
     )
     findings_html = "".join(_finding(f) for f in findings) or '<p class="muted">No findings.</p>'
     checks = ", ".join(report.get("checks_run", [])) or "None"
+    final_url = report.get("final_url") or ""
+    final_row = (
+        f"<tr><th>Final URL</th><td>{_e(final_url)}</td></tr>"
+        if final_url and final_url != report.get("target")
+        else ""
+    )
 
     return f"""<!doctype html>
 <html lang="en">
@@ -144,7 +150,7 @@ def render_html(report: dict) -> str:
 <table class="meta">
 <tr><th>Started (UTC)</th><td>{_e(report.get("started_at"))}</td></tr>
 <tr><th>Finished (UTC)</th><td>{_e(report.get("finished_at"))}</td></tr>
-<tr><th>Checks run</th><td>{_e(checks)}</td></tr>
+{final_row}<tr><th>Checks run</th><td>{_e(checks)}</td></tr>
 <tr><th>Total findings</th><td>{len(findings)}</td></tr>
 </table>
 {secrets_banner}<p class="gate {gate_class}">{_e(gate_text)}</p>

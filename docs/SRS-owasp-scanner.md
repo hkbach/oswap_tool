@@ -174,7 +174,7 @@ Mỗi module trong `checks/` là **hàm gần như thuần**: nhận session/URL
 4. Gửi GET baseline tới trang chủ target. Nếu thất bại, ghi lỗi vào `errors`, rồi:
    - nếu lỗi xảy ra ở tầng TLS (ví dụ chứng chỉ hết hạn hoặc không được tin cậy), vẫn chạy nhóm check TLS (mục 4.5) trên **đúng URL HTTPS bị lỗi** (có thể là bước redirect từ `http://`), rồi dừng; nếu target nhập `http://` và lỗi xảy ra sau khi đã chuyển sang HTTPS thì redirect check coi như đạt (FR-FIX-09);
    - các lỗi khác (DNS, timeout, connection refused) thì dừng ngay, báo cáo có 0 finding.
-5. Nếu baseline thành công, chạy lần lượt các check theo thứ tự cố định: security-headers → cookies → tls (nếu chuỗi redirect của baseline có URL HTTPS) → http-to-https-redirect → cors → sensitive-paths → directory-listing → robots-sitemap. Mỗi check trả về `list[Finding]`, gộp vào `ScanResult`. Check nào ném exception thì lỗi được ghi vào `errors` và các check sau vẫn chạy (FR-REPORT-05).
+5. Nếu baseline thành công, chạy lần lượt các check theo thứ tự cố định: security-headers → cookies → tls (nếu chuỗi redirect của baseline có URL HTTPS) → http-to-https-redirect → hsts-start-host (chỉ khi redirect đổi host và kết thúc ở HTTPS, FR-HDR-11) → cors → sensitive-paths → directory-listing → robots-sitemap. Mỗi check trả về `list[Finding]`, gộp vào `ScanResult`. Check nào ném exception thì lỗi được ghi vào `errors` và các check sau vẫn chạy (FR-REPORT-05).
 6. In báo cáo ra terminal (sắp xếp theo severity); nếu có `--json PATH`, ghi thêm file JSON.
 7. Thoát với exit code theo FR-CLI-04.
 
@@ -218,11 +218,11 @@ Web UI có consent gate tương đương ở FR-UI-02.
 
 ### 4.3 Nhóm kiểm tra Security Headers (`checks/headers.py`)
 
-Cơ sở: OWASP Secure Headers Project. Tên header so khớp không phân biệt hoa/thường. Các check dùng header của **response baseline sau khi đã theo redirect**.
+Cơ sở: OWASP Secure Headers Project. Tên header so khớp không phân biệt hoa/thường. Các check dùng header của **response cuối** của baseline, sau khi đã theo các redirect trong phạm vi (NFR-SEC-05); URL của response đó được ghi ở `final_url` (mục 6.2). Cookie thì xét trên toàn chuỗi redirect (FR-COOKIE-01, D5).
 
 | ID | Yêu cầu | Severity | OWASP | Priority |
 |---|---|---|---|---|
-| FR-HDR-01 | Nếu thiếu `Strict-Transport-Security`, PHẢI tạo finding `HDR-STRICT-TRANSPORT-SECURITY-MISSING`. **Ngoại lệ:** chỉ áp dụng khi target dùng `https://`; khi quét `http://` tool PHẢI bỏ qua hoàn toàn yêu cầu HSTS, vì trình duyệt bỏ qua HSTS gửi qua HTTP. *(Hiện xét theo scheme của target nhập vào; sẽ đổi theo FIX-10, mục 12.)* | HIGH | A02:2021 | M |
+| FR-HDR-01 | Nếu thiếu `Strict-Transport-Security`, PHẢI tạo finding `HDR-STRICT-TRANSPORT-SECURITY-MISSING`. Chỉ áp dụng khi **response cuối** của baseline (sau các redirect trong phạm vi) đến qua `https://`; nếu response cuối là HTTP thì bỏ qua hoàn toàn yêu cầu HSTS, vì trình duyệt bỏ qua HSTS gửi qua HTTP (FR-FIX-10). | HIGH | A02:2021 | M |
 | FR-HDR-02 | Nếu thiếu `Content-Security-Policy`, PHẢI tạo finding `HDR-CONTENT-SECURITY-POLICY-MISSING`. | MEDIUM | A05:2021 | M |
 | FR-HDR-03 | Nếu thiếu `X-Content-Type-Options`, PHẢI tạo finding `HDR-X-CONTENT-TYPE-OPTIONS-MISSING`. | LOW | A05:2021 | M |
 | FR-HDR-04 | Nếu thiếu `X-Frame-Options`, PHẢI tạo finding `HDR-X-FRAME-OPTIONS-MISSING` — **trừ khi** CSP đã có directive `frame-ancestors` (điều kiện loại trừ chung ở FR-HDR-05). | MEDIUM | A05:2021 | M |
@@ -232,6 +232,7 @@ Cơ sở: OWASP Secure Headers Project. Tên header so khớp không phân biệ
 | FR-HDR-08 | Nếu CSP chứa `unsafe-inline` hoặc `unsafe-eval` (không phân biệt hoa/thường), PHẢI tạo finding `HDR-CSP-UNSAFE`, evidence là giá trị CSP. | MEDIUM | A03:2021 | M |
 | FR-HDR-09 | Nếu có `X-XSS-Protection` với giá trị khác `0`, PHẢI tạo finding `HDR-XXP-LEGACY` (khuyến nghị gửi `0` và dùng CSP). | INFO | A05:2021 | C |
 | FR-HDR-10 | Với mỗi header rò rỉ thông tin có mặt (`Server`, `X-Powered-By`, `X-AspNet-Version`, `X-AspNetMvc-Version`), PHẢI tạo 1 finding riêng `HDR-INFO-<TÊN-HEADER>`, evidence là giá trị quan sát được. | INFO | A05:2021 | S |
+| FR-HDR-11 | Nếu redirect của baseline **đổi host** (ví dụ `example.com` → `www.example.com`, trong phạm vi NFR-SEC-05) và response cuối là HTTPS, tool PHẢI gửi thêm 1 GET tới `https://<host ban đầu>/` (giữ cổng nếu target nhập `https://` có cổng riêng), không theo redirect. Nếu response không có `Strict-Transport-Security`, PHẢI tạo finding `HDR-HSTS-MISSING-ON-START-HOST` (`instance_key` = host ban đầu), vì trình duyệt chỉ áp `includeSubDomains`/`preload` từ host gửi header. Không kết nối được thì ghi lỗi `Check 'hsts-start-host' failed: …`, không tạo finding. | LOW | A02:2021 | S |
 
 ### 4.4 Nhóm kiểm tra Cookie (`checks/cookies.py`)
 
@@ -405,6 +406,8 @@ class ScanResult:
     target: str
     started_at: str          # ISO 8601 UTC, hậu tố "Z"
     finished_at: str = ""
+    final_url: str = ""      # URL của response cuối của baseline; rỗng nếu baseline thất bại
+    redirect_chain: list[dict] = []  # các response redirect trước final_url: {"url", "status"}
     findings: list[Finding] = field(default_factory=list)
     checks_run: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -423,16 +426,18 @@ class ScanResult:
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
 
-Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.1`**: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` chỉ **thêm** các trường `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01), không bỏ hay đổi nghĩa trường nào. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
+Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.2`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`. Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "scanner_version": "1.1.0",
   "rules_version": "1.1.0",
   "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "secrets_redacted": true,
   "target": "https://example.com/",
+  "final_url": "https://www.example.com/",
+  "redirect_chain": [{ "url": "https://example.com/", "status": 301 }],
   "started_at": "2026-09-22T08:26:08.822920Z",
   "finished_at": "2026-09-22T08:26:09.273000Z",
   "checks_run": ["security-headers", "cookies", "tls", "http-to-https-redirect", "cors", "sensitive-paths", "directory-listing", "robots-sitemap"],
@@ -580,6 +585,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-33 | Severity CORS theo D3 | Server trả 4 tổ hợp: `*` + credentials; phản xạ + credentials; phản xạ không credentials; `*` đơn lẻ | Lần lượt MEDIUM, HIGH, MEDIUM, INFO; mô tả mỗi finding giải thích lý do mức độ; mọi finding có khuyến nghị | `test_cors`, `test_cors_findings_explain_their_severity_and_how_to_fix` |
 | AT-34 | Không theo redirect ra ngoài phạm vi | Target redirect trang chủ, hoặc mọi path, sang host khác (`localhost` so với `127.0.0.1`) | Host kia không nhận request nào; `errors` có đúng 1 dòng; quét vẫn chạy; redirect tới cùng host (khác path/cổng) vẫn được theo | `test_baseline_redirect_to_other_host_is_not_followed`, `test_path_redirects_to_other_host_are_blocked_and_reported_once`, `test_in_scope`, `test_in_scope_redirects_are_followed`, `test_redirect_to_another_port_on_the_same_host_is_followed` |
 | AT-35 | Redirect check luôn chạy (FIX-09) | `http://` không redirect; `http://` → HTTPS cert tự ký/hết hạn/được tin; `https://` với probe redirect sang `https://` không tồn tại, sang HTTP cùng host, sang host lạ | Lần lượt: `TLS-NO-HTTPS-REDIRECT`; `TLS-CERT-NOT-TRUSTED`/`TLS-CERT-EXPIRED` trên đúng cổng HTTPS và không có finding redirect; TLS chạy trên URL cuối; không finding; có finding; không finding + 1 lỗi phạm vi | `test_http_target_without_redirect_is_reported`, `test_http_target_redirected_to_https_with_bad_cert_reports_the_cert_not_the_redirect`, `test_http_target_redirected_to_expired_https_reports_expiry`, `test_http_target_redirected_to_trusted_https_scans_the_https_page` (skip khi TLS bị chặn), `test_probe_counts_a_redirect_to_https_without_loading_it`, `test_probe_follows_http_hops_in_scope`, `test_probe_stops_at_out_of_scope_redirect` |
+| AT-36 | Header xét trên response cuối (FIX-10) | Redirect `/` → `/home`; không redirect; baseline lỗi; `http://` → HTTPS được tin; đổi host với/không có HSTS ở host gốc | `final_url`/`redirect_chain` đúng và được che secret; không đòi HSTS khi response cuối là HTTP, có đòi khi là HTTPS; `HDR-HSTS-MISSING-ON-START-HOST` mức LOW khi host gốc thiếu HSTS; không áp dụng khi cùng host hoặc response cuối là HTTP; host gốc không kết nối được → lỗi, không finding | `test_report_records_final_url_and_redirect_chain`, `test_no_redirect_gives_empty_chain`, `test_failed_baseline_has_no_final_url`, `test_final_url_and_chain_are_redacted`, `test_hsts_is_not_required_when_the_final_response_is_http`, `test_http_target_redirected_to_https_is_held_to_hsts` (skip khi TLS bị chặn), `test_start_host_without_hsts_is_reported`, `test_start_host_with_hsts_is_fine`, `test_start_host_check_does_not_apply`, `test_unreachable_start_host_is_an_error_not_a_finding` |
 
 ---
 
@@ -607,13 +613,11 @@ Lộ trình chi tiết, độ ưu tiên và thứ tự sprint nằm ở `docs/PR
 
 ## 12. Quyết định đã chốt, chưa triển khai
 
-Các quyết định dưới đây đã được chủ sản phẩm chốt ngày 2026-09-30. Code hiện chưa làm, trừ D1 (mục 3.3), D2 (Sprint 3: FR-COOKIE-04, NFR-SEC-04), D3 (Sprint 3: FR-CORS-02…04) D4 (Sprint 3b: NFR-SEC-05) và FIX-09 (Sprint 3b: FR-CLI-05, FR-REDIR-01, FR-REDIR-03). Khi code xong: cập nhật các FR tương ứng ở mục 4, thêm AT ở mục 9, rồi xoá dòng khỏi bảng.
+Các quyết định dưới đây đã được chủ sản phẩm chốt ngày 2026-09-30. Code hiện chưa làm, trừ D1 (mục 3.3), D2 (Sprint 3: FR-COOKIE-04, NFR-SEC-04), D3 (Sprint 3: FR-CORS-02…04) D4 (Sprint 3b: NFR-SEC-05), D5 và FIX-10 (Sprint 3b: FR-HDR-01, FR-HDR-11, mục 6.2) và FIX-09 (Sprint 3b: FR-CLI-05, FR-REDIR-01, FR-REDIR-03). Khi code xong: cập nhật các FR tương ứng ở mục 4, thêm AT ở mục 9, rồi xoá dòng khỏi bảng.
 
 | ID | Quyết định | FR sẽ thay đổi | Phụ thuộc | Backlog |
 |---|---|---|---|---|
 | D1 | Web UI là công cụ cục bộ chạy chung tiến trình, gọi thẳng `run_scan()`; không có server/service riêng. **Đã triển khai** (mục 3.3, 4.10). | — | — | 1.4 |
-| D5 | **Cookie xét trên toàn chuỗi redirect**, header xét trên response cuối. Giữ hành vi A3 của FR-COOKIE-01. | FR-COOKIE-01 (giữ), FR-HDR-* | — | FR-FIX-10 |
-| FIX-10 | **HSTS xét theo URL nào.** Check header chạy trên response cuối cùng (trang người dùng thật sự nhận); HSTS chỉ xét khi response cuối là HTTPS (gộp FIX-05). Nếu redirect đổi host (ví dụ `example.com` → `www.example.com`), tool kiểm tra thêm HSTS ở host gốc qua HTTPS; thiếu thì tạo finding mức LOW, vì HSTS ở host gốc cần có để `includeSubDomains` và `preload` có tác dụng. JSON thêm `final_url` và `redirect_chain`. | FR-HDR-01, mục 6.2 | FR-MODEL-01, FR-MODEL-02 (nâng `schema_version`), D4, D5 | FR-FIX-10 |
 
 ---
 

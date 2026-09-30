@@ -10,8 +10,8 @@ from . import __version__
 
 # Version of the JSON report layout (docs/report.schema.json). Bump on any change to the
 # report shape: minor for added fields, major for removed/renamed fields or changed meaning.
-# "1.0" was the unversioned layout of scanner v1.1.0.
-SCHEMA_VERSION = "1.1"
+# "1.0" was the unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0; 1.2 adds final_url and redirect_chain.
+SCHEMA_VERSION = "1.2"
 
 
 class Severity(str, Enum):
@@ -82,6 +82,9 @@ class ScanResult:
     target: str
     started_at: str
     finished_at: str = ""
+    # Where the baseline GET ended after in-scope redirects, and the hops before it (FR-FIX-10).
+    final_url: str = ""
+    redirect_chain: list = field(default_factory=list)  # [{"url": str, "status": int}, ...]
     findings: list = field(default_factory=list)
     checks_run: list = field(default_factory=list)
     errors: list = field(default_factory=list)
@@ -106,6 +109,8 @@ class ScanResult:
             "rules_version": self.rules_version,
             "scan_id": self.scan_id,
             "target": self.target,
+            "final_url": self.final_url,
+            "redirect_chain": [dict(hop) for hop in self.redirect_chain],
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "checks_run": self.checks_run,
