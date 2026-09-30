@@ -297,7 +297,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
   `[CONFIRM]` Thêm exit code `3` = "quét không hoàn tất" (baseline thất bại hoặc có check lỗi), để pipeline không "xanh" khi không quét được gì (B2 trong `docs/srs-feedback.md`; SRS mục 13). Là thay đổi hợp đồng CLI, cần chủ SRS duyệt trước khi làm.
 - [ ] **FR-CI-02** (P0 · Pro) `--baseline FILE`: chỉ tính lỗi **mới** so với baseline (theo `fingerprint`) để không chặn pipeline vì nợ cũ.
   Phụ thuộc: FR-MODEL-01, FR-MODEL-02.
-- [ ] **FR-CI-03** (P0 · all) Template CI/CD: GitHub Actions, GitLab CI, Azure DevOps, Jenkins (trong `examples/ci/`), kèm hướng dẫn upload SARIF/artefact.
+- [x] **FR-CI-03** (P0 · all) *(xong ở Sprint 5: `examples/ci/`, AT-46; chưa chạy trên CI thật)* Template CI/CD: GitHub Actions, GitLab CI, Azure DevOps, Jenkins (trong `examples/ci/`), kèm hướng dẫn upload SARIF/artefact.
 - [ ] **FR-CI-04** (P0 · Pro) Image Docker chính thức chạy được CLI (`docker run ... scan https://...`), user không phải root.
 - [ ] **FR-CI-05** (P1 · Pro) `--targets-file FILE` và nhiều `target` trong một lần chạy, gộp báo cáo; giới hạn tuần tự/song song có kiểm soát.
 - [ ] **FR-CI-06** (P1 · Pro) File cấu hình (`scanner.yaml`): target, exclusion, rate limit, auth profile, ngưỡng fail, đường dẫn báo cáo; tham số CLI ghi đè cấu hình.
@@ -515,7 +515,7 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 
 ### E22. Tài liệu và tài sản đưa ra thị trường
 
-- [ ] **FR-DOC-01** (P0 · all) README nêu rõ **phạm vi và giới hạn** (không phải DAST toàn diện ở giai đoạn 1; không thay thế pentest), hướng dẫn cài đặt/chạy/CI.
+- [ ] **FR-DOC-01** (P0 · all) *(phạm vi/giới hạn và hướng dẫn CI đã có trong README ở Sprint 5; còn rà lại toàn bộ trước khi phát hành)* README nêu rõ **phạm vi và giới hạn** (không phải DAST toàn diện ở giai đoạn 1; không thay thế pentest), hướng dẫn cài đặt/chạy/CI.
 - [ ] **FR-DOC-02** (P0 · Business) Tài liệu pháp lý cần có (do pháp lý soạn/duyệt `[CONFIRM]`): Điều khoản sử dụng, Chính sách sử dụng chấp nhận được (AUP), Chính sách quyền riêng tư, DPA (nếu xử lý dữ liệu cá nhân), SLA.
 - [ ] **FR-DOC-03** (P1 · Business) Tài liệu bảo mật cho khách (security overview): cách bảo vệ dữ liệu, mã hóa, cách ly, retention, quy trình xử lý sự cố; bộ trả lời bảng câu hỏi bảo mật (security questionnaire) mẫu.
 - [ ] **FR-DOC-04** (P1 · Pro) Tài liệu người dùng: bắt đầu nhanh, danh mục check (mỗi check: mô tả, vì sao quan trọng, cách sửa), FAQ false positive, cách cấu hình auth/exclusion.

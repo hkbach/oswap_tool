@@ -1,0 +1,39 @@
+// OWASP-Aligned Non-intrusive Web Security Scanner in a Jenkins declarative pipeline.
+//
+// Only scan systems you own or are authorized to test: --yes skips the interactive
+// authorization prompt.
+//
+// Exit codes: 0 pass, 1 finding at or above --fail-on, 3 target could not be scanned.
+pipeline {
+    agent { docker { image 'python:3.12-slim' } }
+
+    environment {
+        TARGET_URL  = 'https://staging.example.com'  // the approved target
+        SCANNER_REF = 'v1.5.0'                       // tag or commit of hkbach/oswap_tool to install
+    }
+
+    stages {
+        stage('Install the scanner') {
+            steps {
+                sh 'apt-get update && apt-get install -y --no-install-recommends git'
+                sh 'pip install "git+https://github.com/hkbach/oswap_tool@${SCANNER_REF}"'
+            }
+        }
+        stage('Scan') {
+            steps {
+                // Add --ca-bundle path/to/ca.pem if the target uses a private CA.
+                sh '''
+                    python -m owasp_scanner "$TARGET_URL" --yes --no-color \
+                      --fail-on high \
+                      --json owasp-report.json --sarif owasp-report.sarif --html owasp-report.html
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'owasp-report.*', allowEmptyArchive: true
+        }
+    }
+}

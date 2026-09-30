@@ -1,0 +1,43 @@
+# OWASP-Aligned Non-intrusive Web Security Scanner in Azure Pipelines.
+#
+# Only scan systems you own or are authorized to test: --yes skips the interactive
+# authorization prompt.
+#
+# Exit codes: 0 pass, 1 finding at or above --fail-on, 3 target could not be scanned.
+trigger: none
+
+schedules:
+  - cron: "0 2 * * 1"
+    displayName: Weekly scan
+    branches:
+      include: [main]
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  TARGET_URL: https://staging.example.com  # the approved target
+  SCANNER_REF: v1.5.0                       # tag or commit of hkbach/oswap_tool to install
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: "3.12"
+
+  - script: pip install "git+https://github.com/hkbach/oswap_tool@$(SCANNER_REF)"
+    displayName: Install the scanner
+
+  # Add --ca-bundle path/to/ca.pem if the target uses a private CA.
+  - script: >
+      python -m owasp_scanner "$(TARGET_URL)" --yes --no-color
+      --fail-on high
+      --json $(Build.ArtifactStagingDirectory)/owasp-report.json
+      --sarif $(Build.ArtifactStagingDirectory)/owasp-report.sarif
+      --html $(Build.ArtifactStagingDirectory)/owasp-report.html
+    displayName: Scan
+
+  - task: PublishBuildArtifacts@1
+    condition: always()
+    inputs:
+      PathtoPublish: $(Build.ArtifactStagingDirectory)
+      ArtifactName: owasp-scan-reports
