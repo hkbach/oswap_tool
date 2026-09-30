@@ -92,7 +92,9 @@ def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[
                         owasp_category="A01:2021 - Broken Access Control",
                         description=f"GET {path} returned HTTP 200, suggesting the file/path is publicly accessible.",
                         evidence=f"HTTP {resp.status_code} for {url}",
-                        recommendation="Remove the file from the web root or block access at the web server/proxy layer.",
+                        recommendation=(
+                            "Remove the file from the web root or block access at the web server/proxy layer."
+                        ),
                         url=url,
                     )
                 )
@@ -154,7 +156,9 @@ def _check_robots_txt(session, base_url: str) -> list[Finding]:
                     "block direct access and can act as a roadmap for attackers."
                 ),
                 evidence=", ".join(interesting[:10]),
-                recommendation="Enforce access control on these paths server-side; don't rely on robots.txt to hide them.",
+                recommendation=(
+                    "Enforce access control on these paths server-side; don't rely on robots.txt to hide them."
+                ),
                 url=url,
             )
         )
@@ -190,7 +194,9 @@ def _check_sitemap_xml(session, base_url: str) -> list[Finding]:
                     "stronger disclosure signal."
                 ),
                 evidence=", ".join(interesting[:10]),
-                recommendation="Remove sensitive/internal URLs from the public sitemap; enforce access control server-side.",
+                recommendation=(
+                    "Remove sensitive/internal URLs from the public sitemap; enforce access control server-side."
+                ),
                 url=url,
             )
         )

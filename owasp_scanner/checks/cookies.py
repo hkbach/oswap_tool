@@ -5,7 +5,7 @@ Maps to OWASP ASVS V3 (Session Management) and Top 10 A05/A07.
 
 from __future__ import annotations
 
-from http.cookies import SimpleCookie
+from http.cookies import CookieError, SimpleCookie
 
 from ..models import Finding, Severity
 
@@ -17,7 +17,7 @@ def check_cookies(url: str, set_cookie_headers: list[str]) -> list[Finding]:
         cookie = SimpleCookie()
         try:
             cookie.load(raw)
-        except Exception:
+        except CookieError:  # unparseable header: nothing to evaluate
             continue
 
         for name, morsel in cookie.items():

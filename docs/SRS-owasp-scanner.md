@@ -358,7 +358,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | NFR-USA-01 | Khả dụng | Output CLI có phân cách rõ ràng, bảng tổng hợp theo severity ở đầu, rồi mới tới chi tiết. |
 | NFR-USA-02 | Khả dụng | Mọi finding PHẢI có khuyến nghị khắc phục khi khả thi. |
 | NFR-USA-03 | Khả dụng | Ngôn ngữ mặc định của mọi text sản phẩm (UI, báo cáo HTML, output CLI, thông báo lỗi API, nội dung finding) là **tiếng Anh**. Tài liệu dự án (SRS, backlog, README) có thể viết tiếng Việt. |
-| NFR-PORT-01 | Khả chuyển | Tool PHẢI chạy trên Python ≥ 3.9, Linux/macOS/Windows. *Hiện mới chạy test thực tế trên Python 3.12 và 3.14 (Windows); Python 3.9 sẽ được kiểm chứng trong CI (FR-QA-07).* |
+| NFR-PORT-01 | Khả chuyển | Tool PHẢI chạy trên Python ≥ 3.9, Linux/macOS/Windows. *Đã chạy toàn bộ test trên Python 3.9, 3.12 và 3.14 (Windows) ngày 2026-09-30; Linux/macOS sẽ được kiểm chứng trong CI (FR-QA-07).* |
 | NFR-MAINT-01 | Bảo trì | Mỗi nhóm check nằm trong module riêng, unit test được không cần mạng thật (dùng mock server cục bộ hoặc dữ liệu có sẵn). |
 | NFR-MAINT-02 | Bảo trì | Danh sách header bắt buộc (4.3) và path nhạy cảm (4.8.1) là cấu trúc dữ liệu khai báo ở đầu file. |
 | NFR-COMP-01 | Tuân thủ | README, UI và báo cáo PHẢI nêu rõ giới hạn phạm vi (không phải DAST toàn diện, không thay thế pentest). Không dùng ngôn ngữ đảm bảo tuyệt đối ("website an toàn", "phát hiện 100%"). |

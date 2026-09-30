@@ -62,7 +62,9 @@ def check_cors(session, url: str) -> list[Finding]:
                 title="CORS allows any origin ('*')",
                 severity=Severity.INFO,
                 owasp_category="A05:2021 - Security Misconfiguration",
-                description="Access-Control-Allow-Origin is '*'. Fine for public, non-authenticated APIs; risky otherwise.",
+                description=(
+                    "Access-Control-Allow-Origin is '*'. Fine for public, non-authenticated APIs; risky otherwise."
+                ),
                 recommendation="Confirm this endpoint truly serves only public, non-sensitive data.",
                 url=url,
             )

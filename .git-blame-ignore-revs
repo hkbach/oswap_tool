@@ -1,0 +1,2 @@
+# Commits that only reformat code (ruff format). Use: git config blame.ignoreRevsFile .git-blame-ignore-revs
+4144bf3d64239f7ac530cfd85ea82693516db1a9

@@ -169,7 +169,9 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
                             severity=Severity.MEDIUM,
                             owasp_category="A02:2021 - Cryptographic Failures",
                             description=f"Certificate expires on {not_after.isoformat()}.",
-                            recommendation="Renew the certificate (or confirm auto-renewal, e.g. ACME/Let's Encrypt, is working).",
+                            recommendation=(
+                                "Renew the certificate (or confirm auto-renewal, e.g. ACME/Let's Encrypt, is working)."
+                            ),
                             url=url,
                         )
                     )
