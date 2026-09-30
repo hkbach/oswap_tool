@@ -10,6 +10,7 @@
     "scanner_version",
     "rules_version",
     "scan_id",
+    "secrets_redacted",
     "target",
     "started_at",
     "finished_at",
@@ -25,6 +26,10 @@
     "scan_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "secrets_redacted": {
+      "description": "false only when the CLI ran with --show-secrets (SRS D2 / FR-AUTH-02)",
+      "type": "boolean"
     },
     "target": { "type": "string", "pattern": "^https?://" },
     "started_at": { "$ref": "#/$defs/timestamp" },

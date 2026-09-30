@@ -107,6 +107,11 @@ def render_html(report: dict) -> str:
     rank = {sev: i for i, sev in enumerate(_SEVERITIES)}
     findings = sorted(report.get("findings", []), key=lambda f: rank.get(f.get("severity"), len(rank)))
     gate_class, gate_text = _gate(report)
+    secrets_banner = (
+        '<p class="gate fail">Secrets are not redacted in this report (--show-secrets). Do not share it.</p>'
+        if report.get("secrets_redacted") is False
+        else ""
+    )
 
     summary_cells = "".join(
         f'<td class="sev-{sev}"><span class="n">{int(counts.get(sev, 0))}</span><span class="l">{sev}</span></td>'
@@ -142,7 +147,7 @@ def render_html(report: dict) -> str:
 <tr><th>Checks run</th><td>{_e(checks)}</td></tr>
 <tr><th>Total findings</th><td>{len(findings)}</td></tr>
 </table>
-<p class="gate {gate_class}">{_e(gate_text)}</p>
+{secrets_banner}<p class="gate {gate_class}">{_e(gate_text)}</p>
 <table class="summary"><tr>{summary_cells}</tr></table>
 </div>
 {errors_html}

@@ -22,6 +22,7 @@ from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_
 from .http_utils import build_session
 from .models import ScanResult
 from .output import build_report, gate_failed
+from .redact import redact
 from .report import print_report, write_json
 
 CONSENT_BANNER = """
@@ -142,6 +143,11 @@ def main(argv=None) -> int:
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors in CLI output")
     parser.add_argument(
+        "--show-secrets",
+        action="store_true",
+        help="Do not redact cookie values and sensitive URL parameters (local debugging only).",
+    )
+    parser.add_argument(
         "--yes",
         "--i-have-authorization",
         dest="assume_yes",
@@ -155,10 +161,16 @@ def main(argv=None) -> int:
         return 2
 
     target = _normalize_target(args.target)
-    print(f"Scanning {target} ...\n")
+    print(f"Scanning {target if args.show_secrets else redact(target)} ...\n")
 
     result = run_scan(target, timeout=args.timeout, workers=args.workers)
-    report = build_report(result)
+    if args.show_secrets:
+        print(
+            "WARNING: --show-secrets is set: cookie values and sensitive URL parameters are NOT redacted. "
+            "Do not share this output.",
+            file=sys.stderr,
+        )
+    report = build_report(result, show_secrets=args.show_secrets)
     print_report(report, use_color=not args.no_color)
 
     if args.json:

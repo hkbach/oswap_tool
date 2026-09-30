@@ -355,7 +355,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 - [ ] **FR-AUTH-01** (P0 · Pro) **Auth profile** khai báo trong config: `bearer`, `api_key`, `basic`, `cookie`, `header`; giá trị lấy từ **biến môi trường/secret store**, không ghi thẳng vào file cấu hình.
   AC: cấu hình chứa secret dạng plaintext → cảnh báo; secret không xuất hiện trong log, evidence, báo cáo, JSON.
-- [ ] **FR-AUTH-02** (P0 · all) Hàm `redact()` dùng chung theo quyết định **D2**: che giá trị `Authorization`, `Cookie`, `Set-Cookie`, token, tham số nhạy cảm trong URL (`token`, `key`, `session`, `password`, `sig`...). **Thay FR-COOKIE-04**: evidence giữ tên cookie + thuộc tính, giá trị thay bằng `<redacted len=N>`.
+- [x] **FR-AUTH-02** (P0 · all) *(xong ở Sprint 3: `redact.py`, NFR-SEC-04, AT-32; SARIF áp dụng khi có FR-RPT-02)* Hàm `redact()` dùng chung theo quyết định **D2**: che giá trị `Authorization`, `Cookie`, `Set-Cookie`, token, tham số nhạy cảm trong URL (`token`, `key`, `session`, `password`, `sig`...). **Thay FR-COOKIE-04**: evidence giữ tên cookie + thuộc tính, giá trị thay bằng `<redacted len=N>`.
   Cờ `--show-secrets` (chỉ CLI): tắt che để debug cục bộ; in cảnh báo ra stderr; JSON có `"secrets_redacted": false`; HTML hiển thị băng cảnh báo. Web UI **không** nhận tham số này dưới bất kỳ hình thức nào.
   AC: test quét toàn bộ output (console/JSON/HTML/SARIF, cả CLI và Web UI) và fail nếu còn secret mẫu; test `POST /api/scan` có trường `show_secrets` vẫn bị che.
   Là tiền đề cho: FR-RPT-02, FR-RPT-09, FR-CI-02, E8.
@@ -503,7 +503,7 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 ### E21. Chất lượng, kiểm thử và benchmark
 
 - [ ] **FR-QA-01** (P0 · all) Bộ kiểm thử tự động chạy **offline** bằng mock server (headers, cookies, TLS giả lập, redirect, CORS, path, directory listing, soft-404, robots); bao phủ tất cả FR đang có + FR mới.
-- [ ] **FR-QA-02** (P0 · all) Test **golden file** cho JSON/SARIF/HTML (snapshot) và test không-lộ-secret (FR-AUTH-02).
+- [ ] **FR-QA-02** (P0 · all) *(test không-lộ-secret đã có ở Sprint 3; còn golden file)* Test **golden file** cho JSON/SARIF/HTML (snapshot) và test không-lộ-secret (FR-AUTH-02).
 - [ ] **FR-QA-03** (P1 · Pro) **Benchmark độ chính xác** trên ứng dụng cố ý dễ tổn thương chạy **local/nội bộ** (ví dụ OWASP Juice Shop, DVWA, crAPI, VAmPI – kiểm tra license và điều khoản từng dự án): đo precision/recall theo từng loại lỗi, lưu kết quả theo phiên bản scanner để phát hiện hồi quy.
 - [ ] **FR-QA-04** (P1 · Pro) **Corpus false positive**: mỗi false positive khách báo → thêm test hồi quy; mục tiêu độ chính xác đặt sau khi có số đo baseline `[CONFIRM]` (không hứa con số khi chưa đo).
 - [ ] **FR-QA-05** (P1 · Pro) Kiểm thử tải/an toàn: chứng minh scanner tuân thủ giới hạn tốc độ và không gây tải bất thường lên mock server.

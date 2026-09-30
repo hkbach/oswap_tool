@@ -12,7 +12,7 @@ import pytest
 import requests
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import __version__, cli, web
+from owasp_scanner import __version__, cli, output, web
 from owasp_scanner.models import SCHEMA_VERSION
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "docs" / "report.schema.json"
@@ -42,7 +42,7 @@ def test_cli_json_report_matches_schema(validator, http_server, tmp_path):
 
 
 def test_failed_scan_report_matches_schema(validator, closed_port):
-    validator.validate(cli.run_scan(f"http://127.0.0.1:{closed_port}/", timeout=2).to_dict())
+    validator.validate(output.build_report(cli.run_scan(f"http://127.0.0.1:{closed_port}/", timeout=2)))
 
 
 def test_every_scan_gets_a_new_scan_id(http_server):
@@ -64,7 +64,7 @@ def test_web_response_is_the_report_plus_web_fields(validator, http_server):
 
 
 def test_schema_rejects_unknown_fields(validator):
-    report = cli.ScanResult(target="https://t/", started_at="2026-01-01T00:00:00Z").to_dict()
+    report = output.build_report(cli.ScanResult(target="https://t/", started_at="2026-01-01T00:00:00Z"))
     validator.validate(report)
     with pytest.raises(jsonschema.ValidationError):
         validator.validate({**report, "surprise": 1})

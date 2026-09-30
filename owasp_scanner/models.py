@@ -53,6 +53,9 @@ class Finding:
     confidence: str = ""  # "high" | "medium" | "low"
     references: list[str] = field(default_factory=list)
     fingerprint: str = ""  # stable across scans, see catalog.fingerprint()
+    # Exact (raw, masked) substrings that output.build_report() replaces unless --show-secrets.
+    # Internal only: never serialized, never shown (FR-AUTH-02).
+    redactions: list[tuple[str, str]] = field(default_factory=list, repr=False)
 
     def to_dict(self) -> dict:
         return {

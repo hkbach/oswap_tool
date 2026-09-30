@@ -116,7 +116,7 @@ def test_at04_cookie_missing_flags(http_server):
     cookie = by_id(result.findings, "COOKIE-FLAGS-MISSING")
     assert cookie.severity.value == "MEDIUM"
     assert "Secure, HttpOnly, SameSite" in cookie.description
-    assert cookie.evidence == "session=abc123; Path=/"
+    assert cookie.evidence == "session=abc123; Path=/"  # raw in ScanResult; output redacts it (FR-AUTH-02)
 
 
 def test_at05_exposed_env_and_git_head(http_server):
@@ -203,6 +203,7 @@ def test_at12_json_report(http_server, tmp_path):
     assert set(data) == {
         "target", "started_at", "finished_at", "checks_run", "summary", "findings", "errors",
         "schema_version", "scanner_version", "rules_version", "scan_id",  # FR-MODEL-02
+        "secrets_redacted",  # FR-AUTH-02
     }  # fmt: skip
     assert set(data["summary"]) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
     assert set(data["findings"][0]) == {
