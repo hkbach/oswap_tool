@@ -192,7 +192,7 @@ def _cors_handler(acao, acac=None):
 @pytest.mark.parametrize(
     "acao, acac, expected",
     [
-        ("*", "true", ("CORS-WILDCARD-WITH-CREDENTIALS", "CRITICAL")),
+        ("*", "true", ("CORS-WILDCARD-WITH-CREDENTIALS", "MEDIUM")),  # D3: browsers refuse this pair
         ("echo", "true", ("CORS-REFLECTS-ARBITRARY-ORIGIN", "HIGH")),
         ("echo", None, ("CORS-REFLECTS-ARBITRARY-ORIGIN", "MEDIUM")),
         ("*", None, ("CORS-WILDCARD", "INFO")),
@@ -267,3 +267,18 @@ def test_robots_hints_capped_at_ten(http_server):
 
     found = exposure.check_robots_and_sitemap(build_session(timeout=2), http_server(H))
     assert len(found) == 1 and len(found[0].evidence.split(", ")) == 10
+
+
+@pytest.mark.parametrize(
+    "acao, acac, reason",
+    [
+        ("*", "true", "browsers refuse"),
+        ("echo", "true", "any website"),
+        ("echo", None, "without credentials"),
+        ("*", None, "public"),
+    ],
+)
+def test_cors_findings_explain_their_severity_and_how_to_fix(http_server, acao, acac, reason):
+    (finding,) = cors_check.check_cors(build_session(timeout=2), http_server(_cors_handler(acao, acac)))
+    assert reason in finding.description.lower()
+    assert finding.recommendation

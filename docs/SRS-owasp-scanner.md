@@ -278,9 +278,9 @@ Chỉ gửi 1 GET với header `Origin` giả lập, rõ ràng là request kiể
 | ID | Yêu cầu | Severity | OWASP | Priority |
 |---|---|---|---|---|
 | FR-CORS-01 | Tool PHẢI gửi GET tới target kèm `Origin: https://owasp-scanner-cors-test.invalid`. | — | — | M |
-| FR-CORS-02 | Nếu `Access-Control-Allow-Origin: *` và `Access-Control-Allow-Credentials: true` cùng xuất hiện, PHẢI tạo finding `CORS-WILDCARD-WITH-CREDENTIALS`. Mô tả PHẢI nêu rõ trình duyệt tự chặn tổ hợp này, nên đây là dấu hiệu cấu hình CORS bị sao chép/nhầm, không phải lỗ hổng khai thác trực tiếp qua trình duyệt. | CRITICAL *(sẽ hạ còn MEDIUM theo D3, mục 12)* | A05:2021 | M |
-| FR-CORS-03 | Nếu `Access-Control-Allow-Origin` phản xạ đúng Origin giả lập, PHẢI tạo finding `CORS-REFLECTS-ARBITRARY-ORIGIN`: HIGH nếu có `Access-Control-Allow-Credentials: true`, ngược lại MEDIUM. | HIGH/MEDIUM | A05:2021 | M |
-| FR-CORS-04 | Nếu `Access-Control-Allow-Origin: *` không kèm credentials, PHẢI tạo finding `CORS-WILDCARD`. | INFO | A05:2021 | S |
+| FR-CORS-02 | Nếu `Access-Control-Allow-Origin: *` và `Access-Control-Allow-Credentials: true` cùng xuất hiện, PHẢI tạo finding `CORS-WILDCARD-WITH-CREDENTIALS`. Mô tả PHẢI nêu rõ trình duyệt từ chối request có credentials khi origin là `*`, nên tổ hợp này không khai thác trực tiếp được qua trình duyệt; nó cho thấy CORS bị cấu hình sao chép/nhầm và client không phải trình duyệt vẫn có thể làm theo, nên cần rà soát toàn bộ policy. *(Trước D3, ngày 2026-09-30, mức này là CRITICAL.)* | MEDIUM | A05:2021 | M |
+| FR-CORS-03 | Nếu `Access-Control-Allow-Origin` phản xạ đúng Origin giả lập, PHẢI tạo finding `CORS-REFLECTS-ARBITRARY-ORIGIN`: HIGH nếu có `Access-Control-Allow-Credentials: true` (mọi website người dùng đã đăng nhập ghé qua đều đọc được response có xác thực), ngược lại MEDIUM (chỉ đọc được response không xác thực). | HIGH/MEDIUM | A05:2021 | M |
+| FR-CORS-04 | Nếu `Access-Control-Allow-Origin: *` không kèm credentials, PHẢI tạo finding `CORS-WILDCARD` (chấp nhận được với API công khai, không xác thực). | INFO | A05:2021 | S |
 
 ### 4.8 Nhóm kiểm tra lộ file/path nhạy cảm (`checks/exposure.py`)
 
@@ -575,6 +575,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-30 | JSON có version và khớp schema | `--json`; quét lỗi kết nối; response của Web UI (bỏ 3 trường riêng) | Cả ba khớp `docs/report.schema.json`; `schema_version` = `1.1`; `scan_id` là UUID4 mới mỗi lần quét; schema từ chối khoá lạ | `test_cli_json_report_matches_schema`, `test_failed_scan_report_matches_schema`, `test_web_response_is_the_report_plus_web_fields`, `test_every_scan_gets_a_new_scan_id`, `test_schema_rejects_unknown_fields` |
 | AT-31 | CLI và Web UI cho cùng kết quả | Quét cùng một mock qua CLI `--json` và qua `POST /api/scan` | JSON giống nhau (trừ trường riêng của UI và trường thay đổi theo lần quét); `gate_failed` khớp exit code; mã lỗi và Content-Type của 2 endpoint đúng hợp đồng | `test_cli_and_web_ui_produce_the_same_report`, `test_scan_errors_are_json_with_an_error_message`, `test_report_endpoint_contract` |
 | AT-32 | Không lộ secret | Mock đặt cookie `session=<giá trị mẫu>`; target có `?access_token=<giá trị mẫu>` | Console, `--json`, JSON và báo cáo HTML của Web UI không chứa hai giá trị mẫu; `secrets_redacted: true`; `--show-secrets` in cảnh báo stderr và cho `secrets_redacted: false`; Web UI vẫn che khi client gửi `show_secrets` | `test_cli_console_and_json_are_redacted`, `test_show_secrets_is_explicit_and_warns`, `test_web_ui_always_redacts_even_if_asked_not_to`, `test_html_report_warns_when_secrets_are_shown`, `test_errors_are_redacted`, `test_sensitive_url_parameters_are_masked` |
+| AT-33 | Severity CORS theo D3 | Server trả 4 tổ hợp: `*` + credentials; phản xạ + credentials; phản xạ không credentials; `*` đơn lẻ | Lần lượt MEDIUM, HIGH, MEDIUM, INFO; mô tả mỗi finding giải thích lý do mức độ; mọi finding có khuyến nghị | `test_cors`, `test_cors_findings_explain_their_severity_and_how_to_fix` |
 
 ---
 
@@ -601,12 +602,11 @@ Lộ trình chi tiết, độ ưu tiên và thứ tự sprint nằm ở `docs/PR
 
 ## 12. Quyết định đã chốt, chưa triển khai
 
-Các quyết định dưới đây đã được chủ sản phẩm chốt ngày 2026-09-30. Code hiện chưa làm, trừ D1 (mục 3.3) và D2 (đã triển khai ở Sprint 3: FR-COOKIE-04, NFR-SEC-04). Khi code xong: cập nhật các FR tương ứng ở mục 4, thêm AT ở mục 9, rồi xoá dòng khỏi bảng.
+Các quyết định dưới đây đã được chủ sản phẩm chốt ngày 2026-09-30. Code hiện chưa làm, trừ D1 (mục 3.3), D2 (Sprint 3: FR-COOKIE-04, NFR-SEC-04) và D3 (Sprint 3: FR-CORS-02…04). Khi code xong: cập nhật các FR tương ứng ở mục 4, thêm AT ở mục 9, rồi xoá dòng khỏi bảng.
 
 | ID | Quyết định | FR sẽ thay đổi | Phụ thuộc | Backlog |
 |---|---|---|---|---|
 | D1 | Web UI là công cụ cục bộ chạy chung tiến trình, gọi thẳng `run_scan()`; không có server/service riêng. **Đã triển khai** (mục 3.3, 4.10). | — | — | 1.4 |
-| D3 | Severity CORS: `*` + credentials → MEDIUM; phản xạ origin + credentials → HIGH; phản xạ origin không credentials → MEDIUM; `*` đơn lẻ → INFO. Thay quyết định ngày 2026-09-23 giữ CRITICAL. Hệ quả: `*` + credentials không còn làm exit code `1`. | FR-CORS-02 | — | FR-FIX-07 |
 | D4 | **Quy tắc phạm vi (scope) khi theo redirect:** chỉ được theo redirect tới cùng host, hoặc host chỉ khác tiền tố `www.` (ví dụ `example.com` ↔ `www.example.com`). Redirect ra ngoài phạm vi thì tool không gửi request tới host đó, dừng lại và ghi vào `errors`. Không dùng Public Suffix List (tránh dependency mới). | FR-CLI-03, FR-REDIR-01 | — | FR-AUTHZ-03 (một phần), FR-FIX-09 |
 | D5 | **Cookie xét trên toàn chuỗi redirect**, header xét trên response cuối. Giữ hành vi A3 của FR-COOKIE-01. | FR-COOKIE-01 (giữ), FR-HDR-* | — | FR-FIX-10 |
 | FIX-09 | **Điều kiện chạy redirect check.** Luôn chạy redirect check cho hostname của target, kể cả khi người dùng nhập `http://`. Nếu `http://` được chuyển sang `https://` trong phạm vi (D4), tool chạy nhóm TLS trên URL cuối. Nếu không được chuyển, tool báo `TLS-NO-HTTPS-REDIRECT`. Lỗi chứng chỉ không chặn redirect check; hai loại lỗi được báo riêng. Hệ quả: target `http://` có thể sinh thêm finding TLS mức CRITICAL/HIGH, làm exit code thay đổi — phải ghi changelog. | FR-CLI-05, FR-REDIR-01, FR-CLI-04 (hệ quả) | D4 | FR-FIX-09 |

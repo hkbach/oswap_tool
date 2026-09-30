@@ -216,7 +216,7 @@ Cách đọc: `- [ ] **ID** (Ưu tiên · Tier) Mô tả.` theo sau là `AC:` (a
   AC: quét `http://` không sinh finding HDR-STRICT-TRANSPORT-SECURITY-MISSING sai ngữ cảnh.
 - [x] **FR-FIX-06** (P0 · all) *(xong từ code v1.1.0; test AT-17)* FR-HDR-04 (thiếu X-Frame-Options) không sinh finding nếu CSP có `frame-ancestors` hợp lệ.
   AC: có test cho cả hai trường hợp; thống nhất với FR-HDR-05.
-- [ ] **FR-FIX-07** (P0 · all) Áp dụng quyết định **D3** cho CORS: `CORS-WILDCARD-WITH-CREDENTIALS` → MEDIUM (trình duyệt từ chối tổ hợp này, rủi ro chủ yếu là cấu hình sai và client không phải trình duyệt); `CORS-REFLECTS-ARBITRARY-ORIGIN` → HIGH nếu có credentials, MEDIUM nếu không; `CORS-WILDCARD` → INFO.
+- [x] **FR-FIX-07** (P0 · all) *(xong ở Sprint 3: AT-33; changelog v1.2.0)* Áp dụng quyết định **D3** cho CORS: `CORS-WILDCARD-WITH-CREDENTIALS` → MEDIUM (trình duyệt từ chối tổ hợp này, rủi ro chủ yếu là cấu hình sai và client không phải trình duyệt); `CORS-REFLECTS-ARBITRARY-ORIGIN` → HIGH nếu có credentials, MEDIUM nếu không; `CORS-WILDCARD` → INFO.
   AC: test cho 4 tổ hợp; description/recommendation của từng finding giải thích lý do mức độ; SRS mục 4.7 và mục 12 cập nhật khi code xong; exit code thay đổi được ghi changelog (`*`+credentials không còn làm exit 1).
 - [x] **FR-FIX-08** (P0 · all) *(xong: SRS v1.2 mục 3.3, 4.10, 6.3, 7.4 đã đối chiếu `web.py`)* Cập nhật SRS để mô tả Web UI cục bộ (đã có trong code) và đối chiếu lại với code thật.
   AC: SRS mô tả khớp với `web.py`; mọi khác biệt được sửa ở tài liệu hoặc code.
