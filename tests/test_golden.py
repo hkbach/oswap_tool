@@ -68,7 +68,8 @@ def _normalise(texts: dict[str, str], report: dict, port: int) -> dict[str, str]
         for old, new in replacements.items():
             text = text.replace(old, new)
         # The version changes on every release; replace it last so it cannot hit a replaced value.
-        result[fmt] = re.sub(rf"(?<![\d.]){re.escape(__version__)}(?![\d.])", "<VERSION>", text)
+        # Not part of a longer version number, but a sentence may end right after it ("Scanner 1.5.1.").
+        result[fmt] = re.sub(rf"(?<!\d)(?<!\d\.){re.escape(__version__)}(?!\.?\d)", "<VERSION>", text)
     return result
 
 
@@ -89,6 +90,7 @@ def test_report_matches_the_golden_file(reports, fmt):
 def test_report_has_no_run_specific_values_left(reports, fmt):
     assert not re.search(r"\b20\d\d-\d\d-\d\dT", reports[fmt]), "a timestamp was not normalised"
     assert not re.search(r"127\.0\.0\.1:\d", reports[fmt]), "a port was not normalised"
+    assert __version__ not in reports[fmt], "the scanner version was not normalised"
 
 
 @pytest.mark.parametrize("fmt", FORMATS)
