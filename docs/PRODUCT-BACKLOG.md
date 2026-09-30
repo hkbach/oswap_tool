@@ -278,7 +278,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 - [ ] **FR-RPT-01** (P0 · Pro) *(một phần đã có: `render_html()` dùng cho Web UI)* Báo cáo **HTML** tự chứa (một file): tóm tắt điều hành (số finding theo severity, điểm rủi ro, top vấn đề), chi tiết từng finding (mô tả, evidence, cách tái hiện, khuyến nghị, tham chiếu), phụ lục phạm vi/giới hạn/các check đã chạy.
   AC: mở được offline; escape đúng nội dung evidence (chống XSS trong chính báo cáo); có test snapshot.
-- [ ] **FR-RPT-09** (P0 · all) Tham số CLI `--html PATH` dùng lại `render_html()` của Web UI (một bộ render cho cả hai nơi).
+- [x] **FR-RPT-09** (P0 · all) *(xong ở Sprint 5: `--html`, SRS FR-REPORT-07, AT-45)* Tham số CLI `--html PATH` dùng lại `render_html()` của Web UI (một bộ render cho cả hai nơi).
   AC: HTML từ CLI và từ `GET /api/report/<id>.html` giống nhau cho cùng JSON; evidence đã qua `redact()`; nội dung được escape.
 - [x] **FR-RPT-02** (P0 · Pro) *(xong ở Sprint 5: `sarif.py`, `--sarif`, SRS FR-REPORT-06, AT-44; test kiểm tra cấu trúc bắt buộc, chưa validate bằng schema chính thức của OASIS — cần xác nhận license trước khi vendor file schema)* Xuất **SARIF 2.1.0** để hiển thị trong GitHub/GitLab code scanning.
   AC: file hợp lệ theo schema SARIF; rule id = `Finding.id`; `partialFingerprints` lấy từ `fingerprint` (FR-MODEL-01); tham số CLI `--sarif PATH`.
