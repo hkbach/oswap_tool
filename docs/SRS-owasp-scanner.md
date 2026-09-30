@@ -528,7 +528,7 @@ python -m owasp_scanner <target> [--json PATH] [--sarif PATH] [--html PATH] [--t
 
 | Tham số | Bắt buộc | Mặc định | Mô tả |
 |---|---|---|---|
-| `target` | Có | — | URL hoặc hostname. Chuẩn hoá theo FR-CLI-01. |
+| `target` | Có (trừ khi có `--list-checks`) | — | URL hoặc hostname. Chuẩn hoá theo FR-CLI-01. |
 | `--json PATH` | Không | (không xuất) | Ghi báo cáo JSON đầy đủ. Thư mục cha phải tồn tại sẵn. |
 | `--timeout N` | Không | `10` | Timeout mỗi request (giây). |
 | `--workers N` | Không | `5` | Số luồng song song khi kiểm tra path nhạy cảm. |
@@ -538,6 +538,8 @@ python -m owasp_scanner <target> [--json PATH] [--sarif PATH] [--html PATH] [--t
 | `--html PATH` | Không | (không xuất) | Ghi báo cáo HTML độc lập (FR-REPORT-07). |
 | `--fail-on LEVEL` | Không | `high` | Mức thấp nhất làm fail gate (exit `1`): `critical`, `high`, `medium`, `low`, hoặc `none` (không bao giờ fail, kể cả khi quét không hoàn tất). |
 | `--ca-bundle PATH` | Không | env `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE`, rồi kho OS | File PEM các CA được tin, thay cho kho mặc định, cho cả request HTTP và TLS check (FR-CLI-06). |
+| `--checks GROUPS` | Không | tất cả | Danh sách id nhóm cách nhau bằng dấu phẩy (mục 4.11), ví dụ `headers,tls`. Id sai → exit code `2` kèm danh sách id hợp lệ (từ v1.7.0). |
+| `--list-checks` | Không | — | In id, tên và mô tả của từng nhóm rồi thoát với code `0`; không cần target, không hỏi xác nhận (từ v1.7.0). |
 | `--show-secrets` | Không | tắt | Không che giá trị cookie và tham số URL nhạy cảm (chỉ để debug cục bộ; NFR-SEC-04). |
 
 ### 7.3 Exit code
@@ -648,6 +650,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-50 | Target IPv6 | Host `::1` cho TLS check và redirect check | URL trong finding và request probe có dấu ngoặc (`https://[::1]:<cổng>`, `http://[::1]/`); `instance_key` giữ nguyên dạng `host:port` để fingerprint không đổi | `test_ipv6_hosts_are_bracketed_in_urls` |
 | AT-51 | TLS cũ trên server thật (FR-TLS-01, FR-TLS-03) | Server local chỉ cho TLS 1.0, rồi chỉ TLS 1.1; server thường | Server cũ → đúng 1 `TLS-WEAK-PROTOCOL` (HIGH) ghi đúng phiên bản, không có `TLS-CONN-FAILED`; server thường vẫn thương lượng TLS 1.2/1.3 với cipher không yếu. Test tự skip nếu chính OpenSSL của máy chạy test không bắt tay được TLS 1.0/1.1 | `test_tls_weak_protocol_is_detected_on_a_real_legacy_server`, `test_tls_modern_server_still_negotiates_a_modern_protocol` |
 | AT-52 | Chọn nhóm kiểm thử (FR-GRP-01…03) | Bảng nhóm; quét mock mặc định; chỉ `headers`+`cookies`; chỉ `directory-listing`; chỉ `cookies`; lựa chọn rỗng/id lạ/trùng/hoa; target không kết nối được; chỉ `https-redirect` trên target http | Mỗi check thuộc đúng 1 nhóm, id nhóm cố định; mặc định `scan_groups` = cả 8 nhóm và mọi finding có `check`; chọn `headers`+`cookies` thì target chỉ nhận GET `/`; `directory-listing` vẫn gửi probe soft-404 nhưng không gửi path nhạy cảm/robots; gate chỉ tính nhóm đã chạy; lựa chọn sai → `ValueError`; trùng/hoa được chuẩn hoá | `test_every_check_belongs_to_exactly_one_group`, `test_group_ids_are_stable`, `test_default_scan_runs_every_group_and_tags_each_finding`, `test_only_the_selected_groups_run_and_send_requests`, `test_selected_groups_are_reported_in_table_order`, `test_directory_listing_alone_still_uses_the_soft404_probes`, `test_gate_counts_only_the_selected_groups`, `test_invalid_group_selection_is_rejected`, `test_group_selection_ignores_duplicates_and_case`, `test_unreachable_target_still_records_the_selection`, `test_https_redirect_group_alone_on_an_http_target` |
+| AT-53 | CLI chọn nhóm (FR-GRP-01, mục 7) | `--list-checks`; `--checks cookies,HEADERS`; quét đủ nhóm; `--checks tls,bogus`; thiếu target | `--list-checks` in đủ 8 nhóm, exit `0`, không hỏi xác nhận; `--checks` chỉ chạy nhóm đã chọn, console in `Check groups:` và `Not selected (not tested):`; quét đủ không in dòng `Not selected`; id sai hoặc thiếu target → exit `2` | `test_list_checks_prints_every_group_without_a_target`, `test_checks_option_selects_groups`, `test_console_does_not_list_unselected_groups_for_a_full_scan`, `test_bad_check_selection_or_missing_target_exits_2` |
 
 ---
 

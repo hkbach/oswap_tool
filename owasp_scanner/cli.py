@@ -111,6 +111,14 @@ def _confirm_authorization(assume_yes: bool) -> bool:
     return answer.strip().lower() in ("y", "yes")
 
 
+def _check_groups(value: str) -> list[str]:
+    """argparse type for --checks: comma-separated group ids (SRS 4.11)."""
+    try:
+        return catalog.normalize_groups(part for part in value.split(",") if part.strip())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
 def run_scan(
     base_url: str,
     timeout: int = 10,
@@ -232,7 +240,7 @@ def main(argv=None) -> int:
         prog="owasp-scanner",
         description="OWASP-aligned non-intrusive web security scanner (headers, TLS, cookies, CORS, exposure).",
     )
-    parser.add_argument("target", help="Target URL or hostname, e.g. https://example.com")
+    parser.add_argument("target", nargs="?", help="Target URL or hostname, e.g. https://example.com")
     parser.add_argument("--json", metavar="PATH", help="Write full JSON report to PATH")
     parser.add_argument("--sarif", metavar="PATH", help="Write a SARIF 2.1.0 report to PATH (e.g. for code scanning)")
     parser.add_argument("--html", metavar="PATH", help="Write a standalone HTML report to PATH")
@@ -254,6 +262,13 @@ def main(argv=None) -> int:
         "(default: REQUESTS_CA_BUNDLE / SSL_CERT_FILE, else the OS store)",
     )
     parser.add_argument(
+        "--checks",
+        metavar="GROUPS",
+        type=_check_groups,
+        help="Comma-separated check groups to run (default: all). See --list-checks.",
+    )
+    parser.add_argument("--list-checks", action="store_true", help="List the check groups and exit")
+    parser.add_argument(
         "--show-secrets",
         action="store_true",
         help="Do not redact cookie values and sensitive URL parameters (local debugging only).",
@@ -266,6 +281,13 @@ def main(argv=None) -> int:
         help="Skip the interactive authorization confirmation (use in CI with care).",
     )
     args = parser.parse_args(argv)
+    if args.list_checks:
+        for group in catalog.CHECK_GROUPS:
+            print(f"{group.id:<18} {group.title}")
+            print(f"{'':<18} {group.description}")
+        return 0
+    if args.target is None:
+        parser.error("the following arguments are required: target")
 
     if not _confirm_authorization(args.assume_yes):
         print("Authorization not confirmed. Aborting.")
@@ -274,7 +296,7 @@ def main(argv=None) -> int:
     target = _normalize_target(args.target)
     print(f"Scanning {target if args.show_secrets else redact(target)} ...\n")
 
-    result = run_scan(target, timeout=args.timeout, workers=args.workers, ca_bundle=args.ca_bundle)
+    result = run_scan(target, timeout=args.timeout, workers=args.workers, ca_bundle=args.ca_bundle, groups=args.checks)
     if args.show_secrets:
         print(
             "WARNING: --show-secrets is set: cookie values and sensitive URL parameters are NOT redacted. "

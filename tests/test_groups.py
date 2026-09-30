@@ -117,3 +117,38 @@ def test_https_redirect_group_alone_on_an_http_target(http_server):
     result = cli.run_scan(http_server(_PlainHttp), timeout=5, groups=["https-redirect"])
     assert result.checks_run == ["http-to-https-redirect"]
     assert [f.id for f in result.findings] == ["TLS-NO-HTTPS-REDIRECT"]
+
+
+# --- CLI: --checks and --list-checks ------------------------------------------------
+
+
+def test_list_checks_prints_every_group_without_a_target(capsys, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda *a: pytest.fail("--list-checks must not ask for authorization"))
+    assert cli.main(["--list-checks"]) == 0
+    out = capsys.readouterr().out
+    for group in catalog.CHECK_GROUPS:
+        assert group.id in out and group.title in out
+
+
+def test_checks_option_selects_groups(recording_mock, tmp_path, capsys):
+    target, paths = recording_mock
+    out = tmp_path / "r.json"
+    cli.main([target, "--yes", "--no-color", "--checks", "cookies,HEADERS", "--json", str(out)])
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["scan_groups"] == ["headers", "cookies"] and paths == ["/"]
+    console = capsys.readouterr().out
+    assert "Check groups: Security headers, Cookies" in console
+    assert "Not selected (not tested): TLS/SSL, HTTP to HTTPS redirect" in console
+
+
+def test_console_does_not_list_unselected_groups_for_a_full_scan(recording_mock, capsys):
+    target, _ = recording_mock
+    cli.main([target, "--yes", "--no-color"])
+    assert "Not selected" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("argv, message", [(["t.example", "--checks", "tls,bogus"], "bogus"), ([], "target")])
+def test_bad_check_selection_or_missing_target_exits_2(capsys, argv, message):
+    with pytest.raises(SystemExit) as exc:
+        cli.main([*argv, "--yes"])
+    assert exc.value.code == 2 and message in capsys.readouterr().err
