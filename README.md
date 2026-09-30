@@ -29,7 +29,7 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
 - [`docs/PRODUCT-BACKLOG.md`](./docs/PRODUCT-BACKLOG.md) — backlog, decisions, sprint order.
 - [`CLAUDE.md`](./CLAUDE.md) — working rules for this repository.
 - [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema of the `--json`
-  report (`schema_version` 1.3).
+  report (`schema_version` 1.4).
 
 ## Authorized use only
 
@@ -92,6 +92,27 @@ sent; each blocked host is listed in `errors`.
 A clean report does not mean that a website is secure. It means that none of
 the checks above found a problem.
 
+### Test targets (check groups)
+
+Every scan covers eight test targets. By default all of them run; `--checks`
+(CLI) or the checkboxes on the web page select a subset. A test target that
+is not selected sends no request, and the reports list it as **not tested**,
+so a clean report of a partial scan is not mistaken for a full one.
+
+| Id | Test target | What it checks |
+|---|---|---|
+| `headers` | Security headers | HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, headers that disclose server software |
+| `cookies` | Cookies | Secure, HttpOnly and SameSite attributes |
+| `tls` | TLS/SSL | Negotiated protocol and cipher, certificate validity period and trust (2 TLS handshakes) |
+| `https-redirect` | HTTP to HTTPS redirect | Whether plain HTTP is redirected to HTTPS |
+| `cors` | CORS | `Access-Control-Allow-Origin` for a test Origin, with and without credentials |
+| `exposed-files` | Exposed files | `.git`, `.env`, backups, keys, ... reported only when the content matches |
+| `directory-listing` | Directory listing | Common directories that return a browsable file index |
+| `robots-sitemap` | robots.txt / sitemap.xml | Sensitive-sounding paths advertised to crawlers (hints, low confidence) |
+
+The home page is always fetched, because most checks read it.
+`python -m owasp_scanner --list-checks` prints this list.
+
 ## Installation
 
 Requires Python 3.12 or later. The package is not published on PyPI.
@@ -101,10 +122,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.6.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.7.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.6.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.7.0.tar.gz"
 ```
 
 Installing the package adds two commands: `owasp-scanner` (same as
@@ -126,6 +147,9 @@ python -m owasp_scanner https://example.com --yes \
 
 # Slower target: longer timeout, more parallel path checks
 python -m owasp_scanner https://example.com --timeout 15 --workers 8
+
+# Only some test targets (see --list-checks)
+python -m owasp_scanner https://example.com --yes --checks headers,cookies,tls
 ```
 
 | Option | Meaning |
@@ -140,6 +164,8 @@ python -m owasp_scanner https://example.com --timeout 15 --workers 8
 | `--workers N` | Concurrent requests for the path checks (default `5`) |
 | `--no-color` | No ANSI colours in the terminal output |
 | `--yes`, `--i-have-authorization` | Skip the interactive authorization prompt |
+| `--checks GROUPS` | Comma-separated test targets to run, for example `headers,tls` (default: all). See [Test targets](#test-targets-check-groups) |
+| `--list-checks` | Print the test targets and exit (no target, no prompt) |
 | `--show-secrets` | Do not redact cookie values and sensitive URL parameters. For local debugging only; the report then carries a warning. Never use it in CI. |
 
 **Trust store:** by default both the HTTP requests and the TLS check trust the
@@ -183,7 +209,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.6.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.7.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -268,13 +294,23 @@ python -m owasp_scanner.web --port 9000 --timeout 15 --workers 8
 python -m owasp_scanner.web --fail-on medium --ca-bundle path/to/ca.pem
 ```
 
-Enter a URL, tick the authorization box and click **Scan**. The results appear
-below the input: counts by severity, the gate status (the same decision as
-the CLI exit code), non-fatal errors and the list of findings with a severity
-filter.
+The page has three steps: enter the target URL, choose the **test targets**
+(all are selected by default; *Select all* / *Clear*), and confirm that you are
+authorized to scan. Then click **Scan**. The results show the counts by
+severity, the gate status (the same decision as the CLI exit code), which test
+targets were not tested, non-fatal errors, and the findings:
 
-- **Download Test result** (below the URL input, shown after a scan) downloads
-  a standalone HTML report: embedded CSS, no scripts, works offline, printable.
+- **Group by: Test target** (default) lists one collapsible section per test
+  target with its severity counts and a status: *N issues*, *No issues*,
+  *Not run* (selected, but it could not run, for example TLS on a plain-HTTP
+  site) or *Not selected*.
+- **Group by: OWASP Top 10** lists the findings by OWASP category.
+- The **Severity** filter applies inside the groups.
+
+- **Download Test result** (next to the Scan button, shown after a scan)
+  downloads a standalone HTML report: embedded CSS, no scripts, works offline,
+  printable. It has a summary by test target, a summary by OWASP Top 10 and the
+  findings grouped by test target.
   The server keeps the reports of the last 20 scans, in memory only; they are
   lost when the server stops.
 - **Download JSON** downloads the same format as the CLI's `--json`.
@@ -459,6 +495,19 @@ docs/               # SRS, backlog, JSON Schema of the report
 
 ## Changelog
 
+- **v1.7.0** (Sprint 8, test targets):
+  - **Choose the test targets of a scan:** `--checks headers,tls,...` and
+    `--list-checks` in the CLI, checkboxes on the web page. Unselected test
+    targets send no request and are listed as not tested. Without a
+    selection every test target runs, as before.
+  - **Web UI:** new scan form (target, test targets, authorization) and results
+    grouped by test target or by OWASP Top 10, with a status per group.
+  - **HTML report:** summaries by test target and by OWASP Top 10, findings
+    grouped by test target.
+  - **JSON `schema_version` 1.4** (fields added only): `scan_groups` and the
+    `check` of each finding. SARIF run properties carry `scan_groups`.
+  - Web API: `GET /api/checks`; `POST /api/scan` accepts `checks`; the response
+    adds `groups` and `owasp_groups`.
 - **v1.6.0** (Sprint 7). Changes to note:
   - **Python 3.12 or later is required** (was 3.9). Development uses 3.14.
     `cryptography` 42 or later (was 41) and `requests` 2.32.3 or later (was 2.31.0)
