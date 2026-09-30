@@ -6,9 +6,13 @@ Design goals:
   can attribute the traffic.
 - Bounded timeouts and no retry storms, so the scanner cannot become
   an accidental denial-of-service tool.
+- Never follow a redirect to a host outside the scan scope (decision D4):
+  the request to that host is simply not sent.
 """
 
 from __future__ import annotations
+
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -16,10 +20,54 @@ from urllib3.util.retry import Retry
 
 DEFAULT_TIMEOUT = 10  # seconds
 USER_AGENT = "TECHVIFY-OWASP-Scanner/1.0 (+passive security header/config check)"
+MAX_REDIRECTS = 10
 
 
-def build_session(timeout: int = DEFAULT_TIMEOUT) -> requests.Session:
-    session = requests.Session()
+def _canonical_host(host: str | None) -> str:
+    host = (host or "").lower().rstrip(".")
+    return host[4:] if host.startswith("www.") else host
+
+
+def in_scope(url: str, scope_host: str) -> bool:
+    """D4: same host as the target, or differing only by a leading ``www.``.
+
+    Scheme and port may change (http -> https, :80 -> :443); other subdomains may not.
+    """
+    return _canonical_host(urlsplit(url).hostname) == _canonical_host(scope_host)
+
+
+class ScopedSession(requests.Session):
+    """A Session that refuses to follow redirects out of ``scope_host``.
+
+    requests asks ``get_redirect_target()`` where to go next before sending each hop;
+    returning None for an out-of-scope location ends the chain there, so the 3xx
+    response becomes the final one and nothing is sent to the other host.
+    """
+
+    def __init__(self, scope_host: str | None = None) -> None:
+        super().__init__()
+        self.scope_host = scope_host
+        self.max_redirects = MAX_REDIRECTS
+        # out-of-scope host -> one error line, so many blocked paths give one report line
+        self.blocked_redirects: dict[str, str] = {}
+
+    def get_redirect_target(self, resp):
+        location = super().get_redirect_target(resp)
+        if location is None or self.scope_host is None:
+            return location
+        target = urljoin(resp.url, location)
+        if in_scope(target, self.scope_host):
+            return location
+        host = (urlsplit(target).hostname or target).lower()
+        self.blocked_redirects.setdefault(
+            host,
+            f"Redirect to {host} not followed: outside the scan scope ({self.scope_host}); first seen at {resp.url}",
+        )
+        return None
+
+
+def build_session(timeout: int = DEFAULT_TIMEOUT, scope_host: str | None = None) -> ScopedSession:
+    session = ScopedSession(scope_host)
     session.headers.update({"User-Agent": USER_AGENT})
 
     retry = Retry(

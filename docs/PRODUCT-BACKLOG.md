@@ -313,7 +313,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-AUTHZ-02** (P0 · Business) Chế độ **consent theo mức**: config (non-intrusive) (mặc định) / crawl / active. Mỗi mức hiển thị banner riêng và yêu cầu xác nhận riêng, ghi lại ai xác nhận, lúc nào, cho mức nào.
 - [ ] **FR-AUTHZ-03** (P0 · all) **Scope guard**: chỉ gửi request tới host/port trong phạm vi khai báo; không theo redirect sang host ngoài phạm vi; cảnh báo khi redirect đi ra ngoài.
   AC: mock server redirect sang host khác → tool không gửi request tới host đó, ghi vào `errors`/`notes`.
-  Phần tối thiểu cho redirect đã chốt ở **D4** và làm cùng FR-FIX-09: cùng host hoặc chỉ khác tiền tố `www.`.
+  Phần tối thiểu cho redirect (**D4**: cùng host hoặc chỉ khác tiền tố `www.`) **đã xong ở Sprint 3b** (`ScopedSession`, SRS NFR-SEC-05, AT-34). Còn phạm vi khai báo nhiều host và cảnh báo trong UI.
 - [ ] **FR-AUTHZ-04** (P0 · Business – bắt buộc khi có dịch vụ dùng chung) **Chống SSRF cho dịch vụ**: từ chối target phân giải ra IP loopback, private (RFC1918), link-local (kể cả `169.254.169.254`), multicast, IPv6 tương đương; kiểm tra lại sau mỗi redirect và **ghim IP đã phân giải** (chống DNS rebinding).
   AC: test với `localhost`, `127.0.0.1`, `10.0.0.1`, `169.254.169.254`, hostname trỏ về IP private → đều bị từ chối. Cho phép cấu hình ngoại lệ chỉ cho bản on-premise nội bộ, với cờ tường minh.
 - [ ] **FR-AUTHZ-05** (P0 · all) **Giới hạn tốc độ** toàn cục và theo host: `--rate-limit` (request/giây), `--max-requests`, `--max-duration`; tự giảm tốc khi gặp 429/503.

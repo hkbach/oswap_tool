@@ -90,7 +90,7 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
     hostname = parsed.hostname or base_url
 
     result = ScanResult(target=base_url, started_at=_utc_timestamp())
-    session = build_session(timeout=timeout)
+    session = build_session(timeout=timeout, scope_host=hostname)
     tls_args = (tls_check.check_tls, hostname)
     tls_kwargs = {"port": parsed.port or 443, "timeout": timeout}
 
@@ -102,6 +102,7 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
         # the TLS check opens its own connections and is exactly what explains it.
         if tls_failure:
             _run_check(result, "tls", *tls_args, **tls_kwargs)
+        result.errors.extend(session.blocked_redirects.values())
         result.finished_at = _utc_timestamp()
         return result
 
@@ -128,6 +129,7 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
     _run_check(result, "directory-listing", exposure.check_directory_listing, session, base_url)
     _run_check(result, "robots-sitemap", exposure.check_robots_and_sitemap, session, base_url)
 
+    result.errors.extend(session.blocked_redirects.values())
     result.finished_at = _utc_timestamp()
     return result
 

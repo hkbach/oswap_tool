@@ -149,7 +149,7 @@ owasp_scanner/
 ├── catalog.py         # Bảng cwe/confidence/references theo finding id; enrich() + fingerprint
 ├── output.py          # build_report() + gate_failed(): một bộ xử lý đầu ra cho CLI và Web UI
 ├── redact.py          # redact(): che giá trị cookie và tham số URL nhạy cảm (D2)
-├── http_utils.py      # HTTP session dùng chung: timeout mặc định, User-Agent, retry có kiểm soát
+├── http_utils.py      # HTTP session dùng chung: timeout, User-Agent, retry có kiểm soát, phạm vi redirect (ScopedSession)
 ├── models.py          # Kiểu dữ liệu: Severity, Finding, ScanResult
 ├── report.py          # In báo cáo CLI (màu ANSI) + ghi file JSON
 └── checks/
@@ -355,6 +355,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | NFR-SEC-02 | Bảo mật/đạo đức | Bước xác nhận quyền quét không tắt được bằng cấu hình mặc định: CLI chỉ bỏ qua bằng cờ `--yes`; Web UI luôn yêu cầu `authorized: true`. |
 | NFR-SEC-03 | Bảo mật/đạo đức | Mọi request PHẢI gửi `User-Agent` nhận diện rõ là scanner (hiện là `TECHVIFY-OWASP-Scanner/1.0 (+passive security header/config check)`), không giả mạo trình duyệt. |
 | NFR-SEC-04 | Bảo mật | Mọi đầu ra (console, `--json`, response Web UI, báo cáo HTML) PHẢI qua `output.build_report()`, nơi che (1) cặp `tên=giá trị` của cookie do check khai báo chính xác, và (2) giá trị của mọi tham số URL có tên chứa `token`, `key`, `session`, `sess`, `password`, `passwd`, `pwd`, `secret`, `sig`, `auth`, `jwt` — trong `target`, `errors`, và `title`/`description`/`evidence`/`url`/`instance_key` của finding. Dòng `Scanning <target>` của CLI cũng được che. Cờ `--show-secrets` **chỉ có ở CLI**: in cảnh báo ra stderr, JSON có `secrets_redacted: false`, báo cáo HTML có băng cảnh báo. Web UI luôn che, bỏ qua mọi trường yêu cầu tắt che. |
+| NFR-SEC-05 | Bảo mật/đạo đức | **Phạm vi khi theo redirect (D4):** mọi request của một lần quét chỉ được theo redirect tới cùng hostname với target, hoặc hostname chỉ khác một tiền tố `www.` (không phân biệt hoa thường; được đổi scheme và cổng; target là IP thì phải khớp chính xác). Redirect ra ngoài phạm vi thì **không gửi request tới host đó**: chuỗi redirect dừng ở response 3xx cuối cùng trong phạm vi, các check chạy tiếp trên response đó, và `errors` có đúng **một dòng** cho mỗi host bị chặn. Tối đa 10 bước redirect cho mỗi request. |
 | NFR-PERF-01 | Hiệu năng | Mỗi request PHẢI có timeout cấu hình được (mặc định 10 giây). |
 | NFR-PERF-02 | Hiệu năng | Số luồng song song khi kiểm tra path nhạy cảm PHẢI giới hạn qua `--workers` (mặc định 5). |
 | NFR-PERF-03 | Hiệu năng | Không retry khi target trả 4xx/5xx; chỉ retry ở tầng kết nối/đọc, tối đa 1 lần. |
@@ -577,6 +578,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-31 | CLI và Web UI cho cùng kết quả | Quét cùng một mock qua CLI `--json` và qua `POST /api/scan` | JSON giống nhau (trừ trường riêng của UI và trường thay đổi theo lần quét); `gate_failed` khớp exit code; mã lỗi và Content-Type của 2 endpoint đúng hợp đồng | `test_cli_and_web_ui_produce_the_same_report`, `test_scan_errors_are_json_with_an_error_message`, `test_report_endpoint_contract` |
 | AT-32 | Không lộ secret | Mock đặt cookie `session=<giá trị mẫu>`; target có `?access_token=<giá trị mẫu>` | Console, `--json`, JSON và báo cáo HTML của Web UI không chứa hai giá trị mẫu; `secrets_redacted: true`; `--show-secrets` in cảnh báo stderr và cho `secrets_redacted: false`; Web UI vẫn che khi client gửi `show_secrets` | `test_cli_console_and_json_are_redacted`, `test_show_secrets_is_explicit_and_warns`, `test_web_ui_always_redacts_even_if_asked_not_to`, `test_html_report_warns_when_secrets_are_shown`, `test_errors_are_redacted`, `test_sensitive_url_parameters_are_masked` |
 | AT-33 | Severity CORS theo D3 | Server trả 4 tổ hợp: `*` + credentials; phản xạ + credentials; phản xạ không credentials; `*` đơn lẻ | Lần lượt MEDIUM, HIGH, MEDIUM, INFO; mô tả mỗi finding giải thích lý do mức độ; mọi finding có khuyến nghị | `test_cors`, `test_cors_findings_explain_their_severity_and_how_to_fix` |
+| AT-34 | Không theo redirect ra ngoài phạm vi | Target redirect trang chủ, hoặc mọi path, sang host khác (`localhost` so với `127.0.0.1`) | Host kia không nhận request nào; `errors` có đúng 1 dòng; quét vẫn chạy; redirect tới cùng host (khác path/cổng) vẫn được theo | `test_baseline_redirect_to_other_host_is_not_followed`, `test_path_redirects_to_other_host_are_blocked_and_reported_once`, `test_in_scope`, `test_in_scope_redirects_are_followed`, `test_redirect_to_another_port_on_the_same_host_is_followed` |
 
 ---
 
@@ -603,12 +605,11 @@ Lộ trình chi tiết, độ ưu tiên và thứ tự sprint nằm ở `docs/PR
 
 ## 12. Quyết định đã chốt, chưa triển khai
 
-Các quyết định dưới đây đã được chủ sản phẩm chốt ngày 2026-09-30. Code hiện chưa làm, trừ D1 (mục 3.3), D2 (Sprint 3: FR-COOKIE-04, NFR-SEC-04) và D3 (Sprint 3: FR-CORS-02…04). Khi code xong: cập nhật các FR tương ứng ở mục 4, thêm AT ở mục 9, rồi xoá dòng khỏi bảng.
+Các quyết định dưới đây đã được chủ sản phẩm chốt ngày 2026-09-30. Code hiện chưa làm, trừ D1 (mục 3.3), D2 (Sprint 3: FR-COOKIE-04, NFR-SEC-04), D3 (Sprint 3: FR-CORS-02…04) và D4 (Sprint 3b: NFR-SEC-05). Khi code xong: cập nhật các FR tương ứng ở mục 4, thêm AT ở mục 9, rồi xoá dòng khỏi bảng.
 
 | ID | Quyết định | FR sẽ thay đổi | Phụ thuộc | Backlog |
 |---|---|---|---|---|
 | D1 | Web UI là công cụ cục bộ chạy chung tiến trình, gọi thẳng `run_scan()`; không có server/service riêng. **Đã triển khai** (mục 3.3, 4.10). | — | — | 1.4 |
-| D4 | **Quy tắc phạm vi (scope) khi theo redirect:** chỉ được theo redirect tới cùng host, hoặc host chỉ khác tiền tố `www.` (ví dụ `example.com` ↔ `www.example.com`). Redirect ra ngoài phạm vi thì tool không gửi request tới host đó, dừng lại và ghi vào `errors`. Không dùng Public Suffix List (tránh dependency mới). | FR-CLI-03, FR-REDIR-01 | — | FR-AUTHZ-03 (một phần), FR-FIX-09 |
 | D5 | **Cookie xét trên toàn chuỗi redirect**, header xét trên response cuối. Giữ hành vi A3 của FR-COOKIE-01. | FR-COOKIE-01 (giữ), FR-HDR-* | — | FR-FIX-10 |
 | FIX-09 | **Điều kiện chạy redirect check.** Luôn chạy redirect check cho hostname của target, kể cả khi người dùng nhập `http://`. Nếu `http://` được chuyển sang `https://` trong phạm vi (D4), tool chạy nhóm TLS trên URL cuối. Nếu không được chuyển, tool báo `TLS-NO-HTTPS-REDIRECT`. Lỗi chứng chỉ không chặn redirect check; hai loại lỗi được báo riêng. Hệ quả: target `http://` có thể sinh thêm finding TLS mức CRITICAL/HIGH, làm exit code thay đổi — phải ghi changelog. | FR-CLI-05, FR-REDIR-01, FR-CLI-04 (hệ quả) | D4 | FR-FIX-09 |
 | FIX-10 | **HSTS xét theo URL nào.** Check header chạy trên response cuối cùng (trang người dùng thật sự nhận); HSTS chỉ xét khi response cuối là HTTPS (gộp FIX-05). Nếu redirect đổi host (ví dụ `example.com` → `www.example.com`), tool kiểm tra thêm HSTS ở host gốc qua HTTPS; thiếu thì tạo finding mức LOW, vì HSTS ở host gốc cần có để `includeSubDomains` và `preload` có tác dụng. JSON thêm `final_url` và `redirect_chain`. | FR-HDR-01, mục 6.2 | FR-MODEL-01, FR-MODEL-02 (nâng `schema_version`), D4, D5 | FR-FIX-10 |
