@@ -7,15 +7,21 @@ Công cụ Python (CLI + Web UI cục bộ) quét cấu hình bảo mật của 
 **Tài liệu:**
 
 - [`docs/SRS-owasp-scanner.md`](./docs/SRS-owasp-scanner.md) — đặc tả yêu cầu
-  (v1.2), tài liệu requirement duy nhất, đã đối chiếu với mã nguồn và test.
+  tài liệu requirement duy nhất, đã đối chiếu với mã nguồn và test.
 - [`docs/PRODUCT-BACKLOG.md`](./docs/PRODUCT-BACKLOG.md) — backlog, quyết định
   đã chốt, thứ tự sprint.
 - [`CLAUDE.md`](./CLAUDE.md) — quy tắc làm việc trong repo.
 - [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema của báo cáo `--json`
-  (`schema_version` 1.1).
+  (`schema_version` 1.3).
 
 ## Changelog
 
+- **v1.5.1** (Sprint 6, chất lượng repo) — không đổi hành vi, output hay exit code của tool:
+  - Workflow CI cho chính repo này (`.github/workflows/ci.yml`, FR-QA-07): ruff,
+    pytest offline (Ubuntu: Python 3.9 và 3.14; Windows: 3.14), `pip-audit`, gitleaks.
+  - Golden file cho báo cáo JSON/SARIF/HTML (`tests/golden/`, FR-QA-02).
+  - Mọi finding ID trong catalog đều có test tạo ra (FR-QA-01).
+  - Template CI trỏ tới tag `v1.5.1`.
 - **v1.5.0** (Sprint 5, dùng trong CI) — thay đổi hành vi cần lưu ý:
   - **Một kho chứng chỉ cho cả hai đường (FR-CI-10, gỡ B1):** request HTTP giờ dùng
     **kho chứng chỉ của hệ điều hành** thay cho `certifi`, giống TLS check.
@@ -235,7 +241,7 @@ python3 tests/mock_server.py 8899 &
 python3 -m owasp_scanner http://127.0.0.1:8899 --yes
 ```
 
-Bộ test tự động (pytest) phủ các kịch bản AT-01…AT-28 của `docs/SRS-owasp-scanner.md` mục 9,
+Bộ test tự động (pytest) phủ các kịch bản AT-01…AT-49 của `docs/SRS-owasp-scanner.md` mục 9,
 tự dựng HTTP/HTTPS server trên `127.0.0.1` và tự sinh chứng chỉ test (hết hạn,
 chưa hiệu lực, sắp hết hạn, tự ký) — không cần internet:
 
@@ -243,6 +249,41 @@ chưa hiệu lực, sắp hết hạn, tự ký) — không cần internet:
 pip install -r requirements-dev.txt
 python -m pytest
 ```
+
+## Phát triển
+
+Chạy cục bộ đúng các bước mà CI chạy:
+
+```bash
+pip install -r requirements-dev.txt        # cài package ở chế độ editable + ruff, pytest, jsonschema
+ruff check . && ruff format --check .
+python -m pytest -q                        # offline, chỉ dùng mock server trên 127.0.0.1
+```
+
+**Golden file** (`tests/golden/`): báo cáo JSON, SARIF và HTML của một lần quét mock
+server, sau khi thay các giá trị đổi theo từng lần chạy (scan id, thời gian, cổng,
+version, fingerprint) bằng placeholder. Khi cố ý đổi output, sinh lại rồi review diff:
+
+```bash
+UPDATE_GOLDEN=1 python -m pytest tests/test_golden.py
+git diff tests/golden/
+```
+
+**CI của repo** (`.github/workflows/ci.yml`, chạy khi push lên `main`/`feat/**` và khi mở PR vào `main`):
+
+| Job | Nội dung |
+|---|---|
+| `lint` | `ruff check`, `ruff format --check` |
+| `test` | `pytest` offline trên Ubuntu 24.04 (Python 3.9, 3.14) và Windows (3.14). Bản dựng Python 3.9 của `setup-python` không có cho Windows. |
+| `audit` | `pip-audit` các dependency runtime trong `pyproject.toml` |
+| `secrets` | gitleaks quét toàn bộ lịch sử git; binary được kiểm tra checksum; allowlist trong `.gitleaks.toml` chỉ gồm 2 giá trị giả của test redact |
+
+Workflow chỉ có quyền `contents: read` và không dùng secret nào của repo. Job `audit` và
+`secrets` cần mạng trên runner; bộ test thì không.
+
+**Chặn merge khi CI fail** là cài đặt của GitHub, người có quyền admin repo tự bật:
+*Settings → Branches → Add branch ruleset* (hoặc *Branch protection rule*) cho `main`,
+chọn *Require status checks to pass* và thêm các check `lint`, `test`, `audit`, `secrets`.
 
 ## Gợi ý mở rộng sau này
 

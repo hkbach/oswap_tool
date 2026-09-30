@@ -1,0 +1,269 @@
+{
+  "schema_version": "1.3",
+  "scanner_version": "<VERSION>",
+  "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1",
+  "scan_id": "<SCAN_ID>",
+  "target": "http://127.0.0.1:<PORT>/",
+  "final_url": "http://127.0.0.1:<PORT>/",
+  "redirect_chain": [],
+  "started_at": "<STARTED_AT>",
+  "finished_at": "<FINISHED_AT>",
+  "checks_run": [
+    "security-headers",
+    "cookies",
+    "http-to-https-redirect",
+    "cors",
+    "sensitive-paths",
+    "directory-listing",
+    "robots-sitemap"
+  ],
+  "summary": {
+    "CRITICAL": 2,
+    "HIGH": 1,
+    "MEDIUM": 4,
+    "LOW": 2,
+    "INFO": 3
+  },
+  "findings": [
+    {
+      "id": "EXPOSURE-ENV",
+      "title": "Exposed .env file (often contains secrets)",
+      "severity": "CRITICAL",
+      "owasp_category": "A01:2021 - Broken Access Control",
+      "cwe": "CWE-538",
+      "confidence": "high",
+      "description": "GET .env returned HTTP 200 and the content looks like KEY=VALUE environment variables, so the file is publicly readable.",
+      "evidence": "HTTP 200 for http://127.0.0.1:<PORT>/.env; content matches KEY=VALUE environment variables",
+      "recommendation": "Remove the file from the web root or block access at the web server/proxy layer.",
+      "url": "http://127.0.0.1:<PORT>/.env",
+      "references": [
+        "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
+        "https://cwe.mitre.org/data/definitions/538.html"
+      ],
+      "instance_key": ".env",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "EXPOSURE-GIT-HEAD",
+      "title": "Exposed .git repository metadata",
+      "severity": "CRITICAL",
+      "owasp_category": "A01:2021 - Broken Access Control",
+      "cwe": "CWE-527",
+      "confidence": "high",
+      "description": "GET .git/HEAD returned HTTP 200 and the content looks like a git HEAD reference, so the file is publicly readable.",
+      "evidence": "HTTP 200 for http://127.0.0.1:<PORT>/.git/HEAD; content matches a git HEAD reference",
+      "recommendation": "Remove the file from the web root or block access at the web server/proxy layer.",
+      "url": "http://127.0.0.1:<PORT>/.git/HEAD",
+      "references": [
+        "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
+        "https://cwe.mitre.org/data/definitions/527.html"
+      ],
+      "instance_key": ".git/HEAD",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "TLS-NO-HTTPS-REDIRECT",
+      "title": "Plain HTTP is not redirected to HTTPS",
+      "severity": "HIGH",
+      "owasp_category": "A02:2021 - Cryptographic Failures",
+      "cwe": "CWE-319",
+      "confidence": "high",
+      "description": "Requesting http://127.0.0.1:<PORT>/ did not result in an HTTPS URL (final URL: http://127.0.0.1:<PORT>/).",
+      "evidence": "",
+      "recommendation": "Redirect all HTTP traffic to HTTPS (301) at the web server/load balancer.",
+      "url": "http://127.0.0.1:<PORT>/",
+      "references": [
+        "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html",
+        "https://owasp.org/Top10/A02_2021-Cryptographic_Failures/",
+        "https://cwe.mitre.org/data/definitions/319.html"
+      ],
+      "instance_key": "http://127.0.0.1:<PORT>/",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "COOKIE-FLAGS-MISSING",
+      "title": "Cookie 'session' missing recommended attribute(s)",
+      "severity": "MEDIUM",
+      "owasp_category": "A05:2021 - Security Misconfiguration",
+      "cwe": "CWE-614",
+      "confidence": "high",
+      "description": "Cookie 'session' is missing: Secure, HttpOnly, SameSite.",
+      "evidence": "session=<redacted len=6>; Path=/",
+      "recommendation": "Set Secure (HTTPS-only), HttpOnly (no JS access) and an explicit SameSite=Lax/Strict on all session/auth cookies.",
+      "url": "http://127.0.0.1:<PORT>/",
+      "references": [
+        "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html",
+        "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
+        "https://cwe.mitre.org/data/definitions/614.html"
+      ],
+      "instance_key": "session",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "EXPOSURE-DIR-LISTING",
+      "title": "Directory listing enabled at /images/",
+      "severity": "MEDIUM",
+      "owasp_category": "A05:2021 - Security Misconfiguration",
+      "cwe": "CWE-548",
+      "confidence": "high",
+      "description": "The web server returns a browsable file index instead of a 403/404.",
+      "evidence": "http://127.0.0.1:<PORT>/images/",
+      "recommendation": "Disable autoindex/directory listing in the web server configuration.",
+      "url": "http://127.0.0.1:<PORT>/images/",
+      "references": [
+        "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
+        "https://cwe.mitre.org/data/definitions/548.html"
+      ],
+      "instance_key": "images/",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "HDR-CONTENT-SECURITY-POLICY-MISSING",
+      "title": "Missing 'content-security-policy' response header",
+      "severity": "MEDIUM",
+      "owasp_category": "A05:2021 - Security Misconfiguration",
+      "cwe": "CWE-693",
+      "confidence": "high",
+      "description": "The response did not include a 'content-security-policy' header.",
+      "evidence": "",
+      "recommendation": "Define a Content-Security-Policy to restrict script/style/frame sources and reduce the impact of XSS.",
+      "url": "http://127.0.0.1:<PORT>/",
+      "references": [
+        "https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html",
+        "https://owasp.org/www-project-secure-headers/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html",
+        "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
+        "https://cwe.mitre.org/data/definitions/693.html"
+      ],
+      "instance_key": "content-security-policy",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "HDR-X-FRAME-OPTIONS-MISSING",
+      "title": "Missing 'x-frame-options' response header",
+      "severity": "MEDIUM",
+      "owasp_category": "A05:2021 - Security Misconfiguration",
+      "cwe": "CWE-1021",
+      "confidence": "high",
+      "description": "The response did not include a 'x-frame-options' header.",
+      "evidence": "",
+      "recommendation": "Send 'X-Frame-Options: DENY' or 'SAMEORIGIN' (or a CSP 'frame-ancestors' directive) to prevent clickjacking.",
+      "url": "http://127.0.0.1:<PORT>/",
+      "references": [
+        "https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html",
+        "https://owasp.org/www-project-secure-headers/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html",
+        "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
+        "https://cwe.mitre.org/data/definitions/1021.html"
+      ],
+      "instance_key": "x-frame-options",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "EXPOSURE-ROBOTS-HINTS",
+      "title": "robots.txt lists sensitive-sounding paths",
+      "severity": "LOW",
+      "owasp_category": "A01:2021 - Broken Access Control",
+      "cwe": "CWE-200",
+      "confidence": "low",
+      "description": "robots.txt disallows crawling of paths that also sound sensitive; this doesn't block direct access and can act as a roadmap for attackers.",
+      "evidence": "/admin/, /backup/",
+      "recommendation": "Enforce access control on these paths server-side; don't rely on robots.txt to hide them.",
+      "url": "http://127.0.0.1:<PORT>/robots.txt",
+      "references": [
+        "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
+        "https://cwe.mitre.org/data/definitions/200.html"
+      ],
+      "instance_key": "robots.txt",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "HDR-REFERRER-POLICY-MISSING",
+      "title": "Missing 'referrer-policy' response header",
+      "severity": "LOW",
+      "owasp_category": "A05:2021 - Security Misconfiguration",
+      "cwe": "CWE-200",
+      "confidence": "high",
+      "description": "The response did not include a 'referrer-policy' header.",
+      "evidence": "",
+      "recommendation": "Send a 'Referrer-Policy' (e.g. 'strict-origin-when-cross-origin') to avoid leaking full URLs to third parties.",
+      "url": "http://127.0.0.1:<PORT>/",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html",
+        "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
+        "https://cwe.mitre.org/data/definitions/200.html"
+      ],
+      "instance_key": "referrer-policy",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "HDR-INFO-SERVER",
+      "title": "Server/technology disclosure via 'server' header",
+      "severity": "INFO",
+      "owasp_category": "A05:2021 - Security Misconfiguration",
+      "cwe": "CWE-497",
+      "confidence": "high",
+      "description": "'server' header reveals implementation details: 'MockServer/1.0, Apache/2.2.15 (CentOS)'.",
+      "evidence": "server: MockServer/1.0, Apache/2.2.15 (CentOS)",
+      "recommendation": "Suppress or generalize this header at the reverse proxy/web server level.",
+      "url": "http://127.0.0.1:<PORT>/",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html",
+        "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
+        "https://cwe.mitre.org/data/definitions/497.html"
+      ],
+      "instance_key": "server",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "HDR-INFO-X-POWERED-BY",
+      "title": "Server/technology disclosure via 'x-powered-by' header",
+      "severity": "INFO",
+      "owasp_category": "A05:2021 - Security Misconfiguration",
+      "cwe": "CWE-497",
+      "confidence": "high",
+      "description": "'x-powered-by' header reveals implementation details: 'PHP/5.6.40'.",
+      "evidence": "x-powered-by: PHP/5.6.40",
+      "recommendation": "Suppress or generalize this header at the reverse proxy/web server level.",
+      "url": "http://127.0.0.1:<PORT>/",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html",
+        "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
+        "https://cwe.mitre.org/data/definitions/497.html"
+      ],
+      "instance_key": "x-powered-by",
+      "fingerprint": "<FINGERPRINT>"
+    },
+    {
+      "id": "HDR-PERMISSIONS-POLICY-MISSING",
+      "title": "Missing 'permissions-policy' response header",
+      "severity": "INFO",
+      "owasp_category": "A05:2021 - Security Misconfiguration",
+      "cwe": "CWE-693",
+      "confidence": "high",
+      "description": "The response did not include a 'permissions-policy' header.",
+      "evidence": "",
+      "recommendation": "Send a 'Permissions-Policy' to explicitly disable browser features (camera, microphone, geolocation, etc.) the site does not use.",
+      "url": "http://127.0.0.1:<PORT>/",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html",
+        "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
+        "https://cwe.mitre.org/data/definitions/693.html"
+      ],
+      "instance_key": "permissions-policy",
+      "fingerprint": "<FINGERPRINT>"
+    }
+  ],
+  "errors": [],
+  "secrets_redacted": true,
+  "gate": {
+    "fail_on": "high",
+    "failed": true,
+    "incomplete": false
+  }
+}

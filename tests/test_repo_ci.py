@@ -1,0 +1,66 @@
+"""FR-QA-07: the repository CI workflow runs the checks the backlog asks for.
+
+The workflow is not executed here (it only runs on GitHub); these tests keep its
+content consistent with the project configuration.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+
+
+@pytest.fixture(scope="module")
+def workflow() -> str:
+    return WORKFLOW.read_text(encoding="utf-8")
+
+
+def test_workflow_has_the_four_jobs(workflow):
+    jobs = set(re.findall(r"^  ([a-z-]+):$", workflow, flags=re.MULTILINE))
+    assert {"lint", "test", "audit", "secrets"} <= jobs
+
+
+def test_workflow_runs_lint_and_offline_tests(workflow):
+    assert "ruff check ." in workflow
+    assert "ruff format --check ." in workflow
+    assert "python -m pytest" in workflow
+
+
+def test_workflow_tests_oldest_supported_and_latest_python(workflow):
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    oldest = re.search(r'requires-python = ">=(\d+\.\d+)"', pyproject).group(1)
+    pythons = set(re.findall(r'python: "(\d+\.\d+)"', workflow))
+    assert oldest in pythons
+    assert max(pythons, key=lambda v: tuple(map(int, v.split(".")))) != oldest
+    assert "windows-latest" in workflow
+
+
+def test_workflow_audits_dependencies_and_scans_for_secrets(workflow):
+    assert "pip_audit" in workflow
+    assert "gitleaks git . --config .gitleaks.toml" in workflow
+    assert "sha256sum -c" in workflow
+    assert "fetch-depth: 0" in workflow
+
+
+def test_workflow_is_read_only_and_uses_no_repository_secrets(workflow):
+    assert re.search(r"^permissions:\n  contents: read$", workflow, flags=re.MULTILINE)
+    assert "write" not in workflow
+    assert "secrets." not in workflow
+
+
+def test_workflow_has_no_tabs(workflow):
+    assert "\t" not in workflow
+
+
+def test_gitleaks_allowlist_only_covers_the_fake_redaction_values():
+    config = (ROOT / ".gitleaks.toml").read_text(encoding="utf-8")
+    assert "useDefault = true" in config
+    assert re.findall(r"paths = \[(.*)\]", config) == [r"'''^tests/test_redact\.py$'''"]
+    source = (ROOT / "tests" / "test_redact.py").read_text(encoding="utf-8")
+    for value in re.findall(r"'''\^(.+?)\$'''", re.search(r"regexes = \[(.*)\]", config).group(1)):
+        assert f'"{value}"' in source, f"{value} is not a fixture value in tests/test_redact.py"

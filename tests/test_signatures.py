@@ -75,6 +75,14 @@ def _serve(contents: dict[str, bytes], default: bytes | None = None):
     return H
 
 
+@pytest.mark.parametrize("path", sorted(SAMPLES))
+def test_every_rule_is_reported_end_to_end(http_server, path):
+    # The check itself, over HTTP: the rule's own id, severity and URL, nothing else.
+    base = http_server(_serve({path: SAMPLES[path]}))
+    findings = exposure.check_sensitive_paths(http_utils.build_session(timeout=2), base)
+    assert [(f.id, f.severity.value, f.url) for f in findings] == [(RULES[path].id, RULES[path].severity, base + path)]
+
+
 def test_catch_all_html_site_has_no_exposure_findings(http_server):
     findings = exposure.check_sensitive_paths(
         http_utils.build_session(timeout=2), http_server(_serve({}, GENERIC_HTML))
