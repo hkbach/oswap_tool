@@ -16,6 +16,20 @@ Công cụ Python (CLI + Web UI cục bộ) quét cấu hình bảo mật của 
 
 ## Changelog
 
+- **v1.5.0** (Sprint 5, dùng trong CI) — thay đổi hành vi cần lưu ý:
+  - **Một kho chứng chỉ cho cả hai đường (FR-CI-10, gỡ B1):** request HTTP giờ dùng
+    **kho chứng chỉ của hệ điều hành** thay cho `certifi`, giống TLS check.
+    `--ca-bundle PATH` (hoặc `REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE`) thay kho
+    mặc định cho cả hai.
+  - **`--fail-on {critical,high,medium,low,none}`** (mặc định `high`, FR-CI-01).
+  - **Exit code `3` khi quét không hoàn tất** (không lấy được trang chủ). Trước
+    đây trường hợp này trả `0`, nên CI có thể "xanh" dù không quét được gì.
+  - **`--sarif PATH`** (SARIF 2.1.0, FR-RPT-02) và **`--html PATH`** (cùng báo
+    cáo HTML với Web UI, FR-RPT-09).
+  - **JSON `schema_version` 1.3** (chỉ thêm trường): `gate` =
+    `{fail_on, failed, incomplete}`.
+  - Template CI cho GitHub Actions, GitLab CI, Azure Pipelines, Jenkins trong
+    `examples/ci/` (chưa chạy thử trên hệ thống CI thật).
 - **v1.4.0** (Sprint 4, độ chính xác) — thay đổi hành vi cần lưu ý:
   - **Finding lộ file chỉ được báo khi nội dung khớp loại file (FR-DET-01).**
     HTTP 200 thôi là không đủ: `.git/HEAD` phải có `ref:`, `.env` phải có
