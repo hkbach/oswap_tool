@@ -11,9 +11,10 @@ from __future__ import annotations
 from html import escape
 
 from . import __version__
+from .models import SEVERITY_ORDER
 from .output import gate_message
 
-_SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
+_SEVERITIES = SEVERITY_ORDER
 
 _CSS = """
 :root { --text:#1c2127; --muted:#5c6670; --border:#dde1e6; --bg:#f6f7f9; --surface:#fff;

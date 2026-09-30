@@ -24,14 +24,12 @@ class Severity(str, Enum):
 
     @property
     def rank(self) -> int:
-        order = {
-            Severity.CRITICAL: 0,
-            Severity.HIGH: 1,
-            Severity.MEDIUM: 2,
-            Severity.LOW: 3,
-            Severity.INFO: 4,
-        }
-        return order[self]
+        """0 for CRITICAL ... 4 for INFO: the order in which the members are declared."""
+        return SEVERITY_ORDER.index(self.value)
+
+
+# Most severe first. The single definition of the order used by every output format.
+SEVERITY_ORDER: tuple[str, ...] = tuple(s.value for s in Severity)
 
 
 @dataclass

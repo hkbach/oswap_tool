@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 
-_SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
+from .models import SEVERITY_ORDER
+
+_SEVERITIES = SEVERITY_ORDER
 _SEVERITY_COLOR = {
     "CRITICAL": "\033[41m\033[97m",  # white on red
     "HIGH": "\033[91m",  # red
