@@ -69,6 +69,19 @@ def test_sensitive_url_parameters_are_masked(text, expected):
     assert redact.redact(text) == expected
 
 
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("https://admin:pw12@t.example/", "https://<redacted len=5>:<redacted len=4>@t.example/"),
+        ("Could not fetch http://tok3n@t.example:8443/x", "Could not fetch http://<redacted len=5>@t.example:8443/x"),
+        ("https://u:@t.example/", "https://<redacted len=1>:@t.example/"),
+        ("https://t.example/@user and mailto:a@b.example", "https://t.example/@user and mailto:a@b.example"),
+    ],
+)
+def test_credentials_in_urls_are_masked(text, expected):
+    assert redact.redact(text) == expected
+
+
 # --- no secret survives any output ----------------------------------------------------
 
 
@@ -137,6 +150,20 @@ def test_same_cookie_on_a_redirect_and_the_final_response_is_redacted_in_both(ht
     assert first not in text and second not in text
     evidence = sorted(f["evidence"] for f in report["findings"] if f["id"] == "COOKIE-FLAGS-MISSING")
     assert evidence == [f"sid=<redacted len={len(first)}>; Path=/", f"sid=<redacted len={len(second)}>; Path=/"]
+
+
+def test_credentials_in_the_target_url_never_reach_the_reports(http_server, tmp_path, capsys):
+    user, password = "scan-user", f"{COOKIE_SECRET}-pw"
+    target = http_server(SecretHandler).replace("http://", f"http://{user}:{password}@")
+    outs = {k: tmp_path / f"r.{k}" for k in ("json", "sarif", "html")}
+    cli.main([target, "--yes", "--no-color", *[a for k, p in outs.items() for a in (f"--{k}", str(p))]])
+    captured = capsys.readouterr()
+    texts = {"console": captured.out + captured.err, **{k: p.read_text("utf-8") for k, p in outs.items()}}
+    for where, text in texts.items():
+        assert password not in text and user not in text, f"credentials leaked in {where}"
+    report = json.loads(outs["json"].read_text(encoding="utf-8"))
+    assert report["target"].startswith(f"http://<redacted len={len(user)}>:<redacted len={len(password)}>@127.0.0.1:")
+    assert "redacted" not in web._report_filename(report)
 
 
 def test_errors_are_redacted(closed_port):

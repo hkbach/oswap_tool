@@ -85,8 +85,8 @@ sent; each blocked host is listed in `errors`.
 - If software on the scanning machine re-signs TLS (antivirus web shields, TLS
   inspection proxies), the TLS results describe that software, not the target.
   The tool warns when the certificate issuer is a known interceptor.
-- Redaction is rule based: cookie values and URL parameters with sensitive
-  names are masked. Reports still contain URLs, headers and configuration of the
+- Redaction is rule based: cookie values, URL parameters with sensitive
+  names and credentials in URLs (`https://user:password@host`) are masked. Reports still contain URLs, headers and configuration of the
   target, so share them only with people who are allowed to see them.
 
 A clean report does not mean that a website is secure. It means that none of

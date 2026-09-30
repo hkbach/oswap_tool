@@ -64,7 +64,9 @@ def _is_loopback(host: str) -> bool:
 
 
 def _report_filename(report: dict) -> str:
-    host = urlsplit(report.get("target", "")).netloc or "target"
+    # Host and port only: never the userinfo part of the target (credentials).
+    parts = urlsplit(report.get("target", ""))
+    host = (parts.hostname or "target") + (f":{parts.port}" if parts.port else "")
     stamp = re.sub(r"\D", "", report.get("started_at", ""))[:14] or "report"
     return f"owasp-scan-{re.sub(r'[^A-Za-z0-9.-]', '_', host)}-{stamp}.html"
 
