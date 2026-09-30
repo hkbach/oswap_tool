@@ -101,10 +101,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.5.1"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.6.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.5.1.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.6.0.tar.gz"
 ```
 
 Installing the package adds two commands: `owasp-scanner` (same as
@@ -183,7 +183,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.5.1`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.6.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -336,6 +336,7 @@ git diff tests/golden/
 |---|---|---|
 | `lint` | `lint` | `ruff check .` and `ruff format --check .` |
 | `test` | `test (ubuntu-24.04, 3.12)`, `test (ubuntu-24.04, 3.14)`, `test (windows-latest, 3.14)` | Offline `pytest` on Ubuntu 24.04 (Python 3.12, the oldest supported, and 3.14) and Windows (3.14). |
+| `min-deps` | `min-deps` | Offline `pytest` on Python 3.12 with the lowest dependency versions `pyproject.toml` allows |
 | `audit` | `audit` | `pip-audit` of the runtime dependencies declared in `pyproject.toml` |
 | `secrets` | `secrets` | gitleaks over the whole git history, binary checksum verified. The allowlist in `.gitleaks.toml` covers only two fake values used by the redaction tests. |
 
@@ -354,6 +355,7 @@ Required checks:
 
 ```text
 lint
+min-deps
 audit
 secrets
 test (ubuntu-24.04, 3.12)
@@ -379,7 +381,7 @@ checks too, or pull requests will wait for a check that no longer runs.
      `1` or more when the team has a second reviewer; `0` still forces every
      change through a pull request and its checks.
    - **Require status checks to pass**. Tick *Require branches to be up to
-     date before merging*, then **Add checks** and add the six check names
+     date before merging*, then **Add checks** and add the seven check names
      above (choose the GitHub Actions source if asked).
 6. Leave **Bypass list** empty, so the rules also apply to admins.
 7. Click **Create**.
@@ -391,7 +393,7 @@ checks too, or pull requests will wait for a check that no longer runs.
 3. Tick **Require a pull request before merging** (set the number of approvals
    as in option A).
 4. Tick **Require status checks to pass before merging**, tick **Require
-   branches to be up to date before merging**, and search for and add the six
+   branches to be up to date before merging**, and search for and add the seven
    checks above.
 5. Tick **Do not allow bypassing the above settings**.
 6. Leave *Allow force pushes* and *Allow deletions* unticked. Click **Create**.
@@ -405,7 +407,7 @@ gh api --method PUT repos/hkbach/oswap_tool/branches/main/protection --input - <
   "required_status_checks": {
     "strict": true,
     "contexts": [
-      "lint", "audit", "secrets",
+      "lint", "min-deps", "audit", "secrets",
       "test (ubuntu-24.04, 3.12)", "test (ubuntu-24.04, 3.14)", "test (windows-latest, 3.14)"
     ]
   },
@@ -419,7 +421,7 @@ EOF
 ```
 
 **Check that it works:** open a pull request to `main`. The merge button must
-stay disabled until all six checks pass, and a direct `git push` to `main`
+stay disabled until all seven checks pass, and a direct `git push` to `main`
 must be rejected.
 
 Rulesets and branch protection are available for public repositories on all
@@ -457,6 +459,32 @@ docs/               # SRS, backlog, JSON Schema of the report
 
 ## Changelog
 
+- **v1.6.0** (Sprint 7). Changes to note:
+  - **Python 3.12 or later is required** (was 3.9). Development uses 3.14.
+    `cryptography` 42 or later (was 41) and `requests` 2.32.3 or later (was 2.31.0)
+    are required; with older `requests`, `--ca-bundle` did not apply to the HTTP
+    requests.
+  - **Weak TLS protocols are detected on real servers.** The measuring TLS
+    connection now also reaches servers that only speak TLS 1.0/1.1, so they get
+    `TLS-WEAK-PROTOCOL` (HIGH) instead of `TLS-CONN-FAILED` (INFO). **Such
+    targets now fail the default gate (exit code `1`).** The trust check still
+    uses strict defaults.
+  - **Redaction fixes:** the same cookie set on a redirect and on the final
+    response is redacted in both findings (before, the first value leaked);
+    credentials in URLs (`https://user:password@host`) are masked everywhere.
+  - **Cookies are read like a browser:** attributes the scanner does not check
+    (`Priority`, `Partitioned`, ...) no longer create false findings for a cookie
+    named after them.
+  - `robots.txt` and `sitemap.xml` are read up to 512 KiB (before: in full); an
+    unknown charset no longer stops the directory-listing check; IPv6 hosts
+    are bracketed in URLs.
+  - Web UI: returns HTTP 500 with an error message if a scan fails internally
+    (before: no response); shows the same gate text as the HTML report. The
+    web API adds `gate_status` and `gate_message`; the JSON report and its
+    `schema_version` (1.3) are unchanged.
+  - Required CI status checks: `test (ubuntu-24.04, 3.9)` is now
+    `test (ubuntu-24.04, 3.12)`, and the new `min-deps` job tests the lowest
+    allowed dependency versions; update branch protection.
 - **v1.5.1** (Sprint 6, repository quality). No change in the tool's
   behaviour, output or exit codes.
   - CI workflow for this repository (`.github/workflows/ci.yml`, FR-QA-07):
