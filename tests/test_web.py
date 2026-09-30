@@ -83,7 +83,7 @@ def test_only_recent_reports_are_kept(ui, monkeypatch):
     monkeypatch.setattr(
         web,
         "run_scan",
-        lambda target, timeout, workers: ScanResult(target=target, started_at="2026-01-01T00:00:00Z"),
+        lambda target, timeout, workers, **kwargs: ScanResult(target=target, started_at="2026-01-01T00:00:00Z"),
     )
     ids = [
         scan(ui, {"target": "http://127.0.0.1:1", "authorized": True}).json()["report_id"]
@@ -183,7 +183,7 @@ def test_oversized_body_rejected(ui):
 def test_only_one_scan_at_a_time(ui, monkeypatch):
     started, release = threading.Event(), threading.Event()
 
-    def slow_scan(target, timeout, workers):
+    def slow_scan(target, timeout, workers, **kwargs):
         started.set()
         release.wait(10)
         return ScanResult(target=target, started_at="2026-01-01T00:00:00Z", finished_at="2026-01-01T00:00:01Z")

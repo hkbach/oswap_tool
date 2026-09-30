@@ -66,9 +66,9 @@ def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int):
         return None, None, None, exc
 
 
-def _verify_trust(hostname: str, port: int, timeout: int):
+def _verify_trust(hostname: str, port: int, timeout: int, trust: ssl.SSLContext | None = None):
     """Step 2: verifying connection. Returns None if trusted, or the raised exception."""
-    verify_ctx = ssl.create_default_context()
+    verify_ctx = trust if trust is not None else ssl.create_default_context()
     try:
         with socket.create_connection((hostname, port), timeout=timeout) as sock:
             with verify_ctx.wrap_socket(sock, server_hostname=hostname):
@@ -82,7 +82,13 @@ def _verify_trust(hostname: str, port: int, timeout: int):
         return None
 
 
-def check_tls(hostname: str, port: int = 443, timeout: int = 10, warnings: list[str] | None = None) -> list[Finding]:
+def check_tls(
+    hostname: str,
+    port: int = 443,
+    timeout: int = 10,
+    warnings: list[str] | None = None,
+    trust: ssl.SSLContext | None = None,
+) -> list[Finding]:
     """TLS checks; ``warnings`` receives a note when the handshake looks intercepted (FR-DET-16)."""
     findings: list[Finding] = []
     url = f"https://{hostname}:{port}"
@@ -203,7 +209,7 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10, warnings: list[
     # period is fine — otherwise a self-signed-style verification failure
     # would just re-state the expiry/not-yet-valid finding above.
     if not cert_time_problem:
-        trust_err = _verify_trust(hostname, port, timeout)
+        trust_err = _verify_trust(hostname, port, timeout, trust)
         if trust_err is not None:
             findings.append(
                 Finding(

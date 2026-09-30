@@ -58,16 +58,17 @@ function renderSummary(result) {
   }
 
   const gate = $("gate");
-  const baselineFailed = result.errors.some((e) => e.startsWith("Could not fetch"));
-  if (result.gate_failed) {
+  const info = result.gate || { fail_on: "high", failed: result.gate_failed, incomplete: false };
+  const threshold = `--fail-on ${info.fail_on}`;
+  if (info.failed) {
     gate.className = "gate gate-fail";
-    gate.textContent = "CRITICAL/HIGH findings present: the CLI exits with code 1 (fails the CI gate).";
-  } else if (baselineFailed) {
+    gate.textContent = `Findings at or above the ${threshold} threshold: the CLI exits with code 1 (fails the CI gate).`;
+  } else if (info.incomplete) {
     gate.className = "gate gate-warn";
     gate.textContent = "The target home page could not be fetched, so most checks did not run. See the errors below.";
   } else {
     gate.className = "gate gate-pass";
-    gate.textContent = "No CRITICAL/HIGH findings: the CLI exits with code 0.";
+    gate.textContent = `No findings at or above the ${threshold} threshold: the CLI exits with code 0.`;
   }
 }
 

@@ -10,8 +10,9 @@ from . import __version__
 
 # Version of the JSON report layout (docs/report.schema.json). Bump on any change to the
 # report shape: minor for added fields, major for removed/renamed fields or changed meaning.
-# "1.0" was the unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0; 1.2 adds final_url and redirect_chain.
-SCHEMA_VERSION = "1.2"
+# History: "1.0" = unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0;
+# 1.2 adds final_url and redirect_chain; 1.3 adds gate.
+SCHEMA_VERSION = "1.3"
 
 
 class Severity(str, Enum):
@@ -92,6 +93,8 @@ class ScanResult:
     scanner_version: str = __version__
     # Version of the rule set in owasp_scanner/rules/ that produced this result.
     rules_version: str = field(default_factory=lambda: _rules_version())
+    # True once the baseline GET succeeded; False means the scan is incomplete (exit code 3).
+    baseline_fetched: bool = False
 
     def add(self, finding: Finding) -> None:
         self.findings.append(finding)

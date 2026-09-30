@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import ssl
 import sys
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
@@ -19,11 +20,13 @@ import requests
 
 from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
+from .html_report import render_html
 from .http_utils import build_session
 from .models import ScanResult
-from .output import build_report, gate_failed
+from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, exit_code
 from .redact import redact
 from .report import print_report, write_json
+from .sarif import to_sarif
 from .soft404 import build_profile
 
 CONSENT_BANNER = """
@@ -85,6 +88,15 @@ def _run_check(result: ScanResult, name: str, check, *args, **kwargs) -> None:
         result.errors.append(f"Check '{name}' failed: {exc!r}")
 
 
+def _ca_bundle(value: str) -> str:
+    """argparse type for --ca-bundle: an existing file that OpenSSL can load."""
+    try:
+        ssl.create_default_context(cafile=value)
+    except (OSError, ssl.SSLError) as exc:
+        raise argparse.ArgumentTypeError(f"cannot load CA bundle {value!r}: {exc}") from exc
+    return value
+
+
 def _confirm_authorization(assume_yes: bool) -> bool:
     print(CONSENT_BANNER)
     if assume_yes:
@@ -96,16 +108,25 @@ def _confirm_authorization(assume_yes: bool) -> bool:
     return answer.strip().lower() in ("y", "yes")
 
 
-def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
+def run_scan(base_url: str, timeout: int = 10, workers: int = 5, ca_bundle: str | None = None) -> ScanResult:
     parsed = urlparse(base_url)
     hostname = parsed.hostname or base_url
 
     result = ScanResult(target=base_url, started_at=_utc_timestamp())
-    session = build_session(timeout=timeout, scope_host=hostname)
+    session = build_session(timeout=timeout, scope_host=hostname, ca_bundle=ca_bundle)
 
     def run_tls(url: str) -> None:
         tls_host, tls_port = _host_port(url)
-        _run_check(result, "tls", tls_check.check_tls, tls_host, port=tls_port, timeout=timeout, warnings=result.errors)
+        _run_check(
+            result,
+            "tls",
+            tls_check.check_tls,
+            tls_host,
+            port=tls_port,
+            timeout=timeout,
+            warnings=result.errors,
+            trust=session.trust_context,  # same trust decision as the HTTP requests (FR-CI-10)
+        )
 
     # 1. Baseline fetch of the target page
     resp, err, tls_error_url = _fetch_baseline(session, base_url)
@@ -122,6 +143,7 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
         result.finished_at = _utc_timestamp()
         return result
 
+    result.baseline_fetched = True
     # FR-FIX-10: header checks judge the page the user actually gets (the final response),
     # and HSTS is only meaningful when that response came over HTTPS.
     result.final_url = resp.url
@@ -183,9 +205,25 @@ def main(argv=None) -> int:
     )
     parser.add_argument("target", help="Target URL or hostname, e.g. https://example.com")
     parser.add_argument("--json", metavar="PATH", help="Write full JSON report to PATH")
+    parser.add_argument("--sarif", metavar="PATH", help="Write a SARIF 2.1.0 report to PATH (e.g. for code scanning)")
+    parser.add_argument("--html", metavar="PATH", help="Write a standalone HTML report to PATH")
     parser.add_argument("--timeout", type=int, default=10, help="Per-request timeout in seconds (default: 10)")
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors in CLI output")
+    parser.add_argument(
+        "--fail-on",
+        choices=FAIL_ON_CHOICES,
+        default=DEFAULT_FAIL_ON,
+        help="Lowest severity that fails the scan with exit code 1 (default: high). "
+        "Exit code 3 means the target could not be scanned; 'none' never fails.",
+    )
+    parser.add_argument(
+        "--ca-bundle",
+        metavar="PATH",
+        type=_ca_bundle,
+        help="PEM file of CA certificates to trust instead of the OS store, for HTTP and TLS checks "
+        "(default: REQUESTS_CA_BUNDLE / SSL_CERT_FILE, else the OS store)",
+    )
     parser.add_argument(
         "--show-secrets",
         action="store_true",
@@ -207,21 +245,29 @@ def main(argv=None) -> int:
     target = _normalize_target(args.target)
     print(f"Scanning {target if args.show_secrets else redact(target)} ...\n")
 
-    result = run_scan(target, timeout=args.timeout, workers=args.workers)
+    result = run_scan(target, timeout=args.timeout, workers=args.workers, ca_bundle=args.ca_bundle)
     if args.show_secrets:
         print(
             "WARNING: --show-secrets is set: cookie values and sensitive URL parameters are NOT redacted. "
             "Do not share this output.",
             file=sys.stderr,
         )
-    report = build_report(result, show_secrets=args.show_secrets)
+    report = build_report(result, show_secrets=args.show_secrets, fail_on=args.fail_on)
     print_report(report, use_color=not args.no_color)
 
     if args.json:
         write_json(report, args.json)
         print(f"\nFull JSON report written to: {args.json}")
+    if args.sarif:
+        write_json(to_sarif(report), args.sarif)
+        print(f"SARIF report written to: {args.sarif}")
+    if args.html:
+        # Same renderer as the Web UI's "Download Test result" (FR-RPT-09).
+        with open(args.html, "w", encoding="utf-8") as fh:
+            fh.write(render_html(report))
+        print(f"HTML report written to: {args.html}")
 
-    return 1 if gate_failed(report) else 0
+    return exit_code(report)
 
 
 if __name__ == "__main__":

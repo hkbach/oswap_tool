@@ -16,6 +16,20 @@ Công cụ Python (CLI + Web UI cục bộ) quét cấu hình bảo mật của 
 
 ## Changelog
 
+- **v1.5.0** (Sprint 5, dùng trong CI) — thay đổi hành vi cần lưu ý:
+  - **Một kho chứng chỉ cho cả hai đường (FR-CI-10, gỡ B1):** request HTTP giờ dùng
+    **kho chứng chỉ của hệ điều hành** thay cho `certifi`, giống TLS check.
+    `--ca-bundle PATH` (hoặc `REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE`) thay kho
+    mặc định cho cả hai.
+  - **`--fail-on {critical,high,medium,low,none}`** (mặc định `high`, FR-CI-01).
+  - **Exit code `3` khi quét không hoàn tất** (không lấy được trang chủ). Trước
+    đây trường hợp này trả `0`, nên CI có thể "xanh" dù không quét được gì.
+  - **`--sarif PATH`** (SARIF 2.1.0, FR-RPT-02) và **`--html PATH`** (cùng báo
+    cáo HTML với Web UI, FR-RPT-09).
+  - **JSON `schema_version` 1.3** (chỉ thêm trường): `gate` =
+    `{fail_on, failed, incomplete}`.
+  - Template CI cho GitHub Actions, GitLab CI, Azure Pipelines, Jenkins trong
+    `examples/ci/` (chưa chạy thử trên hệ thống CI thật).
 - **v1.4.0** (Sprint 4, độ chính xác) — thay đổi hành vi cần lưu ý:
   - **Finding lộ file chỉ được báo khi nội dung khớp loại file (FR-DET-01).**
     HTTP 200 thôi là không đủ: `.git/HEAD` phải có `ref:`, `.env` phải có
@@ -138,6 +152,31 @@ python -m owasp_scanner https://example.com --timeout 15 --workers 8
 
 Exit code: `0` nếu không có finding mức CRITICAL/HIGH, `1` nếu có, `2` nếu
 người dùng không xác nhận quyền quét.
+
+## Tích hợp CI/CD
+
+Template sẵn trong [`examples/ci/`](./examples/ci/): GitHub Actions (kèm upload
+SARIF lên code scanning), GitLab CI, Azure Pipelines, Jenkins. Các template cài
+tool từ git theo tag (package chưa có trên PyPI) và **chưa được chạy thử trên hệ
+thống CI thật**; test trong repo chỉ đảm bảo chúng gọi đúng tham số CLI hiện có.
+
+```bash
+python -m owasp_scanner "$TARGET_URL" --yes --no-color --fail-on high \
+  --json owasp-report.json --sarif owasp-report.sarif --html owasp-report.html
+```
+
+| Exit code | Ý nghĩa | Gợi ý trong CI |
+|---|---|---|
+| `0` | Không có finding nào bằng hoặc cao hơn `--fail-on` | Pass |
+| `1` | Có finding bằng hoặc cao hơn `--fail-on` (mặc định CRITICAL/HIGH) | Fail |
+| `2` | Chưa xác nhận quyền quét, hoặc tham số sai | Fail (cấu hình job sai) |
+| `3` | Không quét được target (DNS, kết nối, TLS…) | Fail (target hoặc mạng có vấn đề) |
+
+- `--yes` bỏ qua bước hỏi quyền quét: chỉ dùng cho target **đã được phê duyệt**.
+- `--fail-on none` không bao giờ fail (chỉ thu báo cáo).
+- Target dùng CA nội bộ: thêm `--ca-bundle path/to/ca.pem` (dùng cho cả request
+  HTTP lẫn TLS check).
+- Báo cáo mặc định đã che giá trị cookie và tham số URL nhạy cảm.
 
 ## Giao diện web (chạy trên máy local)
 

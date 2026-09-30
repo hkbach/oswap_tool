@@ -12,6 +12,8 @@ Design goals:
 
 from __future__ import annotations
 
+import os
+import ssl
 from urllib.parse import urljoin, urlsplit
 
 import requests
@@ -76,9 +78,51 @@ class ScopedSession(requests.Session):
         )
 
 
-def build_session(timeout: int = DEFAULT_TIMEOUT, scope_host: str | None = None) -> ScopedSession:
+def trust_context(ca_bundle: str | None = None) -> ssl.SSLContext:
+    """The one trust decision used by HTTP requests and the TLS check (FR-CI-10, fixes B1).
+
+    ``ca_bundle`` (or ``REQUESTS_CA_BUNDLE`` / ``SSL_CERT_FILE``) *replaces* the default
+    store, as in curl and requests. Without one, the operating system's store is used,
+    so a CA that the machine trusts (e.g. a corporate or antivirus TLS proxy) is trusted
+    by both paths, instead of certifi for one and the OS for the other.
+    """
+    cafile = ca_bundle or os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("SSL_CERT_FILE") or None
+    return ssl.create_default_context(cafile=cafile)
+
+
+class _TrustAdapter(HTTPAdapter):
+    """Make requests verify with our SSLContext instead of its certifi-based default.
+
+    Follows requests' documented extension point (build_connection_pool_key_attributes)
+    and also stops cert_verify() from pointing the connection at certifi, which urllib3
+    would otherwise load *into* the shared context.
+    """
+
+    def __init__(self, ssl_context: ssl.SSLContext, **kwargs) -> None:
+        self._ssl_context = ssl_context
+        super().__init__(**kwargs)
+
+    def build_connection_pool_key_attributes(self, request, verify, cert=None):
+        host_params, pool_kwargs = super().build_connection_pool_key_attributes(request, verify, cert)
+        if verify is not False:
+            pool_kwargs.pop("ca_certs", None)
+            pool_kwargs.pop("ca_cert_dir", None)
+            pool_kwargs["ssl_context"] = self._ssl_context
+        return host_params, pool_kwargs
+
+    def cert_verify(self, conn, url, verify, cert) -> None:
+        super().cert_verify(conn, url, verify, cert)
+        if verify is not False:
+            conn.ca_certs = None
+            conn.ca_cert_dir = None
+
+
+def build_session(
+    timeout: int = DEFAULT_TIMEOUT, scope_host: str | None = None, ca_bundle: str | None = None
+) -> ScopedSession:
     session = ScopedSession(scope_host)
     session.headers.update({"User-Agent": USER_AGENT})
+    session.trust_context = trust_context(ca_bundle)
 
     retry = Retry(
         total=1,
@@ -88,7 +132,7 @@ def build_session(timeout: int = DEFAULT_TIMEOUT, scope_host: str | None = None)
         status_forcelist=(),  # do not retry on 4xx/5xx; that's signal, not noise
         raise_on_status=False,
     )
-    adapter = HTTPAdapter(max_retries=retry)
+    adapter = _TrustAdapter(session.trust_context, max_retries=retry)
     session.mount("http://", adapter)
     session.mount("https://", adapter)
     session.request = _with_default_timeout(session.request, timeout)  # type: ignore

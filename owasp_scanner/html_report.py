@@ -61,11 +61,25 @@ def _e(value) -> str:
 
 
 def _gate(report: dict) -> tuple[str, str]:
-    if gate_failed({"summary": report.get("summary", {})}):
-        return "fail", "CRITICAL/HIGH findings present: the CLI exits with code 1 (fails the CI gate)."
-    if any(str(e).startswith("Could not fetch") for e in report.get("errors", [])):
-        return "warn", "The target home page could not be fetched, so most checks did not run. See the errors below."
-    return "pass", "No CRITICAL/HIGH findings: the CLI exits with code 0."
+    gate = report.get("gate") or {
+        # reports without a gate block (older callers): default threshold, incomplete if the home page failed
+        "fail_on": "high",
+        "failed": gate_failed({"summary": report.get("summary", {})}),
+        "incomplete": any(str(e).startswith("Could not fetch") for e in report.get("errors", [])),
+    }
+    threshold = f"--fail-on {gate['fail_on']}"
+    if gate["failed"]:
+        return "fail", f"Findings at or above the {threshold} threshold: the CLI exits with code 1 (fails the CI gate)."
+    if gate["incomplete"]:
+        code = "0 (--fail-on none)" if gate["fail_on"] == "none" else "3"
+        return (
+            "warn",
+            f"The target home page could not be fetched, so most checks did not run. The CLI exits with code {code}. "
+            "See the errors below.",
+        )
+    if gate["fail_on"] == "none":
+        return "pass", "--fail-on none: the gate never fails; the CLI exits with code 0."
+    return "pass", f"No findings at or above the {threshold} threshold: the CLI exits with code 0."
 
 
 def _finding(f: dict) -> str:

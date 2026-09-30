@@ -278,9 +278,9 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 - [ ] **FR-RPT-01** (P0 · Pro) *(một phần đã có: `render_html()` dùng cho Web UI)* Báo cáo **HTML** tự chứa (một file): tóm tắt điều hành (số finding theo severity, điểm rủi ro, top vấn đề), chi tiết từng finding (mô tả, evidence, cách tái hiện, khuyến nghị, tham chiếu), phụ lục phạm vi/giới hạn/các check đã chạy.
   AC: mở được offline; escape đúng nội dung evidence (chống XSS trong chính báo cáo); có test snapshot.
-- [ ] **FR-RPT-09** (P0 · all) Tham số CLI `--html PATH` dùng lại `render_html()` của Web UI (một bộ render cho cả hai nơi).
+- [x] **FR-RPT-09** (P0 · all) *(xong ở Sprint 5: `--html`, SRS FR-REPORT-07, AT-45)* Tham số CLI `--html PATH` dùng lại `render_html()` của Web UI (một bộ render cho cả hai nơi).
   AC: HTML từ CLI và từ `GET /api/report/<id>.html` giống nhau cho cùng JSON; evidence đã qua `redact()`; nội dung được escape.
-- [ ] **FR-RPT-02** (P0 · Pro) Xuất **SARIF 2.1.0** để hiển thị trong GitHub/GitLab code scanning.
+- [x] **FR-RPT-02** (P0 · Pro) *(xong ở Sprint 5: `sarif.py`, `--sarif`, SRS FR-REPORT-06, AT-44; test kiểm tra cấu trúc bắt buộc, chưa validate bằng schema chính thức của OASIS — cần xác nhận license trước khi vendor file schema)* Xuất **SARIF 2.1.0** để hiển thị trong GitHub/GitLab code scanning.
   AC: file hợp lệ theo schema SARIF; rule id = `Finding.id`; `partialFingerprints` lấy từ `fingerprint` (FR-MODEL-01); tham số CLI `--sarif PATH`.
   Phụ thuộc: FR-MODEL-01, FR-AUTH-02.
 - [ ] **FR-RPT-03** (P1 · Pro) Xuất **CSV** và **JUnit XML** (cho CI).
@@ -292,16 +292,16 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 ### E4. CLI và tích hợp CI/CD
 
-- [ ] **FR-CI-01** (P0 · all) Tham số `--fail-on {critical,high,medium,low,none}` để điều khiển exit code (mặc định `high` = giữ FR-CLI-04). Web UI dùng cùng logic cho `gate_failed`.
+- [x] **FR-CI-01** (P0 · all) *(xong ở Sprint 5 cùng exit code `3` đã xác nhận; SRS FR-CLI-04, 7.3, AT-43)* Tham số `--fail-on {critical,high,medium,low,none}` để điều khiển exit code (mặc định `high` = giữ FR-CLI-04). Web UI dùng cùng logic cho `gate_failed`.
   AC: test cho từng ngưỡng; `gate_failed` của Web UI khớp exit code của CLI với cùng ngưỡng.
   `[CONFIRM]` Thêm exit code `3` = "quét không hoàn tất" (baseline thất bại hoặc có check lỗi), để pipeline không "xanh" khi không quét được gì (B2 trong `docs/srs-feedback.md`; SRS mục 13). Là thay đổi hợp đồng CLI, cần chủ SRS duyệt trước khi làm.
 - [ ] **FR-CI-02** (P0 · Pro) `--baseline FILE`: chỉ tính lỗi **mới** so với baseline (theo `fingerprint`) để không chặn pipeline vì nợ cũ.
   Phụ thuộc: FR-MODEL-01, FR-MODEL-02.
-- [ ] **FR-CI-03** (P0 · all) Template CI/CD: GitHub Actions, GitLab CI, Azure DevOps, Jenkins (trong `examples/ci/`), kèm hướng dẫn upload SARIF/artefact.
+- [x] **FR-CI-03** (P0 · all) *(xong ở Sprint 5: `examples/ci/`, AT-46; chưa chạy trên CI thật)* Template CI/CD: GitHub Actions, GitLab CI, Azure DevOps, Jenkins (trong `examples/ci/`), kèm hướng dẫn upload SARIF/artefact.
 - [ ] **FR-CI-04** (P0 · Pro) Image Docker chính thức chạy được CLI (`docker run ... scan https://...`), user không phải root.
 - [ ] **FR-CI-05** (P1 · Pro) `--targets-file FILE` và nhiều `target` trong một lần chạy, gộp báo cáo; giới hạn tuần tự/song song có kiểm soát.
 - [ ] **FR-CI-06** (P1 · Pro) File cấu hình (`scanner.yaml`): target, exclusion, rate limit, auth profile, ngưỡng fail, đường dẫn báo cáo; tham số CLI ghi đè cấu hình.
-- [ ] **FR-CI-10** (P0 · all) `--ca-bundle PATH` (và biến môi trường `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE` được tôn trọng) cho **cả** HTTP session và kiểm tra TLS (`ssl.create_default_context(cafile=...)`). Gỡ blocker **B1** `[FACT – quan sát trên máy dev ngày 2026-09-23; đính chính 2026-09-30: thành phần chặn TLS là Avast Web/Mail Shield chạy trên máy, không phải proxy mạng; SRS mục 10]`: `requests` tin kho `certifi`, còn nhóm TLS tin kho chứng chỉ của hệ điều hành. Sau proxy có TLS inspection, `requests` từ chối **mọi** site HTTPS nên baseline thất bại; nhóm TLS vẫn qua vì kho OS tin CA của proxy. Kết quả: 1 lỗi "Could not fetch", 0 finding, exit code `0`.
+- [x] **FR-CI-10** (P0 · all) *(xong ở Sprint 5: mặc định kho OS cho cả hai đường, `--ca-bundle`; SRS FR-CLI-06, AT-42)* `--ca-bundle PATH` (và biến môi trường `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE` được tôn trọng) cho **cả** HTTP session và kiểm tra TLS (`ssl.create_default_context(cafile=...)`). Gỡ blocker **B1** `[FACT – quan sát trên máy dev ngày 2026-09-23; đính chính 2026-09-30: thành phần chặn TLS là Avast Web/Mail Shield chạy trên máy, không phải proxy mạng; SRS mục 10]`: `requests` tin kho `certifi`, còn nhóm TLS tin kho chứng chỉ của hệ điều hành. Sau proxy có TLS inspection, `requests` từ chối **mọi** site HTTPS nên baseline thất bại; nhóm TLS vẫn qua vì kho OS tin CA của proxy. Kết quả: 1 lỗi "Could not fetch", 0 finding, exit code `0`.
   AC: mock HTTPS server ký bởi CA tự tạo → không có `--ca-bundle` thì baseline thất bại và có `TLS-CERT-NOT-TRUSTED`; có `--ca-bundle` trỏ tới CA đó thì baseline thành công, các check HTTP chạy đủ, không có `TLS-CERT-NOT-TRUSTED`; Web UI dùng cùng cấu hình (tham số khi khởi động server).
   `[REC]` Phương án thay thế: dùng kho chứng chỉ của OS cho `requests` (thư viện `truststore`). Cần Python ≥ 3.10, xung đột với NFR-PORT-01 (≥ 3.9); cần kiểm tra license.
 - [ ] **FR-CI-07** (P1 · Pro) Tham số vận hành: `--proxy`, `--header K:V` (lặp được), `--cookie`, `--user-agent`, `--version`, `--quiet`/`--verbose`.
@@ -515,7 +515,7 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 
 ### E22. Tài liệu và tài sản đưa ra thị trường
 
-- [ ] **FR-DOC-01** (P0 · all) README nêu rõ **phạm vi và giới hạn** (không phải DAST toàn diện ở giai đoạn 1; không thay thế pentest), hướng dẫn cài đặt/chạy/CI.
+- [ ] **FR-DOC-01** (P0 · all) *(phạm vi/giới hạn và hướng dẫn CI đã có trong README ở Sprint 5; còn rà lại toàn bộ trước khi phát hành)* README nêu rõ **phạm vi và giới hạn** (không phải DAST toàn diện ở giai đoạn 1; không thay thế pentest), hướng dẫn cài đặt/chạy/CI.
 - [ ] **FR-DOC-02** (P0 · Business) Tài liệu pháp lý cần có (do pháp lý soạn/duyệt `[CONFIRM]`): Điều khoản sử dụng, Chính sách sử dụng chấp nhận được (AUP), Chính sách quyền riêng tư, DPA (nếu xử lý dữ liệu cá nhân), SLA.
 - [ ] **FR-DOC-03** (P1 · Business) Tài liệu bảo mật cho khách (security overview): cách bảo vệ dữ liệu, mã hóa, cách ly, retention, quy trình xử lý sự cố; bộ trả lời bảng câu hỏi bảo mật (security questionnaire) mẫu.
 - [ ] **FR-DOC-04** (P1 · Pro) Tài liệu người dùng: bắt đầu nhanh, danh mục check (mỗi check: mô tả, vì sao quan trọng, cách sửa), FAQ false positive, cách cấu hình auth/exclusion.
@@ -582,7 +582,7 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 3 | Cấu hình `ruff` + `pyproject.toml`; `redact()` + mô hình finding (fingerprint, `schema_version`) + Web UI dùng chung đầu ra; CORS theo D3 | FR-QA-07 (phần cấu hình), FR-AUTH-02, FR-MODEL-01, FR-MODEL-02, FR-WEB-01, FR-FIX-07 | Xong (v1.2.0) trên branch `feat/sprint-3`, chờ review |
 | 3b | Scope khi theo redirect (D4); redirect check luôn chạy; header/HSTS xét trên response cuối; bỏ chữ "Passive" trong code | FR-FIX-09, FR-FIX-10, FR-FIX-11 (+ FR-AUTHZ-03 phần D4) | Xong (v1.3.0) trên branch `feat/sprint-3b`, chờ review |
 | 4 | Kiểm tra nội dung file nhạy cảm + confidence | FR-DET-01, FR-DET-02, FR-DET-03 (+ FR-DET-16, FR-EXP-01 dạng rules, đọc body có giới hạn) | Xong (v1.4.0) trên branch `feat/sprint-4`, chờ review |
-| 5 | `--ca-bundle` (gỡ B1), `--fail-on`, SARIF, `--html`, template CI | FR-CI-10, FR-CI-01, FR-RPT-02, FR-RPT-09, FR-CI-03 | Chưa làm |
+| 5 | `--ca-bundle` (gỡ B1), `--fail-on`, SARIF, `--html`, template CI | FR-CI-10, FR-CI-01 (+ exit code 3), FR-RPT-02, FR-RPT-09, FR-CI-03 | Xong (v1.5.0) trên branch `feat/sprint-5`, chờ review |
 | 6 | Lint (ruff) + CI cho repo | FR-QA-07 (+ FR-QA-01/02) | Chưa làm |
 
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
@@ -653,8 +653,8 @@ Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên l�
 | E0 | ☑ | – | – | FIX-01…11 xong (Sprint 2–3b) |
 | E1 | ☐ | ☐ | ☐ | DET-01, 02, 03 (P0) và DET-16 (P1) xong ở Sprint 4; còn DET-04 (P0) |
 | E2 | ☑ | ☐ | – | MODEL-01, 02 xong (Sprint 3) |
-| E3 | ☐ | ☐ | ☐ | |
-| E4 | ☐ | ☐ | – | |
+| E3 | ☐ | ☐ | ☐ | RPT-02, RPT-09 xong (Sprint 5); còn RPT-01 (đầy đủ), RPT-08 |
+| E4 | ☐ | ☐ | – | CI-01, CI-03, CI-10 xong (Sprint 5); còn CI-02, CI-04 |
 | E5 | ☐ | ☐ | – | AUTHZ-03 phần D4 xong (Sprint 3b) |
 | E6 | ☐ | ☐ | ☐ | |
 | E7 | ☐ | ☐ | ☐ | |

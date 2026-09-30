@@ -64,14 +64,24 @@ def test_http_target_redirected_to_expired_https_reports_expiry(http_server, htt
 def test_http_target_redirected_to_trusted_https_scans_the_https_page(http_server, https_server, tmp_path, monkeypatch):
     target, https_port = _http_to_https(http_server, https_server, "valid")
     skip_if_tls_is_intercepted(https_port, tmp_path / "valid.pem")
-    monkeypatch.setenv("REQUESTS_CA_BUNDLE", str(tmp_path / "valid.pem"))  # requests now trusts the test cert
+    monkeypatch.setenv("REQUESTS_CA_BUNDLE", str(tmp_path / "valid.pem"))  # now both HTTP and TLS trust the test cert
+    tls_calls = []
+    real_check_tls = cli.tls_check.check_tls
+
+    def spy(host, port=443, **kwargs):
+        tls_calls.append((host, port))
+        return real_check_tls(host, port=port, **kwargs)
+
+    monkeypatch.setattr(cli.tls_check, "check_tls", spy)
     result = cli.run_scan(target, timeout=5)
 
     assert not [e for e in result.errors if e.startswith("Could not fetch")]
     assert "tls" in result.checks_run and "http-to-https-redirect" in result.checks_run
     assert "TLS-NO-HTTPS-REDIRECT" not in ids(result.findings)
-    tls_keys = {f.instance_key for f in result.findings if f.id.startswith("TLS-")}
-    assert tls_keys == {f"127.0.0.1:{https_port}"}
+    # HTTP and the TLS check share one trust decision (FR-CI-10), so the bundle that made the
+    # redirect target trusted for HTTP makes the TLS check trust it too: no TLS finding at all.
+    assert not [f for f in result.findings if f.id == "TLS-CERT-NOT-TRUSTED"]
+    assert tls_calls == [("127.0.0.1", https_port)]  # TLS ran on the HTTPS port we were sent to
 
 
 # --- target entered as https:// : probe http://<host>/ hop by hop -----------------------
