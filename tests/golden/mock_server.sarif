@@ -1,0 +1,637 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "OWASP-Aligned Non-intrusive Web Security Scanner",
+          "version": "<VERSION>",
+          "informationUri": "https://github.com/hkbach/oswap_tool",
+          "rules": [
+            {
+              "id": "EXPOSURE-ENV",
+              "shortDescription": {
+                "text": "Exposed .env file (often contains secrets)"
+              },
+              "fullDescription": {
+                "text": "GET .env returned HTTP 200 and the content looks like KEY=VALUE environment variables, so the file is publicly readable."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A01:2021 - Broken Access Control",
+                  "CWE-538"
+                ],
+                "security-severity": "9.5",
+                "precision": "high"
+              },
+              "helpUri": "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
+              "help": {
+                "text": "Remove the file from the web root or block access at the web server/proxy layer."
+              }
+            },
+            {
+              "id": "EXPOSURE-GIT-HEAD",
+              "shortDescription": {
+                "text": "Exposed .git repository metadata"
+              },
+              "fullDescription": {
+                "text": "GET .git/HEAD returned HTTP 200 and the content looks like a git HEAD reference, so the file is publicly readable."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A01:2021 - Broken Access Control",
+                  "CWE-527"
+                ],
+                "security-severity": "9.5",
+                "precision": "high"
+              },
+              "helpUri": "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
+              "help": {
+                "text": "Remove the file from the web root or block access at the web server/proxy layer."
+              }
+            },
+            {
+              "id": "TLS-NO-HTTPS-REDIRECT",
+              "shortDescription": {
+                "text": "Plain HTTP is not redirected to HTTPS"
+              },
+              "fullDescription": {
+                "text": "Requesting http://127.0.0.1:<PORT>/ did not result in an HTTPS URL (final URL: http://127.0.0.1:<PORT>/)."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A02:2021 - Cryptographic Failures",
+                  "CWE-319"
+                ],
+                "security-severity": "8.0",
+                "precision": "high"
+              },
+              "helpUri": "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html",
+              "help": {
+                "text": "Redirect all HTTP traffic to HTTPS (301) at the web server/load balancer."
+              }
+            },
+            {
+              "id": "COOKIE-FLAGS-MISSING",
+              "shortDescription": {
+                "text": "Cookie 'session' missing recommended attribute(s)"
+              },
+              "fullDescription": {
+                "text": "Cookie 'session' is missing: Secure, HttpOnly, SameSite."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A05:2021 - Security Misconfiguration",
+                  "CWE-614"
+                ],
+                "security-severity": "5.5",
+                "precision": "high"
+              },
+              "helpUri": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html",
+              "help": {
+                "text": "Set Secure (HTTPS-only), HttpOnly (no JS access) and an explicit SameSite=Lax/Strict on all session/auth cookies."
+              }
+            },
+            {
+              "id": "EXPOSURE-DIR-LISTING",
+              "shortDescription": {
+                "text": "Directory listing enabled at /images/"
+              },
+              "fullDescription": {
+                "text": "The web server returns a browsable file index instead of a 403/404."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A05:2021 - Security Misconfiguration",
+                  "CWE-548"
+                ],
+                "security-severity": "5.5",
+                "precision": "high"
+              },
+              "helpUri": "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
+              "help": {
+                "text": "Disable autoindex/directory listing in the web server configuration."
+              }
+            },
+            {
+              "id": "HDR-CONTENT-SECURITY-POLICY-MISSING",
+              "shortDescription": {
+                "text": "Missing 'content-security-policy' response header"
+              },
+              "fullDescription": {
+                "text": "The response did not include a 'content-security-policy' header."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A05:2021 - Security Misconfiguration",
+                  "CWE-693"
+                ],
+                "security-severity": "5.5",
+                "precision": "high"
+              },
+              "helpUri": "https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html",
+              "help": {
+                "text": "Define a Content-Security-Policy to restrict script/style/frame sources and reduce the impact of XSS."
+              }
+            },
+            {
+              "id": "HDR-X-FRAME-OPTIONS-MISSING",
+              "shortDescription": {
+                "text": "Missing 'x-frame-options' response header"
+              },
+              "fullDescription": {
+                "text": "The response did not include a 'x-frame-options' header."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A05:2021 - Security Misconfiguration",
+                  "CWE-1021"
+                ],
+                "security-severity": "5.5",
+                "precision": "high"
+              },
+              "helpUri": "https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html",
+              "help": {
+                "text": "Send 'X-Frame-Options: DENY' or 'SAMEORIGIN' (or a CSP 'frame-ancestors' directive) to prevent clickjacking."
+              }
+            },
+            {
+              "id": "EXPOSURE-ROBOTS-HINTS",
+              "shortDescription": {
+                "text": "robots.txt lists sensitive-sounding paths"
+              },
+              "fullDescription": {
+                "text": "robots.txt disallows crawling of paths that also sound sensitive; this doesn't block direct access and can act as a roadmap for attackers."
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A01:2021 - Broken Access Control",
+                  "CWE-200"
+                ],
+                "security-severity": "3.0",
+                "precision": "low"
+              },
+              "helpUri": "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
+              "help": {
+                "text": "Enforce access control on these paths server-side; don't rely on robots.txt to hide them."
+              }
+            },
+            {
+              "id": "HDR-REFERRER-POLICY-MISSING",
+              "shortDescription": {
+                "text": "Missing 'referrer-policy' response header"
+              },
+              "fullDescription": {
+                "text": "The response did not include a 'referrer-policy' header."
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A05:2021 - Security Misconfiguration",
+                  "CWE-200"
+                ],
+                "security-severity": "3.0",
+                "precision": "high"
+              },
+              "helpUri": "https://owasp.org/www-project-secure-headers/",
+              "help": {
+                "text": "Send a 'Referrer-Policy' (e.g. 'strict-origin-when-cross-origin') to avoid leaking full URLs to third parties."
+              }
+            },
+            {
+              "id": "HDR-INFO-SERVER",
+              "shortDescription": {
+                "text": "Server/technology disclosure via 'server' header"
+              },
+              "fullDescription": {
+                "text": "'server' header reveals implementation details: 'MockServer/1.0, Apache/2.2.15 (CentOS)'."
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A05:2021 - Security Misconfiguration",
+                  "CWE-497"
+                ],
+                "security-severity": "0.0",
+                "precision": "high"
+              },
+              "helpUri": "https://owasp.org/www-project-secure-headers/",
+              "help": {
+                "text": "Suppress or generalize this header at the reverse proxy/web server level."
+              }
+            },
+            {
+              "id": "HDR-INFO-X-POWERED-BY",
+              "shortDescription": {
+                "text": "Server/technology disclosure via 'x-powered-by' header"
+              },
+              "fullDescription": {
+                "text": "'x-powered-by' header reveals implementation details: 'PHP/5.6.40'."
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A05:2021 - Security Misconfiguration",
+                  "CWE-497"
+                ],
+                "security-severity": "0.0",
+                "precision": "high"
+              },
+              "helpUri": "https://owasp.org/www-project-secure-headers/",
+              "help": {
+                "text": "Suppress or generalize this header at the reverse proxy/web server level."
+              }
+            },
+            {
+              "id": "HDR-PERMISSIONS-POLICY-MISSING",
+              "shortDescription": {
+                "text": "Missing 'permissions-policy' response header"
+              },
+              "fullDescription": {
+                "text": "The response did not include a 'permissions-policy' header."
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "A05:2021 - Security Misconfiguration",
+                  "CWE-693"
+                ],
+                "security-severity": "0.0",
+                "precision": "high"
+              },
+              "helpUri": "https://owasp.org/www-project-secure-headers/",
+              "help": {
+                "text": "Send a 'Permissions-Policy' to explicitly disable browser features (camera, microphone, geolocation, etc.) the site does not use."
+              }
+            }
+          ]
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "toolExecutionNotifications": []
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "EXPOSURE-ENV",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "Exposed .env file (often contains secrets): GET .env returned HTTP 200 and the content looks like KEY=VALUE environment variables, so the file is publicly readable. Evidence: HTTP 200 for http://127.0.0.1:<PORT>/.env; content matches KEY=VALUE environment variables"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/.env"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "CRITICAL",
+            "confidence": "high",
+            "instance_key": ".env"
+          }
+        },
+        {
+          "ruleId": "EXPOSURE-GIT-HEAD",
+          "ruleIndex": 1,
+          "level": "error",
+          "message": {
+            "text": "Exposed .git repository metadata: GET .git/HEAD returned HTTP 200 and the content looks like a git HEAD reference, so the file is publicly readable. Evidence: HTTP 200 for http://127.0.0.1:<PORT>/.git/HEAD; content matches a git HEAD reference"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/.git/HEAD"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "CRITICAL",
+            "confidence": "high",
+            "instance_key": ".git/HEAD"
+          }
+        },
+        {
+          "ruleId": "TLS-NO-HTTPS-REDIRECT",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "Plain HTTP is not redirected to HTTPS: Requesting http://127.0.0.1:<PORT>/ did not result in an HTTPS URL (final URL: http://127.0.0.1:<PORT>/)."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "HIGH",
+            "confidence": "high",
+            "instance_key": "http://127.0.0.1:<PORT>/"
+          }
+        },
+        {
+          "ruleId": "COOKIE-FLAGS-MISSING",
+          "ruleIndex": 3,
+          "level": "warning",
+          "message": {
+            "text": "Cookie 'session' missing recommended attribute(s): Cookie 'session' is missing: Secure, HttpOnly, SameSite. Evidence: session=<redacted len=6>; Path=/"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "MEDIUM",
+            "confidence": "high",
+            "instance_key": "session"
+          }
+        },
+        {
+          "ruleId": "EXPOSURE-DIR-LISTING",
+          "ruleIndex": 4,
+          "level": "warning",
+          "message": {
+            "text": "Directory listing enabled at /images/: The web server returns a browsable file index instead of a 403/404. Evidence: http://127.0.0.1:<PORT>/images/"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/images/"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "MEDIUM",
+            "confidence": "high",
+            "instance_key": "images/"
+          }
+        },
+        {
+          "ruleId": "HDR-CONTENT-SECURITY-POLICY-MISSING",
+          "ruleIndex": 5,
+          "level": "warning",
+          "message": {
+            "text": "Missing 'content-security-policy' response header: The response did not include a 'content-security-policy' header."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "MEDIUM",
+            "confidence": "high",
+            "instance_key": "content-security-policy"
+          }
+        },
+        {
+          "ruleId": "HDR-X-FRAME-OPTIONS-MISSING",
+          "ruleIndex": 6,
+          "level": "warning",
+          "message": {
+            "text": "Missing 'x-frame-options' response header: The response did not include a 'x-frame-options' header."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "MEDIUM",
+            "confidence": "high",
+            "instance_key": "x-frame-options"
+          }
+        },
+        {
+          "ruleId": "EXPOSURE-ROBOTS-HINTS",
+          "ruleIndex": 7,
+          "level": "note",
+          "message": {
+            "text": "robots.txt lists sensitive-sounding paths: robots.txt disallows crawling of paths that also sound sensitive; this doesn't block direct access and can act as a roadmap for attackers. Evidence: /admin/, /backup/"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/robots.txt"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "LOW",
+            "confidence": "low",
+            "instance_key": "robots.txt"
+          }
+        },
+        {
+          "ruleId": "HDR-REFERRER-POLICY-MISSING",
+          "ruleIndex": 8,
+          "level": "note",
+          "message": {
+            "text": "Missing 'referrer-policy' response header: The response did not include a 'referrer-policy' header."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "LOW",
+            "confidence": "high",
+            "instance_key": "referrer-policy"
+          }
+        },
+        {
+          "ruleId": "HDR-INFO-SERVER",
+          "ruleIndex": 9,
+          "level": "note",
+          "message": {
+            "text": "Server/technology disclosure via 'server' header: 'server' header reveals implementation details: 'MockServer/1.0, Apache/2.2.15 (CentOS)'. Evidence: server: MockServer/1.0, Apache/2.2.15 (CentOS)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "INFO",
+            "confidence": "high",
+            "instance_key": "server"
+          }
+        },
+        {
+          "ruleId": "HDR-INFO-X-POWERED-BY",
+          "ruleIndex": 10,
+          "level": "note",
+          "message": {
+            "text": "Server/technology disclosure via 'x-powered-by' header: 'x-powered-by' header reveals implementation details: 'PHP/5.6.40'. Evidence: x-powered-by: PHP/5.6.40"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "INFO",
+            "confidence": "high",
+            "instance_key": "x-powered-by"
+          }
+        },
+        {
+          "ruleId": "HDR-PERMISSIONS-POLICY-MISSING",
+          "ruleIndex": 11,
+          "level": "note",
+          "message": {
+            "text": "Missing 'permissions-policy' response header: The response did not include a 'permissions-policy' header."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "http://127.0.0.1:<PORT>/"
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "owaspScannerFingerprint/v1": "<FINGERPRINT>"
+          },
+          "properties": {
+            "severity": "INFO",
+            "confidence": "high",
+            "instance_key": "permissions-policy"
+          }
+        }
+      ],
+      "properties": {
+        "target": "http://127.0.0.1:<PORT>/",
+        "final_url": "http://127.0.0.1:<PORT>/",
+        "scan_id": "<SCAN_ID>",
+        "schema_version": "1.3",
+        "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1",
+        "gate": {
+          "fail_on": "high",
+          "failed": true,
+          "incomplete": false
+        }
+      }
+    }
+  ]
+}
