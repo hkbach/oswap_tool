@@ -139,6 +139,12 @@ def test_scan_rejects_invalid_targets(ui, monkeypatch, target):
     assert scan(ui, {"target": target, "authorized": True}).status_code == 400
 
 
+def test_post_to_unknown_path_is_404_even_with_body(ui):
+    # The body must be read before replying, or Windows resets the connection.
+    resp = requests.post(f"{ui}/api/other", json={"target": "x", "authorized": True}, timeout=5)
+    assert resp.status_code == 404
+
+
 def test_scan_rejects_non_json_body(ui):
     resp = requests.post(
         f"{ui}/api/scan",
@@ -199,4 +205,4 @@ def test_bind_address_decides_host_check():
         assert loopback.loopback_only is True
     finally:
         loopback.server_close()
-    assert web._is_loopback("localhost") and web._is_loopback("::1") and not web._is_loopback("0.0.0.0")
+    assert web._is_loopback("localhost") and web._is_loopback("::1") and not web._is_loopback("0.0.0.0")  # noqa: S104 - test data, nothing binds here
