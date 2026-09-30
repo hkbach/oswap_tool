@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from conftest import QuietHandler, skip_if_tls_is_intercepted
 
-from owasp_scanner import catalog, cli, rule_loader
-from owasp_scanner.checks import tls_check
+from websec_scanner import catalog, cli, rule_loader
+from websec_scanner.checks import tls_check
 
 
 class Ok(QuietHandler):

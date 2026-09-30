@@ -8,7 +8,7 @@ import pytest
 from mock_server import Handler as MockHandler
 from test_redact import COOKIE_SECRET, SecretHandler
 
-from owasp_scanner import __version__, cli, output, sarif
+from websec_scanner import __version__, cli, output, sarif
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def test_top_level_structure(report):
     assert doc["version"] == "2.1.0" and doc["$schema"].endswith("sarif-2.1.0.json")
     (run,) = doc["runs"]
     driver = run["tool"]["driver"]
-    assert driver["name"] == "OWASP-Aligned Non-intrusive Web Security Scanner"
+    assert driver["name"] == "Non-intrusive Web Security Scanner"
     assert driver["version"] == __version__
     assert run["invocations"][0]["executionSuccessful"] is True
 
@@ -33,7 +33,7 @@ def test_every_result_points_at_its_rule(report):
     assert len(run["results"]) == len(report["findings"])
     for result, finding in zip(run["results"], report["findings"], strict=True):
         assert result["ruleId"] == finding["id"] == rules[result["ruleIndex"]]["id"]
-        assert result["partialFingerprints"] == {"owaspScannerFingerprint/v1": finding["fingerprint"]}
+        assert result["partialFingerprints"] == {"websecScannerFingerprint/v1": finding["fingerprint"]}
         assert result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == (
             finding["url"] or report["target"]
         )

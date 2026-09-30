@@ -1,16 +1,16 @@
-# CLAUDE.md – OWASP Scanner
+# CLAUDE.md – WebSec Scanner
 
 Quy tắc cho Claude khi làm việc trong repo này. Đọc kèm:
 
 - `docs/PRODUCT-BACKLOG.md`: backlog, quyết định D1–D3 (mục 1.4), thứ tự sprint (mục 9.1).
-- `docs/SRS-owasp-scanner.md`: đặc tả hành vi hiện có. Không đổi hành vi đã đặc tả nếu không có FR tương ứng.
+- `docs/SRS-websec-scanner.md`: đặc tả hành vi hiện có. Không đổi hành vi đã đặc tả nếu không có FR tương ứng.
 
 ## Sản phẩm trong một đoạn
 
 Scanner cấu hình bảo mật web không xâm lấn (non-intrusive), viết bằng Python. Có hai lối vào dùng chung một lõi:
 
-- CLI: `python -m owasp_scanner <target>`
-- Web UI cục bộ: `python -m owasp_scanner.web`. Chạy `http.server` tại `127.0.0.1:8765`, file tĩnh nằm ở `owasp_scanner/static/`. `POST /api/scan` gọi thẳng `run_scan()` trong `cli.py`, `GET /api/report/<id>.html` dùng `render_html()`.
+- CLI: `python -m websec_scanner <target>`
+- Web UI cục bộ: `python -m websec_scanner.web`. Chạy `http.server` tại `127.0.0.1:8765`, file tĩnh nằm ở `websec_scanner/static/`. `POST /api/scan` gọi thẳng `run_scan()` trong `cli.py`, `GET /api/report/<id>.html` dùng `render_html()`.
 
 Không có server hay service riêng (quyết định D1). Không thêm FastAPI, DB, queue hay framework web nếu FR không yêu cầu.
 
@@ -20,8 +20,8 @@ Không có server hay service riêng (quyết định D1). Không thêm FastAPI,
 pip install -r requirements-dev.txt   # pyproject.toml sẽ có ở FR-QA-07 (Sprint 3)
 ruff check . && ruff format --check . # chưa cấu hình; bắt buộc từ Sprint 3 (FR-QA-07)
 python -m pytest -q                   # phải chạy offline, không gọi mạng ngoài
-python -m owasp_scanner --help
-python -m owasp_scanner.web
+python -m websec_scanner --help
+python -m websec_scanner.web
 ```
 
 ## Cách làm việc

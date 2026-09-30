@@ -11,7 +11,7 @@ import requests
 from mock_server import Handler as MockHandler
 from test_acceptance import SoftNotFoundHandler
 
-from owasp_scanner import cli, output, web
+from websec_scanner import cli, output, web
 
 VOLATILE = {"scan_id", "started_at", "finished_at"}
 WEB_ONLY = set(web.WEB_ONLY_FIELDS)
@@ -110,7 +110,7 @@ def test_report_endpoint_contract(ui, http_server):
 def test_finding_order_is_deterministic():
     # Sensitive-path findings arrive in completion order of parallel requests; the
     # report order must not depend on it (severity, then id, then instance_key).
-    from owasp_scanner.models import Finding, ScanResult, Severity
+    from websec_scanner.models import Finding, ScanResult, Severity
 
     def finding(fid, sev, key):
         return Finding(id=fid, title="t", severity=sev, owasp_category="c", description="d", instance_key=key)

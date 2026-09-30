@@ -8,8 +8,8 @@ import pytest
 from conftest import QuietHandler
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import cli
-from owasp_scanner.checks import headers
+from websec_scanner import cli
+from websec_scanner.checks import headers
 
 ANSI = "\x1b["
 
@@ -92,7 +92,7 @@ def test_at02_yes_flag_skips_prompt(monkeypatch, http_server, capsys):
     cli.main([base, "--yes", "--no-color"])
     out = capsys.readouterr().out
     assert "only run it against systems you own" in out  # banner still shown (FR-CONSENT-01)
-    assert "OWASP-aligned scan report" in out
+    assert "Non-intrusive scan report" in out
 
 
 # --- AT-03 … AT-09: HTTP checks against local mock servers -----------------------

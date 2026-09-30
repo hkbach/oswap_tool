@@ -9,7 +9,7 @@ import pytest
 from conftest import QuietHandler
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import catalog, cli, output
+from websec_scanner import catalog, cli, output
 
 SCHEMA = json.loads((Path(__file__).resolve().parents[1] / "docs" / "report.schema.json").read_text("utf-8"))
 ALL_CHECKS = SCHEMA["properties"]["checks_run"]["items"]["enum"]
@@ -81,7 +81,7 @@ def test_selected_groups_are_reported_in_table_order(recording_mock):
 def test_directory_listing_alone_still_uses_the_soft404_probes(recording_mock):
     target, paths = recording_mock
     cli.run_scan(target, timeout=5, groups=["directory-listing"])
-    assert any(p.startswith("/owasp-scanner-probe-") for p in paths)
+    assert any(p.startswith("/websec-scanner-probe-") for p in paths)
     assert "/.env" not in paths and "/robots.txt" not in paths
 
 

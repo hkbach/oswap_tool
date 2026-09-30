@@ -77,18 +77,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - run: docker build -t owasp-scanner:ci .
-      - run: docker run --rm owasp-scanner:ci --help
-      - run: docker run --rm owasp-scanner:ci --list-checks
+      - run: docker build -t websec-scanner:ci .
+      - run: docker run --rm websec-scanner:ci --help
+      - run: docker run --rm websec-scanner:ci --list-checks
       - name: Refuses to run as root
         run: |
-          uid=$(docker run --rm --entrypoint id owasp-scanner:ci -u)
+          uid=$(docker run --rm --entrypoint id websec-scanner:ci -u)
           test "$uid" -ne 0
       - name: Scan a mock server over --network host
         run: |
           python3 tests/mock_server.py 8899 &
           sleep 1
-          docker run --rm --network host owasp-scanner:ci \
+          docker run --rm --network host websec-scanner:ci \
             http://127.0.0.1:8899 --yes --no-color --fail-on none
 
   secrets:

@@ -14,9 +14,9 @@ from .models import SEVERITY_ORDER
 
 SARIF_VERSION = "2.1.0"
 SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
-TOOL_NAME = "OWASP-Aligned Non-intrusive Web Security Scanner"
+TOOL_NAME = "Non-intrusive Web Security Scanner"
 TOOL_URI = "https://github.com/hkbach/oswap_tool"
-FINGERPRINT_KEY = "owaspScannerFingerprint/v1"
+FINGERPRINT_KEY = "websecScannerFingerprint/v1"
 
 _LEVEL = {"CRITICAL": "error", "HIGH": "error", "MEDIUM": "warning", "LOW": "note", "INFO": "note"}
 # GitHub code scanning reads "security-severity" (0.0-10.0) to rank security results.

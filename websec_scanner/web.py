@@ -1,8 +1,8 @@
 """Local web UI: enter a URL, click Scan, see the findings below the form.
 
 Usage:
-    python -m owasp_scanner.web                # http://127.0.0.1:8765/
-    python -m owasp_scanner.web --port 9000
+    python -m websec_scanner.web                # http://127.0.0.1:8765/
+    python -m websec_scanner.web --port 9000
 
 After a scan, the page offers a "Download Test result" link: a standalone HTML
 report (see html_report.py) kept in memory for the most recent scans only.
@@ -67,7 +67,7 @@ _SECURITY_HEADERS = {
 # FR-WEB-02: required on every request once the server is not loopback-only. Issued as a
 # cookie after the first request that supplies a correct ?token= query value, so opening
 # http://host:port/?token=... once is enough for the rest of a browser session.
-_TOKEN_COOKIE = "owasp_scanner_token"  # noqa: S105 - a cookie name, not a secret value
+_TOKEN_COOKIE = "websec_scanner_token"  # noqa: S105 - a cookie name, not a secret value
 
 
 def _hostname(host_header: str) -> str:
@@ -88,11 +88,11 @@ def _report_filename(report: dict) -> str:
     parts = urlsplit(report.get("target", ""))
     host = (parts.hostname or "target") + (f":{parts.port}" if parts.port else "")
     stamp = re.sub(r"\D", "", report.get("started_at", ""))[:14] or "report"
-    return f"owasp-scan-{re.sub(r'[^A-Za-z0-9.-]', '_', host)}-{stamp}.html"
+    return f"websec-scan-{re.sub(r'[^A-Za-z0-9.-]', '_', host)}-{stamp}.html"
 
 
 class ScanUIHandler(BaseHTTPRequestHandler):
-    server_version = "OWASPScannerUI"
+    server_version = "WebSecScannerUI"
 
     # --- helpers -----------------------------------------------------------------
 
@@ -307,8 +307,8 @@ def build_server(
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        prog="owasp-scanner-web",
-        description="Local web UI for the OWASP-aligned non-intrusive web security scanner.",
+        prog="websec-scanner-web",
+        description="Local web UI for the non-intrusive web security scanner.",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Interface to bind (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8765, help="Port to listen on (default: 8765)")
@@ -356,7 +356,7 @@ def main(argv=None) -> int:
         )
         print(f"Access token: {access_token}", flush=True)
         print(f"Open: http://{args.host}:{server.server_address[1]}/?token={access_token}", flush=True)
-    print(f"OWASP scanner UI running at http://{args.host}:{server.server_address[1]}/  (Ctrl+C to stop)", flush=True)
+    print(f"WebSec Scanner UI running at http://{args.host}:{server.server_address[1]}/  (Ctrl+C to stop)", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

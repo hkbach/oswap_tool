@@ -27,7 +27,7 @@ def test_workflow_has_the_six_jobs(workflow):
 
 def test_docker_job_builds_runs_non_root_and_smoke_tests_a_scan(workflow):
     job = workflow[workflow.index("  docker:") : workflow.index("  secrets:")]
-    assert "docker build -t owasp-scanner:ci ." in job
+    assert "docker build -t websec-scanner:ci ." in job
     assert "--help" in job and "--list-checks" in job
     assert "--entrypoint id" in job and 'uid" -ne 0' in job  # must not run as root
     assert "tests/mock_server.py" in job and "--network host" in job

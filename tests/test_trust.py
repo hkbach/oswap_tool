@@ -9,7 +9,7 @@ import pytest
 import requests
 from conftest import QuietHandler, skip_if_tls_is_intercepted
 
-from owasp_scanner import cli, http_utils
+from websec_scanner import cli, http_utils
 
 
 class Ok(QuietHandler):

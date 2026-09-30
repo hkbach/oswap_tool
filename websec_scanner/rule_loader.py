@@ -1,4 +1,4 @@
-"""Load and validate the declarative check tables in ``owasp_scanner/rules/`` (NFR-MAINT-02, FR-EXP-01).
+"""Load and validate the declarative check tables in ``websec_scanner/rules/`` (NFR-MAINT-02, FR-EXP-01).
 
 Rules are plain JSON (no extra dependency). Each file carries a ``version``; the
 scan report's ``rules_version`` comes from here, so a report says which rule set

@@ -7,10 +7,10 @@ from contextlib import redirect_stdout
 
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import cli, output
-from owasp_scanner.html_report import render_html
-from owasp_scanner.report import print_report
-from owasp_scanner.sarif import to_sarif
+from websec_scanner import cli, output
+from websec_scanner.html_report import render_html
+from websec_scanner.report import print_report
+from websec_scanner.sarif import to_sarif
 
 # Multi-word so legitimate technical terms ("Secure cookie attribute", "Transport Layer
 # Security") never trip this check; CLAUDE.md names the Vietnamese phrasing, these are its

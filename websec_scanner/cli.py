@@ -1,8 +1,8 @@
 """Command-line entry point.
 
 Usage:
-    python -m owasp_scanner https://example.com
-    python -m owasp_scanner https://example.com --json report.json --yes
+    python -m websec_scanner https://example.com
+    python -m websec_scanner https://example.com --json report.json --yes
 
 IMPORTANT: only run this against systems you own or have explicit,
 documented authorization to test. See README.md.
@@ -34,7 +34,7 @@ from .soft404 import build_profile
 
 CONSENT_BANNER = """
 ==========================================================================
- OWASP-Aligned Non-intrusive Web Security Scanner
+ Non-intrusive Web Security Scanner
 ==========================================================================
  This tool sends ordinary, non-destructive HTTP GET requests to check
  security headers, TLS configuration, cookie flags, CORS behavior, and
@@ -237,8 +237,8 @@ def run_scan(
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        prog="owasp-scanner",
-        description="OWASP-aligned non-intrusive web security scanner (headers, TLS, cookies, CORS, exposure).",
+        prog="websec-scanner",
+        description="Non-intrusive web security configuration scanner (headers, TLS, cookies, CORS, exposure).",
     )
     parser.add_argument("target", nargs="?", help="Target URL or hostname, e.g. https://example.com")
     parser.add_argument("--json", metavar="PATH", help="Write full JSON report to PATH")

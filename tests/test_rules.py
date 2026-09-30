@@ -8,8 +8,8 @@ import time
 import pytest
 from conftest import QuietHandler
 
-from owasp_scanner import cli, http_utils, rule_loader
-from owasp_scanner.checks import exposure
+from websec_scanner import cli, http_utils, rule_loader
+from websec_scanner.checks import exposure
 
 # SRS table 4.8.1
 EXPECTED_PATHS = {

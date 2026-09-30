@@ -11,7 +11,7 @@ Bộ test chạy trên Python 3.12 và 3.14 (Windows), toàn bộ trên `127.0.0
 
 ## Trạng thái xử lý (cập nhật 2026-09-30)
 
-File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. Requirement hiện hành nằm ở `docs/SRS-owasp-scanner.md` v1.2 và `docs/PRODUCT-BACKLOG.md`.
+File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. Requirement hiện hành nằm ở `docs/SRS-websec-scanner.md` v1.2 và `docs/PRODUCT-BACKLOG.md`. *(Đổi tên file ngày 2026-09-30 khi package đổi thành `websec_scanner`; nội dung review bên dưới giữ nguyên tên sản phẩm cũ để đúng bối cảnh lúc đó.)*
 
 | Mục | Trạng thái | Nằm ở đâu |
 |---|---|---|

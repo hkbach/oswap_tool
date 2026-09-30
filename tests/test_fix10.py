@@ -7,9 +7,9 @@ import json
 import pytest
 from conftest import QuietHandler, skip_if_tls_is_intercepted
 
-from owasp_scanner import cli, output
-from owasp_scanner.checks import headers
-from owasp_scanner.models import SCHEMA_VERSION
+from websec_scanner import cli, output
+from websec_scanner.checks import headers
+from websec_scanner.models import SCHEMA_VERSION
 
 
 class PlainHandler(QuietHandler):
@@ -134,7 +134,7 @@ def test_unreachable_start_host_is_an_error_not_a_finding(monkeypatch):
 
 
 def test_html_report_shows_the_final_url_when_redirected(http_server):
-    from owasp_scanner.html_report import render_html
+    from websec_scanner.html_report import render_html
 
     base = http_server(_redirect_to("/home"))
     html = render_html(output.build_report(cli.run_scan(base, timeout=5)))

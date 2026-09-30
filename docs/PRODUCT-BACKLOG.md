@@ -1,6 +1,6 @@
 # PRODUCT BACKLOG – Commercial Web & API Security Scanner
 
-> File này dùng làm **nguồn ngữ cảnh** khi vibe-code cùng Claude trong VS Code. Vị trí trong repo: `docs/PRODUCT-BACKLOG.md`; quy tắc làm việc nằm ở `CLAUDE.md` (thư mục gốc repo); đặc tả hiện trạng ở `docs/SRS-owasp-scanner.md` (v1.2). **Phạm vi:** chỉ các chức năng lõi/backend/API còn thiếu để thương mại hóa; **không** gồm giao diện (UI) vì UI đã có sẵn.
+> File này dùng làm **nguồn ngữ cảnh** khi vibe-code cùng Claude trong VS Code. Vị trí trong repo: `docs/PRODUCT-BACKLOG.md`; quy tắc làm việc nằm ở `CLAUDE.md` (thư mục gốc repo); đặc tả hiện trạng ở `docs/SRS-websec-scanner.md` (v1.2). **Phạm vi:** chỉ các chức năng lõi/backend/API còn thiếu để thương mại hóa; **không** gồm giao diện (UI) vì UI đã có sẵn.
 
 | | |
 |---|---|
@@ -38,7 +38,7 @@ Quy tắc cho Claude nằm trong file riêng `CLAUDE.md` ở thư mục gốc re
 ### 0.3 Mẫu prompt
 
 ```text
-@docs/PRODUCT-BACKLOG.md @docs/SRS-owasp-scanner.md
+@docs/PRODUCT-BACKLOG.md @docs/SRS-websec-scanner.md
 Hãy đọc Sprint 4 ở mục 9.1 (FR-DET-01, FR-DET-03). Chưa viết code. Cho tôi: (1) các file sẽ sửa/tạo,
 (2) cách kiểm chứng bằng mock server, (3) rủi ro false positive. Chờ tôi duyệt.
 ```
@@ -64,14 +64,14 @@ sau đó code. Không đổi hành vi các FR khác. Chạy test và báo kết 
 
 ### 1.1 Hiện trạng `[FACT – từ SRS v1.2, đã đối chiếu code v1.1.0 ngày 2026-09-30]`
 
-- CLI Python `python -m owasp_scanner <target>`; module: `cli.py`, `http_utils.py`, `models.py`, `report.py`, `checks/{headers,cookies,tls_check,redirect_check,cors_check,exposure}.py`.
+- CLI Python `python -m websec_scanner <target>`; module: `cli.py`, `http_utils.py`, `models.py`, `report.py`, `checks/{headers,cookies,tls_check,redirect_check,cors_check,exposure}.py`.
 - Chỉ gửi GET thông thường, không payload khai thác; quét **1 trang** (trang chủ) cho hầu hết check.
 - Có consent gate (`--yes` để bỏ qua), exit code 0/1/2 (2 = không xác nhận quyền quét), JSON output có `summary`, `findings`, `errors`, `checks_run`.
 - Mapping OWASP Top 10:2021 (chủ yếu A01, A02, A03, A05); mỗi finding có id ổn định, severity, evidence, recommendation.
 - Đã có từ v1.1.0: TLS kiểm tra 2 bước (đọc hạn chứng chỉ độc lập với trust, `TLS-CERT-EXPIRED`/`TLS-CERT-NOT-YET-VALID`/`TLS-CERT-NOT-TRUSTED`); tách robots.txt và sitemap.xml; HSTS chỉ khi `https://`; `frame-ancestors` loại trừ X-Frame-Options; `Finding.id` khai báo tường minh cho từng path.
 - Đã sửa sau v1.1.0 (SRS v1.2): baseline lỗi ở tầng TLS vẫn chạy nhóm TLS; một check lỗi không dừng cả lần quét; cookie ở các bước redirect cũng được kiểm tra; chuẩn hoá đúng `host:port`; soft-404 áp dụng cho cả `security.txt`.
 - 110 test pytest chạy offline (mock HTTP/HTTPS, chứng chỉ tự sinh), đã chạy trên Python 3.12 và 3.14 (Windows). Chưa có lint và CI.
-- **Web UI cục bộ** `[FACT – đã đối chiếu `web.py` ngày 2026-09-30; đặc tả ở SRS mục 3.3 và 4.10]`: `python -m owasp_scanner.web` chạy `http.server` tại `127.0.0.1:8765` (`web.py`), phục vụ `static/{index.html,app.js,app.css}`. `POST /api/scan` với `{"target", "authorized": true}`; server kiểm tra Host/Origin, Content-Type, kích thước body, cờ authorized, URL target rồi gọi `run_scan(target, timeout, workers)` của `cli.py` **trong thread xử lý request**, mỗi lúc một lần quét. Trả JSON đúng SRS 6.2 + `gate_failed`, `report_id`, `report_url`. `GET /api/report/<id>.html` sinh HTML bằng `render_html()` từ báo cáo trong bộ nhớ (giữ 20 báo cáo gần nhất). UI và báo cáo dùng tiếng Anh.
+- **Web UI cục bộ** `[FACT – đã đối chiếu `web.py` ngày 2026-09-30; đặc tả ở SRS mục 3.3 và 4.10]`: `python -m websec_scanner.web` chạy `http.server` tại `127.0.0.1:8765` (`web.py`), phục vụ `static/{index.html,app.js,app.css}`. `POST /api/scan` với `{"target", "authorized": true}`; server kiểm tra Host/Origin, Content-Type, kích thước body, cờ authorized, URL target rồi gọi `run_scan(target, timeout, workers)` của `cli.py` **trong thread xử lý request**, mỗi lúc một lần quét. Trả JSON đúng SRS 6.2 + `gate_failed`, `report_id`, `report_url`. `GET /api/report/<id>.html` sinh HTML bằng `render_html()` từ báo cáo trong bộ nhớ (giữ 20 báo cáo gần nhất). UI và báo cáo dùng tiếng Anh.
 - Hạn chế đã biết: không phải DAST; không crawl; không auth; không API; có thể false positive (robots, path 200) và false negative (WAF/CDN).
 
 ### 1.2 Vấn đề tồn đọng cần xử lý trước khi thương mại hóa `[FACT – rút ra từ review SRS]`
@@ -162,7 +162,7 @@ Stage 1  CLI + Web UI cục bộ ──►  Stage 2  + Server (API + worker)  �
 ### 4.2 Cấu trúc thư mục gợi ý
 
 ```text
-owasp_scanner/
+websec_scanner/
 ├── core/            # engine: runner, session, rate limiter, scope, redaction
 ├── checks/          # các check (hàm thuần) – gom theo nhóm: config/, api/, active/
 ├── rules/           # dữ liệu khai báo: headers, paths, signatures (YAML/JSON)

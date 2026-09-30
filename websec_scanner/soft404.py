@@ -75,7 +75,7 @@ class Soft404Profile:
 def build_profile(session, base_url: str) -> Soft404Profile:
     """Probe one random file-like and one random directory-like path (random per scan)."""
     probes = []
-    for path in (f"owasp-scanner-probe-{secrets.token_hex(6)}.txt", f"owasp-scanner-probe-{secrets.token_hex(6)}/"):
+    for path in (f"websec-scanner-probe-{secrets.token_hex(6)}.txt", f"websec-scanner-probe-{secrets.token_hex(6)}/"):
         resp, body, err = get_limited(session, urljoin(base_url, path))
         if err or resp is None or resp.status_code != 200:
             continue

@@ -66,7 +66,7 @@ def http_server():
         server.server_close()
 
 
-def make_self_signed_cert(tmp_path, not_before, not_after, name="cert", common_name="owasp-scanner-test"):
+def make_self_signed_cert(tmp_path, not_before, not_after, name="cert", common_name="websec-scanner-test"):
     """Write a self-signed cert/key pair for 127.0.0.1 and return (certfile, keyfile).
 
     The OS trust store never knows it. It is marked as its own CA so a test can make
@@ -140,7 +140,7 @@ def https_server(tmp_path):
     """
     servers = []
 
-    def factory(handler_cls, cert="valid", common_name="owasp-scanner-test", only_version=None):
+    def factory(handler_cls, cert="valid", common_name="websec-scanner-test", only_version=None):
         not_before, not_after = CERT_WINDOWS[cert]()
         certfile, keyfile = make_self_signed_cert(tmp_path, not_before, not_after, name=cert, common_name=common_name)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)

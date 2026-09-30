@@ -49,7 +49,7 @@ class Handler(BaseHTTPRequestHandler):
                 b"<html><title>Index of /images</title><body>Index of /images/</body></html>",
                 {"Content-Type": "text/html"},
             )
-        elif path.startswith("/owasp-scanner-nonexistent-probe"):
+        elif path.startswith("/websec-scanner-nonexistent-probe"):
             self._send(404, b"Not Found")
         else:
             self._send(404, b"Not Found")

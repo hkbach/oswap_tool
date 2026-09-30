@@ -93,7 +93,7 @@ class ScanResult:
     errors: list = field(default_factory=list)
     scan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     scanner_version: str = __version__
-    # Version of the rule set in owasp_scanner/rules/ that produced this result.
+    # Version of the rule set in websec_scanner/rules/ that produced this result.
     rules_version: str = field(default_factory=lambda: _rules_version())
     # True once the baseline GET succeeded; False means the scan is incomplete (exit code 3).
     baseline_fetched: bool = False

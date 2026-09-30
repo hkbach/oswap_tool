@@ -1,4 +1,4 @@
-# OWASP-Aligned Non-intrusive Web Security Scanner
+# Non-intrusive Web Security Scanner
 
 A Python tool (CLI + local web UI) that scans the security configuration of a
 website and compares it with OWASP guidance:
@@ -24,7 +24,7 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
 
 **Documentation** (project documents are written in Vietnamese):
 
-- [`docs/SRS-owasp-scanner.md`](./docs/SRS-owasp-scanner.md) — requirements
+- [`docs/SRS-websec-scanner.md`](./docs/SRS-websec-scanner.md) — requirements
   specification; the single requirements document, checked against the code and tests.
 - [`docs/PRODUCT-BACKLOG.md`](./docs/PRODUCT-BACKLOG.md) — backlog, decisions, sprint order.
 - [`CLAUDE.md`](./CLAUDE.md) — working rules for this repository.
@@ -113,7 +113,7 @@ so a clean report of a partial scan is not mistaken for a full one.
 | `robots-sitemap` | robots.txt / sitemap.xml | Sensitive-sounding paths advertised to crawlers (hints, low confidence) |
 
 The home page is always fetched, because most checks read it.
-`python -m owasp_scanner --list-checks` prints this list.
+`python -m websec_scanner --list-checks` prints this list.
 
 ## Installation
 
@@ -124,15 +124,15 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.8.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.9.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.8.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.9.0.tar.gz"
 ```
 
-Installing the package adds two commands: `owasp-scanner` (same as
-`python -m owasp_scanner`) and `owasp-scanner-web` (same as
-`python -m owasp_scanner.web`).
+Installing the package adds two commands: `websec-scanner` (same as
+`python -m websec_scanner`) and `websec-scanner-web` (same as
+`python -m websec_scanner.web`).
 
 ### Docker
 
@@ -141,36 +141,36 @@ non-root user; it is not published to a registry yet (build it yourself until
 that is decided):
 
 ```bash
-docker build -t owasp-scanner .
-docker run --rm owasp-scanner https://example.com --yes --no-color
+docker build -t websec-scanner .
+docker run --rm websec-scanner https://example.com --yes --no-color
 
 # Write reports to the host: mount a directory and give it as the output path.
-docker run --rm -v "$PWD":/data -w /data owasp-scanner \
+docker run --rm -v "$PWD":/data -w /data websec-scanner \
   https://example.com --yes --json report.json --html report.html
 ```
 
 The image has no shell tools beyond Python; it only runs
-`python -m owasp_scanner`. There is no `owasp-scanner-web` equivalent yet —
+`python -m websec_scanner`. There is no `websec-scanner-web` equivalent yet —
 the web UI is meant for a trusted local machine, not a container.
 
 ## Usage
 
 ```bash
 # Basic scan, results in the terminal (asks for authorization first)
-python -m owasp_scanner https://example.com
+python -m websec_scanner https://example.com
 
 # Skip the prompt (target already approved) and write a JSON report
-python -m owasp_scanner https://example.com --yes --json report.json
+python -m websec_scanner https://example.com --yes --json report.json
 
 # All report formats in one run
-python -m owasp_scanner https://example.com --yes \
+python -m websec_scanner https://example.com --yes \
   --json report.json --sarif report.sarif --html report.html
 
 # Slower target: longer timeout, more parallel path checks
-python -m owasp_scanner https://example.com --timeout 15 --workers 8
+python -m websec_scanner https://example.com --timeout 15 --workers 8
 
 # Only some test targets (see --list-checks)
-python -m owasp_scanner https://example.com --yes --checks headers,cookies,tls
+python -m websec_scanner https://example.com --yes --checks headers,cookies,tls
 ```
 
 | Option | Meaning |
@@ -214,8 +214,8 @@ Ready-made templates are in [`examples/ci/`](./examples/ci/):
 |---|---|---|
 | GitHub Actions | [`github-actions.yml`](./examples/ci/github-actions.yml) | Workflow artifact, and SARIF uploaded to code scanning |
 | GitLab CI | [`gitlab-ci.yml`](./examples/ci/gitlab-ci.yml) | Job artifacts (30 days) |
-| Azure Pipelines | [`azure-pipelines.yml`](./examples/ci/azure-pipelines.yml) | Build artifact `owasp-scan-reports` |
-| Jenkins | [`Jenkinsfile`](./examples/ci/Jenkinsfile) | Archived artifacts `owasp-report.*` |
+| Azure Pipelines | [`azure-pipelines.yml`](./examples/ci/azure-pipelines.yml) | Build artifact `websec-scan-reports` |
+| Jenkins | [`Jenkinsfile`](./examples/ci/Jenkinsfile) | Archived artifacts `websec-report.*` |
 
 Tests in this repository check that every template uses only real CLI options
 and installs the current release tag. **The templates have not been run on the
@@ -230,7 +230,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.8.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.9.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -240,8 +240,8 @@ CI systems themselves.** Try them on a non-production target first.
 Every template runs the same command:
 
 ```bash
-python -m owasp_scanner "$TARGET_URL" --yes --no-color --fail-on high \
-  --json owasp-report.json --sarif owasp-report.sarif --html owasp-report.html
+python -m websec_scanner "$TARGET_URL" --yes --no-color --fail-on high \
+  --json websec-report.json --sarif websec-report.sarif --html websec-report.html
 ```
 
 | Exit code | What to do in CI |
@@ -270,10 +270,10 @@ Tips:
 
 **GitHub Actions**
 
-- Copy the template to `.github/workflows/owasp-scan.yml` in the repository
+- Copy the template to `.github/workflows/websec-scan.yml` in the repository
   that owns the site.
 - The job needs `security-events: write` to upload SARIF. Findings then appear
-  under *Security → Code scanning* with the category `owasp-scanner`.
+  under *Security → Code scanning* with the category `websec-scanner`.
   Code scanning is available for public repositories; private repositories
   need GitHub Code Security (part of GitHub Advanced Security).
 - If you do not want the SARIF upload, delete the last step and the
@@ -281,7 +281,7 @@ Tips:
 
 **GitLab CI**
 
-- Add the `owasp-scan` job to your `.gitlab-ci.yml`. It uses the `test` stage;
+- Add the `websec-scan` job to your `.gitlab-ci.yml`. It uses the `test` stage;
   change `stage:` if your pipeline has no such stage.
 - The job installs `git` in the `python:3.12-slim` image before installing the
   scanner. You can use the source archive URL from
@@ -292,12 +292,12 @@ Tips:
 - The template has `trigger: none` and a weekly schedule on `main`. Add a
   trigger if you also want the scan on pushes.
 - Reports are written to `$(Build.ArtifactStagingDirectory)` and published as
-  the `owasp-scan-reports` artifact.
+  the `websec-scan-reports` artifact.
 
 **Jenkins**
 
 - The declarative pipeline runs in a `python:3.12-slim` Docker agent (needs the
-  Docker Pipeline plugin) and archives `owasp-report.*`.
+  Docker Pipeline plugin) and archives `websec-report.*`.
 - The template installs from the tag's source archive over plain HTTPS (see
   [Installation](#installation)), not with `git+https`: Jenkins' Docker
   Pipeline plugin runs the agent container as a non-root user by default, and
@@ -311,9 +311,9 @@ report files.
 ## Local web UI
 
 ```bash
-python -m owasp_scanner.web        # opens http://127.0.0.1:8765/
-python -m owasp_scanner.web --port 9000 --timeout 15 --workers 8
-python -m owasp_scanner.web --fail-on medium --ca-bundle path/to/ca.pem
+python -m websec_scanner.web        # opens http://127.0.0.1:8765/
+python -m websec_scanner.web --port 9000 --timeout 15 --workers 8
+python -m websec_scanner.web --fail-on medium --ca-bundle path/to/ca.pem
 ```
 
 The page has three steps: enter the target URL, choose the **test targets**
@@ -355,7 +355,7 @@ targets were not tested, non-fatal errors, and the findings:
   start scans from this machine, so treat it like a password and prefer the
   default loopback bind unless you really need remote access.
 - No extra dependencies: the server uses Python's `http.server`, and the UI is
-  static HTML/CSS/JS in `owasp_scanner/static/` that loads nothing from the
+  static HTML/CSS/JS in `websec_scanner/static/` that loads nothing from the
   internet.
 
 ## Development
@@ -380,7 +380,7 @@ directory listing, ...) for a quick manual run without scanning a real site:
 
 ```bash
 python tests/mock_server.py 8899 &
-python -m owasp_scanner http://127.0.0.1:8899 --yes
+python -m websec_scanner http://127.0.0.1:8899 --yes
 ```
 
 **Golden files** (`tests/golden/`) hold the JSON, SARIF and HTML reports of
@@ -498,7 +498,7 @@ GitHub plans; private repositories need a paid plan.
 ## Project layout
 
 ```text
-owasp_scanner/
+websec_scanner/
   cli.py            # CLI entry point, runs the checks (run_scan)
   output.py         # the single output pipeline: redaction, sorting, gate, exit code
   models.py         # Finding / ScanResult / Severity
@@ -511,7 +511,7 @@ owasp_scanner/
   soft404.py        # soft-404 detection by response fingerprint
   rule_loader.py    # loads and validates rules/*.json
   rules/            # sensitive paths and content signatures, known TLS interceptors
-  web.py            # local web UI server (python -m owasp_scanner.web)
+  web.py            # local web UI server (python -m websec_scanner.web)
   static/           # index.html, app.js, app.css of the web UI
   checks/
     headers.py         # security headers
@@ -530,6 +530,27 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 
 ## Changelog
 
+- **v1.9.0** (package rename, breaking). The package, PyPI/pip distribution name, CLI
+  commands and product identity strings changed from `owasp_scanner`/`owasp-scanner` to
+  `websec_scanner`/`websec-scanner`, because the tool is no longer scoped to only OWASP
+  checks. What actually changed:
+  - **Import path:** `import owasp_scanner` → `import websec_scanner`.
+  - **CLI commands:** `owasp-scanner`/`owasp-scanner-web` →
+    `websec-scanner`/`websec-scanner-web` (`python -m owasp_scanner` →
+    `python -m websec_scanner`, same for `.web`).
+  - **PyPI/pip distribution name:** `owasp-scanner` → `websec-scanner`.
+  - **User-Agent sent to targets (NFR-SEC-03):** `TECHVIFY-OWASP-Scanner/<version>` →
+    `TECHVIFY-WebSec-Scanner/<version>`. **If a target's WAF or log filter matches the
+    old string, it will no longer recognise this tool's traffic; update it.**
+  - **SARIF `partialFingerprints` key:** `owaspScannerFingerprint/v1` →
+    `websecScannerFingerprint/v1`. Existing GitHub code scanning alerts matched on the
+    old key lose fingerprint continuity across this release.
+  - Downloaded report filenames (`owasp-scan-...` → `websec-scan-...`), the Docker image
+    example tag, and product titles in the CLI banner, Web UI and HTML report.
+  - **Unchanged:** JSON `schema_version` (1.4), `owasp_category` and `owasp_groups`
+    fields (the tool still maps every finding to OWASP Top 10, ASVS and the Secure
+    Headers Project — only the tool's own name changed, not what it checks against),
+    exit codes, CLI/web behaviour.
 - **v1.8.0** (Sprint 9, closing Phase A). Changes to note:
   - **Binding the web UI to anything other than `127.0.0.1` now needs
     `--allow-remote`**, or the server refuses to start (before: it started
@@ -623,7 +644,7 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
     Web/Mail Shield), `errors` has a warning and TLS findings get
     `confidence: low`.
   - The sensitive-path table and the list of TLS interceptors live in
-    `owasp_scanner/rules/*.json`; `rules_version` now looks like
+    `websec_scanner/rules/*.json`; `rules_version` now looks like
     `sensitive_paths=<v>;tls_interceptors=<v>`.
 - **v1.3.0** (Sprint 3b). Behaviour changes to note:
   - **Scanning `http://` now always checks the redirect to HTTPS (FIX-09).** An
@@ -670,5 +691,5 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
   no longer required when scanning over `http://`; (5) `Finding.id` of the
   sensitive paths is declared explicitly instead of derived from a string;
   (6) new dependency `cryptography` to read certificate dates independently of
-  trust-chain validation. Details in section 0 of `docs/SRS-owasp-scanner.md`.
+  trust-chain validation. Details in section 0 of `docs/SRS-websec-scanner.md`.
 - **v1.0.0.** First release.

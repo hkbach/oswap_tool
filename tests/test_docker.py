@@ -33,7 +33,7 @@ def test_dockerfile_runs_as_a_non_root_user():
 
 
 def test_dockerfile_entrypoint_is_the_cli():
-    assert 'ENTRYPOINT ["python", "-m", "owasp_scanner"]' in _dockerfile()
+    assert 'ENTRYPOINT ["python", "-m", "websec_scanner"]' in _dockerfile()
 
 
 def test_dockerfile_final_stage_does_not_copy_the_source_tree():
@@ -41,7 +41,7 @@ def test_dockerfile_final_stage_does_not_copy_the_source_tree():
     # package from the build stage (no source, no pyproject.toml, no compiler left behind).
     text = _dockerfile()
     final_stage = text[text.index("FROM python:3.12-slim\n", text.index("AS build") + 1) :]
-    assert "COPY owasp_scanner" not in final_stage
+    assert "COPY websec_scanner" not in final_stage
     assert "COPY --from=build" in final_stage
 
 

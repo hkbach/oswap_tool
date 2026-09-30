@@ -29,7 +29,7 @@ def _colorize(text: str, severity: str, use_color: bool) -> str:
 def print_report(report: dict, use_color: bool = True) -> None:
     counts = report["summary"]
     print("=" * 72)
-    print(f" OWASP-aligned scan report for: {report['target']}")
+    print(f" Non-intrusive scan report for: {report['target']}")
     print(f" Started:  {report['started_at']}")
     print(f" Finished: {report['finished_at']}")
     titles = {g.id: g.title for g in CHECK_GROUPS}

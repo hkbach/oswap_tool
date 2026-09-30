@@ -10,8 +10,8 @@ import requests
 from conftest import QuietHandler
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import cli, output, web
-from owasp_scanner.html_report import render_html
+from websec_scanner import cli, output, web
+from websec_scanner.html_report import render_html
 
 EMPTY = {s: 0 for s in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")}
 

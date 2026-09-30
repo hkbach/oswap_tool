@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_readme_at_range_matches_the_srs():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    srs = (ROOT / "docs" / "SRS-owasp-scanner.md").read_text(encoding="utf-8")
+    srs = (ROOT / "docs" / "SRS-websec-scanner.md").read_text(encoding="utf-8")
 
     stated = re.search(r"acceptance scenarios AT-01 to AT-(\d+)", readme)
     assert stated, "README must say which AT- range the test suite covers"

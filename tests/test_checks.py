@@ -9,9 +9,9 @@ import pytest
 import requests
 from conftest import CERT_WINDOWS, QuietHandler, make_self_signed_cert
 
-from owasp_scanner.checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
-from owasp_scanner.http_utils import USER_AGENT, build_session
-from owasp_scanner.rule_loader import load_sensitive_paths
+from websec_scanner.checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
+from websec_scanner.http_utils import USER_AGENT, build_session
+from websec_scanner.rule_loader import load_sensitive_paths
 
 
 def ids(findings):

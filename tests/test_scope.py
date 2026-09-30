@@ -7,7 +7,7 @@ import threading
 import pytest
 from conftest import QuietHandler
 
-from owasp_scanner import cli, http_utils
+from websec_scanner import cli, http_utils
 
 
 class CountingHandler(QuietHandler):
