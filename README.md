@@ -16,6 +16,22 @@ Công cụ Python (CLI + Web UI cục bộ) quét cấu hình bảo mật của 
 
 ## Changelog
 
+- **v1.4.0** (Sprint 4, độ chính xác) — thay đổi hành vi cần lưu ý:
+  - **Finding lộ file chỉ được báo khi nội dung khớp loại file (FR-DET-01).**
+    HTTP 200 thôi là không đủ: `.git/HEAD` phải có `ref:`, `.env` phải có
+    `KEY=VALUE`, `backup.zip` phải bắt đầu bằng `PK`… Trang chung của SPA, trang
+    lỗi tuỳ biến hay trang chặn của WAF không còn tạo false positive; file thật
+    trên các site như vậy vẫn được phát hiện. **Sẽ có ít finding lộ file hơn.**
+  - **Soft-404 theo vân tay nội dung (FR-DET-02):** 2 probe ngẫu nhiên mỗi lần
+    quét, nhận ra cả trường hợp mọi path redirect về `/login`.
+  - **Không tải cả file:** mỗi response của path/thư mục chỉ đọc tối đa 8 KiB.
+  - **Confidence (FR-DET-03):** finding lộ file có nội dung khớp là `high`.
+  - **Cảnh báo TLS bị chặn giữa đường (FR-DET-16):** nếu chứng chỉ do phần mềm
+    diệt virus hoặc proxy TLS inspection ký lại (ví dụ Avast Web/Mail Shield),
+    `errors` có cảnh báo và finding TLS mang `confidence: low`.
+  - Bảng path nhạy cảm và danh sách phần mềm chặn TLS nằm trong
+    `owasp_scanner/rules/*.json`; `rules_version` giờ có dạng
+    `sensitive_paths=<v>;tls_interceptors=<v>`.
 - **v1.3.0** (Sprint 3b) — thay đổi hành vi cần lưu ý:
   - **Quét `http://` giờ luôn kiểm tra redirect sang HTTPS (FIX-09).** Site HTTP
     không chuyển sang HTTPS có finding `TLS-NO-HTTPS-REDIRECT` (HIGH), nên
