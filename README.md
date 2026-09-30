@@ -1,12 +1,16 @@
-# OWASP-Aligned Passive Web Security Scanner
+# OWASP-Aligned Non-intrusive Web Security Scanner
 
-Công cụ dòng lệnh (Python) quét một website và đối chiếu với các khuyến nghị
-của OWASP: [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/),
+Công cụ Python (CLI + Web UI cục bộ) quét cấu hình bảo mật của một website và
+đối chiếu với các khuyến nghị của OWASP: [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/),
 [OWASP Top 10:2021](https://owasp.org/Top10/) và một phần [OWASP ASVS](https://owasp.org/www-project-application-security-verification-standard/).
 
-**Đặc tả yêu cầu chi tiết:** xem [`SRS.md`](./SRS.md) trong cùng thư mục này —
-đây là baseline "as-built" duy nhất, đã được đối chiếu và kiểm thử cùng mã
-nguồn (không phải tài liệu rời rạc).
+**Tài liệu:**
+
+- [`docs/SRS-owasp-scanner.md`](./docs/SRS-owasp-scanner.md) — đặc tả yêu cầu
+  (v1.2), tài liệu requirement duy nhất, đã đối chiếu với mã nguồn và test.
+- [`docs/PRODUCT-BACKLOG.md`](./docs/PRODUCT-BACKLOG.md) — backlog, quyết định
+  đã chốt, thứ tự sprint.
+- [`CLAUDE.md`](./CLAUDE.md) — quy tắc làm việc trong repo.
 
 ## Changelog
 
@@ -18,7 +22,7 @@ nguồn (không phải tài liệu rời rạc).
   khi quét qua `http://`; (5) `Finding.id` của các path nhạy cảm nay khai báo
   tường minh thay vì suy ra từ chuỗi; (6) thêm dependency `cryptography` để
   đọc hạn chứng chỉ độc lập với xác thực trust chain. Chi tiết đầy đủ ở mục 0
-  của `SRS.md`.
+  của `docs/SRS-owasp-scanner.md`.
 - **v1.0.0** — bản đầu tiên.
 
 ## ⚠️ Chỉ dùng cho hệ thống bạn được phép kiểm tra
@@ -35,7 +39,12 @@ dịch vụ của bên sở hữu. Trước khi chạy:
 Tool sẽ hỏi xác nhận trước khi chạy; dùng `--yes` để bỏ qua xác nhận tương tác
 (ví dụ khi chạy trong CI/CD với hệ thống nội bộ đã được phê duyệt).
 
-## Phạm vi kiểm tra (Passive / Header scan)
+## Phạm vi kiểm tra (non-intrusive configuration scan)
+
+Tool không hoàn toàn thụ động: ngoài request tới trang chủ, nó chủ động gửi
+khoảng 29 request GET (target `https://`) tới các path và thư mục cụ thể, kèm
+một request có header `Origin` giả lập và 2 lần bắt tay TLS. Không gửi payload
+khai thác, không thay đổi dữ liệu phía target. Chi tiết ở SRS mục 1.2.
 
 | Check | Nội dung | OWASP mapping |
 |---|---|---|
@@ -49,7 +58,7 @@ Tool sẽ hỏi xác nhận trước khi chạy; dùng `--yes` để bỏ qua x�
 | robots.txt | Có `Disallow:` tiết lộ đường dẫn nhạy cảm (admin, backup, staging...) không | A01:2021 |
 | sitemap.xml | Có `<loc>` tiết lộ URL nhạy cảm (staging, internal...) không | A01:2021 |
 
-**Giới hạn:** đây là quét passive/config-check, KHÔNG phải DAST toàn diện.
+**Giới hạn:** đây là quét cấu hình không xâm lấn (non-intrusive), KHÔNG phải DAST toàn diện.
 Tool không phát hiện injection (SQLi/XSS thực sự cần test chủ động), business
 logic flaw, broken authentication ở tầng ứng dụng, v.v. Với các hạng mục đó,
 nên dùng thêm công cụ chuyên sâu như OWASP ZAP, Burp Suite, hoặc pentest thủ
@@ -58,7 +67,7 @@ công — sau khi đã có phạm vi và cho phép rõ ràng.
 ## Cài đặt
 
 ```bash
-cd owasp-scanner
+# (từ thư mục gốc của repo)
 pip install -r requirements.txt
 ```
 
@@ -135,7 +144,7 @@ python3 tests/mock_server.py 8899 &
 python3 -m owasp_scanner http://127.0.0.1:8899 --yes
 ```
 
-Bộ test tự động (pytest) phủ các kịch bản AT-01…AT-18 của `SRS.md` mục 9,
+Bộ test tự động (pytest) phủ các kịch bản AT-01…AT-28 của `docs/SRS-owasp-scanner.md` mục 9,
 tự dựng HTTP/HTTPS server trên `127.0.0.1` và tự sinh chứng chỉ test (hết hạn,
 chưa hiệu lực, sắp hết hạn, tự ký) — không cần internet:
 
