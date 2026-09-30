@@ -9,6 +9,7 @@ that knowledge lives in one declarative table (FR-MODEL-01, NFR-MAINT-02).
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from urllib.parse import urlsplit
 
@@ -138,3 +139,77 @@ def enrich(finding: Finding, target: str) -> Finding:
         references=list(finding.references or (meta.references if meta else ())),
         fingerprint=fingerprint(finding.id, finding.instance_key, target),
     )
+
+
+@dataclass(frozen=True)
+class CheckGroup:
+    """One test target: a group of checks that the user can select for a scan (SRS 4.11)."""
+
+    id: str
+    title: str
+    description: str
+    checks: tuple[str, ...]  # check names as they appear in ScanResult.checks_run
+
+
+# The order is the order of the report sections, the web UI and ``--list-checks``.
+CHECK_GROUPS: tuple[CheckGroup, ...] = (
+    CheckGroup(
+        "headers",
+        "Security headers",
+        "HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy "
+        "and headers that disclose server software.",
+        ("security-headers", "hsts-start-host"),
+    ),
+    CheckGroup("cookies", "Cookies", "Secure, HttpOnly and SameSite attributes of the cookies set.", ("cookies",)),
+    CheckGroup(
+        "tls",
+        "TLS/SSL",
+        "Negotiated protocol and cipher, certificate validity period and trust (2 TLS handshakes).",
+        ("tls",),
+    ),
+    CheckGroup(
+        "https-redirect",
+        "HTTP to HTTPS redirect",
+        "Whether plain HTTP is redirected to HTTPS.",
+        ("http-to-https-redirect",),
+    ),
+    CheckGroup(
+        "cors", "CORS", "Access-Control-Allow-Origin for a test Origin, with and without credentials.", ("cors",)
+    ),
+    CheckGroup(
+        "exposed-files",
+        "Exposed files",
+        "Well-known sensitive files (.git, .env, backups, keys, ...), reported only when the content matches.",
+        ("sensitive-paths",),
+    ),
+    CheckGroup(
+        "directory-listing",
+        "Directory listing",
+        "Common directories that return a browsable file index.",
+        ("directory-listing",),
+    ),
+    CheckGroup(
+        "robots-sitemap",
+        "robots.txt / sitemap.xml",
+        "Sensitive-sounding paths advertised in robots.txt and sitemap.xml (hints, low confidence).",
+        ("robots-sitemap",),
+    ),
+)
+GROUP_IDS: tuple[str, ...] = tuple(g.id for g in CHECK_GROUPS)
+_GROUP_OF_CHECK = {check: g.id for g in CHECK_GROUPS for check in g.checks}
+
+
+def group_of_check(check: str) -> str:
+    """The group id that a check name (``checks_run`` entry, ``finding.check``) belongs to."""
+    return _GROUP_OF_CHECK[check]
+
+
+def normalize_groups(groups: Iterable[str]) -> list[str]:
+    """Validate a group selection; returns the ids in table order. Raises ValueError."""
+    wanted = {str(g).strip().lower() for g in groups}
+    unknown = sorted(wanted - set(GROUP_IDS))
+    if unknown:
+        raise ValueError(f"Unknown check group(s): {', '.join(unknown)}. Valid groups: {', '.join(GROUP_IDS)}")
+    if not wanted:
+        raise ValueError("Select at least one check group")
+    return [g for g in GROUP_IDS if g in wanted]

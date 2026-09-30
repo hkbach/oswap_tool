@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | OWASP-Aligned Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.8 |
-| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.7: 2026-09-30) |
+| **Phiên bản tài liệu** | 1.9 |
+| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.8: 2026-09-30) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.6.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 7). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.7.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 8). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -31,6 +31,7 @@
 | 1.6 | 2026-09-30 | Theo code v1.5.0 (Sprint 5, dùng trong CI): một kho chứng chỉ cho HTTP và TLS, mặc định là kho OS, `--ca-bundle` (FR-CI-10: FR-CLI-06, FR-TLS-08; B1 đã xử lý); `--fail-on` và exit code `3` (FR-CI-01: FR-CLI-04, mục 7.3, trường `gate`, `schema_version` 1.3; mục 13 không còn điểm chờ); `--sarif` (FR-RPT-02: FR-REPORT-06); `--html` (FR-RPT-09: FR-REPORT-07); template CI trong `examples/ci/` (FR-CI-03); AT-42…AT-46. |
 | 1.7 | 2026-09-30 | Theo code v1.5.1 (Sprint 6, chất lượng repo; không đổi hành vi tool): workflow CI của repo (FR-QA-07); golden file JSON/SARIF/HTML (FR-QA-02); mọi finding ID có test (FR-QA-01); NFR-PORT-01 ghi ma trận CI; mục 10 thêm rủi ro Python 3.9 hết hỗ trợ; AT-47…AT-49. |
 | 1.8 | 2026-09-30 | Theo code v1.6.0 (Sprint 7): Python ≥ 3.12 (NFR-PORT-01, mục 2; bỏ rủi ro 3.9 ở mục 10); Bước A của TLS chấp nhận TLS 1.0/1.1 và cipher cũ (FR-TLS-01, FR-TLS-04); che userinfo trong URL và gộp redaction theo fingerprint (NFR-SEC-04, AT-32); parse Set-Cookie theo RFC 6265 (FR-COOKIE-01, AT-04); robots/sitemap đọc tối đa 512 KiB, charset lạ không làm dừng check (NFR-PERF-04, AT-38); Web UI trả 500 khi quét lỗi (FR-UI-05, AT-26); `gate_status`/`gate_message` và `output.gate_message()` (FR-UI-09, mục 6.3); AT-50…AT-51. |
+| 1.9 | 2026-09-30 | Theo code v1.7.0 (Sprint 8): nhóm mục tiêu kiểm thử `catalog.CHECK_GROUPS` và chọn nhóm khi quét (mục 4.11, FR-GRP-01…03); `--checks`, `--list-checks` (mục 7); JSON `schema_version` 1.4 với `scan_groups` và `check` (mục 6.2); Web UI chọn nhóm và nhóm kết quả theo test target/OWASP Top 10, `GET /api/checks`, `groups`/`owasp_groups` (FR-UI-10, FR-UI-11, mục 6.3); báo cáo HTML theo nhóm (FR-UI-07); AT-52…AT-55. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -354,9 +355,32 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | FR-UI-04 | `POST /api/scan` PHẢI yêu cầu `Content-Type: application/json` (415 nếu khác), body tối đa 4096 byte (413), là JSON object hợp lệ (400), `target` là chuỗi không rỗng và sau chuẩn hoá có scheme `http`/`https` và hostname (400). | M |
 | FR-UI-05 | Mỗi lúc chỉ chạy một lần quét; request quét thứ hai trong lúc đang quét PHẢI nhận 429. Nếu lần quét gặp lỗi nội bộ (exception), server PHẢI trả 500 với `{"error": "The scan failed with an internal error; see the server console for details."}`, ghi một dòng đã che secret ra stderr, và giải phóng lượt quét (từ v1.6.0; trước đó kết nối bị đóng không có response). | M |
 | FR-UI-06 | Sau mỗi lần quét, server PHẢI lưu báo cáo trong bộ nhớ dưới một id ngẫu nhiên không đoán được (`secrets.token_urlsafe(16)`), giữ tối đa 20 báo cáo gần nhất. `GET /api/report/<id>.html` PHẢI trả báo cáo HTML dạng tệp đính kèm (`Content-Disposition: attachment`, tên `owasp-scan-<host>-<thời điểm>.html`); id không tồn tại → 404. | M |
-| FR-UI-07 | Báo cáo HTML (`render_html()`) PHẢI là một tệp độc lập: CSS nhúng, không có script, không tải tài nguyên ngoài; mọi giá trị lấy từ target PHẢI được HTML-escape. Nội dung gồm thời gian, check đã chạy, trạng thái gate, bảng tổng hợp, lỗi non-fatal, danh sách finding, và phần giới hạn phạm vi. | M |
+| FR-UI-07 | Báo cáo HTML (`render_html()`) PHẢI là một tệp độc lập: CSS nhúng, không có script, không tải tài nguyên ngoài; mọi giá trị lấy từ target PHẢI được HTML-escape. Nội dung gồm thời gian, nhóm kiểm thử đã chọn và **nhóm không được chọn (not tested)**, check đã chạy, trạng thái gate, bảng tổng hợp, lỗi non-fatal, và (từ v1.7.0) bảng *Summary by test target* (trạng thái và số finding theo severity của từng nhóm mục 4.11, từ `output.group_findings()`), bảng *Summary by OWASP Top 10* (từ `output.owasp_groups()`, link tới từng finding), chi tiết finding **nhóm theo test target** (trong nhóm sắp theo severity), và phần giới hạn phạm vi. Vì không có script, báo cáo trình bày cả hai cách nhóm dạng tĩnh thay cho nút chuyển của Web UI. | M |
 | FR-UI-08 | Trang UI PHẢI gửi các header: `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. Dữ liệu quét trên trang chỉ được hiển thị bằng `textContent` (không `innerHTML`). | M |
 | FR-UI-09 | Trường `gate_failed` PHẢI bằng `gate.failed` của báo cáo, tính bằng cùng hàm `output.gate_failed()` và cùng ngưỡng `--fail-on` (khai báo khi khởi động server) như CLI. Ngoài các trường của mục 6.3 (`web.WEB_ONLY_FIELDS`) và các trường thay đổi theo lần quét (`scan_id`, thời gian), JSON của Web UI PHẢI giống hệt JSON `--json` của CLI cho cùng target và cùng ngưỡng. Lỗi của cả hai endpoint trả `application/json` dạng `{"error": "..."}`. Câu gate hiển thị trên UI (`gate_message`) và trong báo cáo HTML PHẢI do cùng hàm `output.gate_message()` tạo ra. | M |
+| FR-UI-10 | Trang nhập URL PHẢI liệt kê các nhóm kiểm thử (từ `GET /api/checks`) dạng checkbox, mặc định chọn tất cả, có *Select all* / *Clear* và số nhóm đã chọn; PHẢI chặn quét khi không chọn nhóm nào. Nếu không tải được danh sách, UI quét mọi nhóm (không gửi `checks`). (từ v1.7.0) | M |
+| FR-UI-11 | Trang kết quả PHẢI nhóm finding theo *Test target* (mặc định, dùng `groups`) hoặc *OWASP Top 10* (dùng `owasp_groups`), chuyển bằng ô *Group by*. Mỗi nhóm là khối thu gọn được, hiện số finding theo severity và trạng thái (*N issues* / *No issues* / *Not run* / *Not selected*); bộ lọc severity áp dụng trong từng nhóm; mỗi finding ghi kèm cách nhóm còn lại (OWASP category hoặc test target). Dòng phạm vi PHẢI liệt kê các nhóm không được chọn là "not tested". (từ v1.7.0) | M |
+
+### 4.11 Nhóm mục tiêu kiểm thử (`catalog.CHECK_GROUPS`, từ v1.7.0)
+
+Các check được gom thành 8 nhóm mục tiêu kiểm thử, khai báo **một lần** trong `catalog.CHECK_GROUPS` (dữ liệu, không nằm trong logic). CLI, Web UI và báo cáo HTML đều dùng bảng này; thứ tự trong bảng là thứ tự hiển thị.
+
+| id | Tên hiển thị | Check (`checks_run`) |
+|---|---|---|
+| `headers` | Security headers | `security-headers`, `hsts-start-host` |
+| `cookies` | Cookies | `cookies` |
+| `tls` | TLS/SSL | `tls` |
+| `https-redirect` | HTTP to HTTPS redirect | `http-to-https-redirect` |
+| `cors` | CORS | `cors` |
+| `exposed-files` | Exposed files | `sensitive-paths` |
+| `directory-listing` | Directory listing | `directory-listing` |
+| `robots-sitemap` | robots.txt / sitemap.xml | `robots-sitemap` |
+
+| ID | Yêu cầu | Ưu tiên |
+|---|---|---|
+| FR-GRP-01 | `run_scan(..., groups=None)` PHẢI chạy mọi nhóm khi `groups` là `None`, và chỉ các nhóm được chọn khi có danh sách. GET baseline luôn chạy. Nhóm không được chọn KHÔNG được gửi request nào của riêng nó (2 probe soft-404 chỉ gửi khi chọn `exposed-files` hoặc `directory-listing`). | M |
+| FR-GRP-02 | Lựa chọn PHẢI được chuẩn hoá bởi `catalog.normalize_groups()`: không phân biệt hoa/thường, bỏ trùng, trả theo thứ tự bảng; id lạ hoặc danh sách rỗng → `ValueError` nêu các id hợp lệ. | M |
+| FR-GRP-03 | Báo cáo PHẢI ghi `scan_groups` (các nhóm đã chọn) và mỗi finding PHẢI có `check` (tên check tạo ra nó). Gate và exit code chỉ tính trên finding của các nhóm đã chạy; nhóm không được chọn phải được hiển thị là "not selected", không phải "no issues". | M |
 
 ---
 
@@ -439,12 +463,12 @@ class ScanResult:
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
 
-Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.3`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01). Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
+Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.4`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01); `1.4` (scanner 1.7.0) **thêm** `scan_groups` và `check` của mỗi finding (FR-GRP-03). Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
 
 ```json
 {
-  "schema_version": "1.3",
-  "scanner_version": "1.1.0",
+  "schema_version": "1.4",
+  "scanner_version": "1.7.0",
   "rules_version": "1.1.0",
   "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "secrets_redacted": true,
@@ -454,6 +478,7 @@ class ScanResult:
   "redirect_chain": [{ "url": "https://example.com/", "status": 301 }],
   "started_at": "2026-09-22T08:26:08.822920Z",
   "finished_at": "2026-09-22T08:26:09.273000Z",
+  "scan_groups": ["headers", "cookies", "tls", "https-redirect", "cors", "exposed-files", "directory-listing", "robots-sitemap"],
   "checks_run": ["security-headers", "cookies", "tls", "http-to-https-redirect", "cors", "sensitive-paths", "directory-listing", "robots-sitemap"],
   "summary": { "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0 },
   "findings": [
@@ -470,7 +495,8 @@ class ScanResult:
       "url": "https://example.com/.env",
       "references": ["https://owasp.org/Top10/A01_2021-Broken_Access_Control/", "https://cwe.mitre.org/data/definitions/538.html"],
       "instance_key": ".env",
-      "fingerprint": "<32 ký tự hex>"
+      "fingerprint": "<32 ký tự hex>",
+      "check": "sensitive-paths"
     }
   ],
   "errors": []
@@ -488,6 +514,8 @@ AT-12 kiểm tra đúng tập khoá ở cấp gốc, trong `summary` và trong m
 | `gate_failed` | bool | `true` nếu có ít nhất 1 finding CRITICAL/HIGH (FR-UI-09) |
 | `gate_status` | string | `fail`, `warn` (quét không hoàn tất) hoặc `pass`, từ `output.gate_message()` (từ v1.6.0) |
 | `gate_message` | string | Câu mô tả gate và exit code của CLI; **cùng câu** với báo cáo HTML (từ v1.6.0) |
+| `groups` | array | `output.group_findings()`: mỗi nhóm của mục 4.11 theo thứ tự bảng, gồm `id`, `title`, `description`, `status` (`issues`/`clean`/`not-run`/`not-selected`), `counts` theo severity, `findings` (chỉ số trong `findings`) (từ v1.7.0) |
+| `owasp_groups` | array | `output.owasp_groups()`: các OWASP category có finding, sắp theo category, gồm `id` (ví dụ `A05:2021`), `title`, `counts`, `findings` (từ v1.7.0) |
 | `report_id` | string | id ngẫu nhiên của báo cáo lưu trong bộ nhớ (FR-UI-06) |
 | `report_url` | string | `/api/report/<report_id>.html` |
 
@@ -505,7 +533,7 @@ python -m owasp_scanner <target> [--json PATH] [--sarif PATH] [--html PATH] [--t
 
 | Tham số | Bắt buộc | Mặc định | Mô tả |
 |---|---|---|---|
-| `target` | Có | — | URL hoặc hostname. Chuẩn hoá theo FR-CLI-01. |
+| `target` | Có (trừ khi có `--list-checks`) | — | URL hoặc hostname. Chuẩn hoá theo FR-CLI-01. |
 | `--json PATH` | Không | (không xuất) | Ghi báo cáo JSON đầy đủ. Thư mục cha phải tồn tại sẵn. |
 | `--timeout N` | Không | `10` | Timeout mỗi request (giây). |
 | `--workers N` | Không | `5` | Số luồng song song khi kiểm tra path nhạy cảm. |
@@ -515,6 +543,8 @@ python -m owasp_scanner <target> [--json PATH] [--sarif PATH] [--html PATH] [--t
 | `--html PATH` | Không | (không xuất) | Ghi báo cáo HTML độc lập (FR-REPORT-07). |
 | `--fail-on LEVEL` | Không | `high` | Mức thấp nhất làm fail gate (exit `1`): `critical`, `high`, `medium`, `low`, hoặc `none` (không bao giờ fail, kể cả khi quét không hoàn tất). |
 | `--ca-bundle PATH` | Không | env `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE`, rồi kho OS | File PEM các CA được tin, thay cho kho mặc định, cho cả request HTTP và TLS check (FR-CLI-06). |
+| `--checks GROUPS` | Không | tất cả | Danh sách id nhóm cách nhau bằng dấu phẩy (mục 4.11), ví dụ `headers,tls`. Id sai → exit code `2` kèm danh sách id hợp lệ (từ v1.7.0). |
+| `--list-checks` | Không | — | In id, tên và mô tả của từng nhóm rồi thoát với code `0`; không cần target, không hỏi xác nhận (từ v1.7.0). |
 | `--show-secrets` | Không | tắt | Không che giá trị cookie và tham số URL nhạy cảm (chỉ để debug cục bộ; NFR-SEC-04). |
 
 ### 7.3 Exit code
@@ -544,7 +574,8 @@ python -m owasp_scanner.web [--host 127.0.0.1] [--port 8765] [--timeout N] [--wo
 | Endpoint | Mô tả |
 |---|---|
 | `GET /`, `/app.js`, `/app.css` | Trang UI và file tĩnh. |
-| `POST /api/scan` | Chạy quét đồng bộ, trả JSON mục 6.2 + 6.3. Mã lỗi: 400, 403, 413, 415, 429, 500 (FR-UI-02…05). |
+| `GET /api/checks` | Danh sách nhóm của mục 4.11: `{"groups": [{"id", "title", "description"}]}` (từ v1.7.0). |
+| `POST /api/scan` | Chạy quét đồng bộ, trả JSON mục 6.2 + 6.3. Body có thể có `checks`: danh sách id nhóm (không có = mọi nhóm); không phải danh sách chuỗi, rỗng hoặc có id lạ → 400. Mã lỗi: 400, 403, 413, 415, 429, 500 (FR-UI-02…05, FR-UI-10). |
 | `GET /api/report/<id>.html` | Tải báo cáo HTML (FR-UI-06). 404 nếu không còn. |
 
 ---
@@ -624,6 +655,10 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-49 | Mọi finding ID đều được test tạo ra (FR-QA-01) | 17 rule path nhạy cảm qua HTTP; header `X-AspNetMvc-Version`; chứng chỉ không parse được | Mỗi rule cho đúng 1 finding với id, severity, URL của rule; `HDR-INFO-X-ASPNETMVC-VERSION`; `TLS-CERT-PARSE-FAILED` (INFO) và trust check vẫn chạy. Đo ngày 2026-09-30: cả 47 id trong catalog đều được suite tạo ra (trước đó 33/47). | `test_every_rule_is_reported_end_to_end`, `test_headers_info_leak_one_finding_per_header`, `test_tls_unparsable_certificate_is_reported_and_trust_is_still_checked` |
 | AT-50 | Target IPv6 | Host `::1` cho TLS check và redirect check | URL trong finding và request probe có dấu ngoặc (`https://[::1]:<cổng>`, `http://[::1]/`); `instance_key` giữ nguyên dạng `host:port` để fingerprint không đổi | `test_ipv6_hosts_are_bracketed_in_urls` |
 | AT-51 | TLS cũ trên server thật (FR-TLS-01, FR-TLS-03) | Server local chỉ cho TLS 1.0, rồi chỉ TLS 1.1; server thường | Server cũ → đúng 1 `TLS-WEAK-PROTOCOL` (HIGH) ghi đúng phiên bản, không có `TLS-CONN-FAILED`; server thường vẫn thương lượng TLS 1.2/1.3 với cipher không yếu. Test tự skip nếu chính OpenSSL của máy chạy test không bắt tay được TLS 1.0/1.1 | `test_tls_weak_protocol_is_detected_on_a_real_legacy_server`, `test_tls_modern_server_still_negotiates_a_modern_protocol` |
+| AT-52 | Chọn nhóm kiểm thử (FR-GRP-01…03) | Bảng nhóm; quét mock mặc định; chỉ `headers`+`cookies`; chỉ `directory-listing`; chỉ `cookies`; lựa chọn rỗng/id lạ/trùng/hoa; target không kết nối được; chỉ `https-redirect` trên target http | Mỗi check thuộc đúng 1 nhóm, id nhóm cố định; mặc định `scan_groups` = cả 8 nhóm và mọi finding có `check`; chọn `headers`+`cookies` thì target chỉ nhận GET `/`; `directory-listing` vẫn gửi probe soft-404 nhưng không gửi path nhạy cảm/robots; gate chỉ tính nhóm đã chạy; lựa chọn sai → `ValueError`; trùng/hoa được chuẩn hoá | `test_every_check_belongs_to_exactly_one_group`, `test_group_ids_are_stable`, `test_default_scan_runs_every_group_and_tags_each_finding`, `test_only_the_selected_groups_run_and_send_requests`, `test_selected_groups_are_reported_in_table_order`, `test_directory_listing_alone_still_uses_the_soft404_probes`, `test_gate_counts_only_the_selected_groups`, `test_invalid_group_selection_is_rejected`, `test_group_selection_ignores_duplicates_and_case`, `test_unreachable_target_still_records_the_selection`, `test_https_redirect_group_alone_on_an_http_target` |
+| AT-53 | CLI chọn nhóm (FR-GRP-01, mục 7) | `--list-checks`; `--checks cookies,HEADERS`; quét đủ nhóm; `--checks tls,bogus`; thiếu target | `--list-checks` in đủ 8 nhóm, exit `0`, không hỏi xác nhận; `--checks` chỉ chạy nhóm đã chọn, console in `Check groups:` và `Not selected (not tested):`; quét đủ không in dòng `Not selected`; id sai hoặc thiếu target → exit `2` | `test_list_checks_prints_every_group_without_a_target`, `test_checks_option_selects_groups`, `test_console_does_not_list_unselected_groups_for_a_full_scan`, `test_bad_check_selection_or_missing_target_exits_2` |
+| AT-54 | Web UI chọn và nhóm (FR-UI-10, FR-UI-11, mục 6.3) | `GET /api/checks` (và với Host lạ); quét mock với `checks` = `cookies`,`headers`; không có `checks`; `checks` = `[]`/`["bogus"]`/`"headers"`/`[1]`/`null`; bảng nhóm và nhóm OWASP của dữ liệu mẫu và của lần quét thật | Danh sách đúng bảng 4.11; Host lạ → 403; chỉ chạy nhóm đã chọn, `groups`/`owasp_groups` đúng bằng `output.group_findings()`/`owasp_groups()` của báo cáo, nhóm không chọn có `status` `not-selected`; không có `checks` → mọi nhóm; lựa chọn sai → 400, không quét; mỗi finding nằm đúng một nhóm ở cả hai cách nhóm; Download JSON bỏ đúng `web.WEB_ONLY_FIELDS`. *Phần hiển thị (HTML/JS) được kiểm tra bằng ảnh chụp trình duyệt headless, không có test tự động.* | `test_checks_endpoint_lists_the_groups`, `test_checks_endpoint_blocks_rebinding_host`, `test_scan_runs_only_the_selected_groups_and_returns_grouped_views`, `test_scan_without_checks_runs_every_group`, `test_scan_rejects_an_invalid_check_selection`, `test_group_findings_gives_every_group_a_status_in_table_order`, `test_owasp_groups_are_sorted_by_category_and_list_only_categories_found`, `test_grouped_views_of_a_real_scan_cover_every_finding_once`, `test_download_json_in_the_ui_strips_exactly_the_web_only_fields` |
+| AT-55 | Báo cáo HTML theo nhóm (FR-UI-07) | Báo cáo mẫu chỉ chọn `headers`,`cookies`,`tls`; báo cáo quét đủ nhóm; quét mock (golden) | Có 3 phần tóm tắt/chi tiết; mọi nhóm có mục riêng với trạng thái đúng (`2 issues`, `No issues`, `Not run`); dòng *Not selected (not tested)* liệt kê nhóm không chọn và không xuất hiện khi quét đủ; link trong bảng OWASP trỏ tới finding có trong trang; trong nhóm sắp theo severity; khớp golden file | `test_report_groups_findings_by_test_target_and_summarises_owasp`, `test_full_scan_report_has_no_not_selected_row`, `test_report_matches_the_golden_file` |
 
 ---
 
@@ -665,4 +700,4 @@ Hiện không có điểm nào. Exit code `3` (Q1 cũ) đã được xác nhận
 
 ---
 
-*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.6.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với các test tự động của v1.6.0 ngày 2026-09-30 (các test cần bắt tay TLS được tin cậy tự skip trên máy có phần mềm chặn TLS). Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*
+*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.7.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với các test tự động của v1.7.0 ngày 2026-09-30 (các test cần bắt tay TLS được tin cậy tự skip trên máy có phần mềm chặn TLS). Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*

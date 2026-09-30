@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.3",
+  "schema_version": "1.4",
   "scanner_version": "<VERSION>",
   "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1",
   "scan_id": "<SCAN_ID>",
@@ -8,6 +8,16 @@
   "redirect_chain": [],
   "started_at": "<STARTED_AT>",
   "finished_at": "<FINISHED_AT>",
+  "scan_groups": [
+    "headers",
+    "cookies",
+    "tls",
+    "https-redirect",
+    "cors",
+    "exposed-files",
+    "directory-listing",
+    "robots-sitemap"
+  ],
   "checks_run": [
     "security-headers",
     "cookies",
@@ -41,7 +51,8 @@
         "https://cwe.mitre.org/data/definitions/538.html"
       ],
       "instance_key": ".env",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "sensitive-paths"
     },
     {
       "id": "EXPOSURE-GIT-HEAD",
@@ -59,7 +70,8 @@
         "https://cwe.mitre.org/data/definitions/527.html"
       ],
       "instance_key": ".git/HEAD",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "sensitive-paths"
     },
     {
       "id": "TLS-NO-HTTPS-REDIRECT",
@@ -79,7 +91,8 @@
         "https://cwe.mitre.org/data/definitions/319.html"
       ],
       "instance_key": "http://127.0.0.1:<PORT>/",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "http-to-https-redirect"
     },
     {
       "id": "COOKIE-FLAGS-MISSING",
@@ -98,7 +111,8 @@
         "https://cwe.mitre.org/data/definitions/614.html"
       ],
       "instance_key": "session",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "cookies"
     },
     {
       "id": "EXPOSURE-DIR-LISTING",
@@ -116,7 +130,8 @@
         "https://cwe.mitre.org/data/definitions/548.html"
       ],
       "instance_key": "images/",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "directory-listing"
     },
     {
       "id": "HDR-CONTENT-SECURITY-POLICY-MISSING",
@@ -137,7 +152,8 @@
         "https://cwe.mitre.org/data/definitions/693.html"
       ],
       "instance_key": "content-security-policy",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "security-headers"
     },
     {
       "id": "HDR-X-FRAME-OPTIONS-MISSING",
@@ -158,7 +174,8 @@
         "https://cwe.mitre.org/data/definitions/1021.html"
       ],
       "instance_key": "x-frame-options",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "security-headers"
     },
     {
       "id": "EXPOSURE-ROBOTS-HINTS",
@@ -176,7 +193,8 @@
         "https://cwe.mitre.org/data/definitions/200.html"
       ],
       "instance_key": "robots.txt",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "robots-sitemap"
     },
     {
       "id": "HDR-REFERRER-POLICY-MISSING",
@@ -196,7 +214,8 @@
         "https://cwe.mitre.org/data/definitions/200.html"
       ],
       "instance_key": "referrer-policy",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "security-headers"
     },
     {
       "id": "HDR-INFO-SERVER",
@@ -216,7 +235,8 @@
         "https://cwe.mitre.org/data/definitions/497.html"
       ],
       "instance_key": "server",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "security-headers"
     },
     {
       "id": "HDR-INFO-X-POWERED-BY",
@@ -236,7 +256,8 @@
         "https://cwe.mitre.org/data/definitions/497.html"
       ],
       "instance_key": "x-powered-by",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "security-headers"
     },
     {
       "id": "HDR-PERMISSIONS-POLICY-MISSING",
@@ -256,7 +277,8 @@
         "https://cwe.mitre.org/data/definitions/693.html"
       ],
       "instance_key": "permissions-policy",
-      "fingerprint": "<FINGERPRINT>"
+      "fingerprint": "<FINGERPRINT>",
+      "check": "security-headers"
     }
   ],
   "errors": [],

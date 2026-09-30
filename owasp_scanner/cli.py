@@ -14,10 +14,13 @@ import argparse
 import datetime
 import ssl
 import sys
+from collections.abc import Iterable
+from dataclasses import replace
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
 import requests
 
+from . import catalog
 from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
 from .html_report import render_html
@@ -83,7 +86,7 @@ def _run_check(result: ScanResult, name: str, check, *args, **kwargs) -> None:
     result.checks_run.append(name)
     try:
         for f in check(*args, **kwargs):
-            result.add(enrich(f, result.target))
+            result.add(replace(enrich(f, result.target), check=name))
     except Exception as exc:  # one broken check must not abort the scan (FR-REPORT-05)
         result.errors.append(f"Check '{name}' failed: {exc!r}")
 
@@ -108,11 +111,31 @@ def _confirm_authorization(assume_yes: bool) -> bool:
     return answer.strip().lower() in ("y", "yes")
 
 
-def run_scan(base_url: str, timeout: int = 10, workers: int = 5, ca_bundle: str | None = None) -> ScanResult:
+def _check_groups(value: str) -> list[str]:
+    """argparse type for --checks: comma-separated group ids (SRS 4.11)."""
+    try:
+        return catalog.normalize_groups(part for part in value.split(",") if part.strip())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
+def run_scan(
+    base_url: str,
+    timeout: int = 10,
+    workers: int = 5,
+    ca_bundle: str | None = None,
+    groups: Iterable[str] | None = None,
+) -> ScanResult:
+    """Scan ``base_url``. ``groups`` selects check groups (catalog.GROUP_IDS); None means all.
+
+    The baseline GET always runs; a group that is not selected sends no request of its own.
+    """
     parsed = urlparse(base_url)
     hostname = parsed.hostname or base_url
+    selected = catalog.normalize_groups(groups) if groups is not None else list(catalog.GROUP_IDS)
 
-    result = ScanResult(target=base_url, started_at=_utc_timestamp())
+    result = ScanResult(target=base_url, started_at=_utc_timestamp(), scan_groups=selected)
+    want = set(selected).__contains__
     session = build_session(timeout=timeout, scope_host=hostname, ca_bundle=ca_bundle)
 
     def run_tls(url: str) -> None:
@@ -134,8 +157,9 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5, ca_bundle: str 
         result.errors.append(f"Could not fetch {base_url}: {err}")
         # An expired/untrusted certificate makes the verifying baseline GET fail;
         # the TLS check opens its own connections and is exactly what explains it.
-        if tls_error_url:
+        if tls_error_url and want("tls"):
             run_tls(tls_error_url)
+        if tls_error_url and want("https-redirect"):
             if parsed.scheme == "http" and tls_error_url.lower().startswith("https://"):
                 # We were redirected to HTTPS; the certificate problem is the TLS check's finding (FIX-09).
                 _run_check(result, "http-to-https-redirect", lambda: [])
@@ -149,49 +173,62 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5, ca_bundle: str 
     result.final_url = resp.url
     result.redirect_chain = [{"url": hop.url, "status": hop.status_code} for hop in resp.history]
     final_is_https = resp.url.lower().startswith("https://")
-    _run_check(
-        result,
-        "security-headers",
-        headers.check_security_headers,
-        base_url,
-        dict(resp.headers),
-        is_https=final_is_https,
-    )
-    if final_is_https and (urlparse(resp.url).hostname or "").lower() != hostname.lower():
-        _run_check(result, "hsts-start-host", headers.check_start_host_hsts, session, base_url, resp.url)
+    if want("headers"):
+        _run_check(
+            result,
+            "security-headers",
+            headers.check_security_headers,
+            base_url,
+            dict(resp.headers),
+            is_https=final_is_https,
+        )
+        if final_is_https and (urlparse(resp.url).hostname or "").lower() != hostname.lower():
+            _run_check(result, "hsts-start-host", headers.check_start_host_hsts, session, base_url, resp.url)
 
-    # requests folds repeated Set-Cookie headers into one string, so read them from
-    # the raw urllib3 headers — of the final response and of every redirect hop.
-    set_cookie_headers = [raw for r in (*resp.history, resp) for raw in r.raw.headers.getlist("Set-Cookie")]
-    _run_check(result, "cookies", cookies.check_cookies, base_url, set_cookie_headers)
+    if want("cookies"):
+        # requests folds repeated Set-Cookie headers into one string, so read them from
+        # the raw urllib3 headers — of the final response and of every redirect hop.
+        set_cookie_headers = [raw for r in (*resp.history, resp) for raw in r.raw.headers.getlist("Set-Cookie")]
+        _run_check(result, "cookies", cookies.check_cookies, base_url, set_cookie_headers)
 
     # FIX-09: TLS runs on the first HTTPS URL of the baseline chain (the target itself,
     # or where an http:// target redirected to), and the redirect check always runs.
     chain = [r.url for r in (*resp.history, resp)]
     https_url = next((url for url in chain if url.lower().startswith("https://")), None)
-    if https_url:
+    if https_url and want("tls"):
         run_tls(https_url)
-    if parsed.scheme == "https":
-        _run_check(result, "http-to-https-redirect", redirect_check.check_http_to_https_redirect, session, hostname)
-    elif not resp.is_redirect:  # a redirect stopped by the scope guard gives no verdict
-        _run_check(result, "http-to-https-redirect", redirect_check.evaluate_redirect_chain, base_url, chain)
+    if want("https-redirect"):
+        if parsed.scheme == "https":
+            _run_check(result, "http-to-https-redirect", redirect_check.check_http_to_https_redirect, session, hostname)
+        elif not resp.is_redirect:  # a redirect stopped by the scope guard gives no verdict
+            _run_check(result, "http-to-https-redirect", redirect_check.evaluate_redirect_chain, base_url, chain)
 
-    _run_check(result, "cors", cors_check.check_cors, session, base_url)
-    # One soft-404 profile (2 random probes) shared by both path-based checks (FR-DET-02).
-    profile = build_profile(session, base_url)
-    _run_check(
-        result,
-        "sensitive-paths",
-        exposure.check_sensitive_paths,
-        session,
-        base_url,
-        max_workers=workers,
-        soft404_profile=profile,
-    )
-    _run_check(
-        result, "directory-listing", exposure.check_directory_listing, session, base_url, soft404_profile=profile
-    )
-    _run_check(result, "robots-sitemap", exposure.check_robots_and_sitemap, session, base_url)
+    if want("cors"):
+        _run_check(result, "cors", cors_check.check_cors, session, base_url)
+    if want("exposed-files") or want("directory-listing"):
+        # One soft-404 profile (2 random probes) shared by both path-based checks (FR-DET-02).
+        profile = build_profile(session, base_url)
+        if want("exposed-files"):
+            _run_check(
+                result,
+                "sensitive-paths",
+                exposure.check_sensitive_paths,
+                session,
+                base_url,
+                max_workers=workers,
+                soft404_profile=profile,
+            )
+        if want("directory-listing"):
+            _run_check(
+                result,
+                "directory-listing",
+                exposure.check_directory_listing,
+                session,
+                base_url,
+                soft404_profile=profile,
+            )
+    if want("robots-sitemap"):
+        _run_check(result, "robots-sitemap", exposure.check_robots_and_sitemap, session, base_url)
 
     result.errors.extend(session.blocked_redirects.values())
     result.finished_at = _utc_timestamp()
@@ -203,7 +240,7 @@ def main(argv=None) -> int:
         prog="owasp-scanner",
         description="OWASP-aligned non-intrusive web security scanner (headers, TLS, cookies, CORS, exposure).",
     )
-    parser.add_argument("target", help="Target URL or hostname, e.g. https://example.com")
+    parser.add_argument("target", nargs="?", help="Target URL or hostname, e.g. https://example.com")
     parser.add_argument("--json", metavar="PATH", help="Write full JSON report to PATH")
     parser.add_argument("--sarif", metavar="PATH", help="Write a SARIF 2.1.0 report to PATH (e.g. for code scanning)")
     parser.add_argument("--html", metavar="PATH", help="Write a standalone HTML report to PATH")
@@ -225,6 +262,13 @@ def main(argv=None) -> int:
         "(default: REQUESTS_CA_BUNDLE / SSL_CERT_FILE, else the OS store)",
     )
     parser.add_argument(
+        "--checks",
+        metavar="GROUPS",
+        type=_check_groups,
+        help="Comma-separated check groups to run (default: all). See --list-checks.",
+    )
+    parser.add_argument("--list-checks", action="store_true", help="List the check groups and exit")
+    parser.add_argument(
         "--show-secrets",
         action="store_true",
         help="Do not redact cookie values and sensitive URL parameters (local debugging only).",
@@ -237,6 +281,13 @@ def main(argv=None) -> int:
         help="Skip the interactive authorization confirmation (use in CI with care).",
     )
     args = parser.parse_args(argv)
+    if args.list_checks:
+        for group in catalog.CHECK_GROUPS:
+            print(f"{group.id:<18} {group.title}")
+            print(f"{'':<18} {group.description}")
+        return 0
+    if args.target is None:
+        parser.error("the following arguments are required: target")
 
     if not _confirm_authorization(args.assume_yes):
         print("Authorization not confirmed. Aborting.")
@@ -245,7 +296,7 @@ def main(argv=None) -> int:
     target = _normalize_target(args.target)
     print(f"Scanning {target if args.show_secrets else redact(target)} ...\n")
 
-    result = run_scan(target, timeout=args.timeout, workers=args.workers, ca_bundle=args.ca_bundle)
+    result = run_scan(target, timeout=args.timeout, workers=args.workers, ca_bundle=args.ca_bundle, groups=args.checks)
     if args.show_secrets:
         print(
             "WARNING: --show-secrets is set: cookie values and sensitive URL parameters are NOT redacted. "

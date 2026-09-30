@@ -8,7 +8,7 @@ import pytest
 import requests
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import web
+from owasp_scanner import catalog, output, web
 from owasp_scanner.models import ScanResult
 
 
@@ -220,3 +220,40 @@ def test_bind_address_decides_host_check():
     finally:
         loopback.server_close()
     assert web._is_loopback("localhost") and web._is_loopback("::1") and not web._is_loopback("0.0.0.0")  # noqa: S104 - test data, nothing binds here
+
+
+# --- check groups (SRS 4.11) ---------------------------------------------------------
+
+
+def test_checks_endpoint_lists_the_groups(ui):
+    resp = requests.get(f"{ui}/api/checks", timeout=5)
+    assert resp.status_code == 200 and resp.headers["Content-Type"].startswith("application/json")
+    assert resp.json() == {
+        "groups": [{"id": g.id, "title": g.title, "description": g.description} for g in catalog.CHECK_GROUPS]
+    }
+
+
+def test_checks_endpoint_blocks_rebinding_host(ui):
+    port = ui.rsplit(":", 1)[1]
+    assert requests.get(f"{ui}/api/checks", headers={"Host": f"evil.example:{port}"}, timeout=5).status_code == 403
+
+
+def test_scan_runs_only_the_selected_groups_and_returns_grouped_views(ui, http_server):
+    data = scan(ui, {"target": http_server(MockHandler), "authorized": True, "checks": ["cookies", "headers"]}).json()
+    assert data["scan_groups"] == ["headers", "cookies"]
+    report = {k: v for k, v in data.items() if k not in web.WEB_ONLY_FIELDS}
+    assert data["groups"] == output.group_findings(report)
+    assert data["owasp_groups"] == output.owasp_groups(report)
+    assert {g["id"]: g["status"] for g in data["groups"]}["tls"] == "not-selected"
+
+
+def test_scan_without_checks_runs_every_group(ui, http_server):
+    data = scan(ui, {"target": http_server(MockHandler), "authorized": True}).json()
+    assert data["scan_groups"] == list(catalog.GROUP_IDS)
+
+
+@pytest.mark.parametrize("checks", [[], ["bogus"], "headers", [1], None])
+def test_scan_rejects_an_invalid_check_selection(ui, monkeypatch, checks):
+    monkeypatch.setattr(web, "run_scan", lambda *a, **kw: pytest.fail("scan ran with an invalid selection"))
+    resp = scan(ui, {"target": "https://t.example/", "authorized": True, "checks": checks})
+    assert resp.status_code == 400 and "check group" in resp.json()["error"].lower()

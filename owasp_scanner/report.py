@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from .catalog import CHECK_GROUPS
 from .models import SEVERITY_ORDER
 
 _SEVERITIES = SEVERITY_ORDER
@@ -29,6 +30,12 @@ def print_report(report: dict, use_color: bool = True) -> None:
     print(f" OWASP-aligned scan report for: {report['target']}")
     print(f" Started:  {report['started_at']}")
     print(f" Finished: {report['finished_at']}")
+    titles = {g.id: g.title for g in CHECK_GROUPS}
+    selected = report["scan_groups"]
+    print(f" Check groups: {', '.join(titles[g] for g in selected)}")
+    skipped = [g.title for g in CHECK_GROUPS if g.id not in selected]
+    if skipped:
+        print(f" Not selected (not tested): {', '.join(skipped)}")
     print(f" Checks run: {', '.join(report['checks_run'])}")
     print("=" * 72)
     print(" Summary: " + " | ".join(f"{sev}: {counts[sev]}" for sev in _SEVERITIES))
