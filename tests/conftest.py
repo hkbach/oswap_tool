@@ -104,14 +104,14 @@ def make_self_signed_cert(tmp_path, not_before, not_after, name="cert", common_n
 
 
 def _utcnow():
-    return datetime.datetime.now(datetime.timezone.utc)
+    return datetime.datetime.now(datetime.UTC)
 
 
 CERT_WINDOWS = {
     # expired since 2020, as in the SRS AT-10 verification
     "expired": lambda: (
-        datetime.datetime(2019, 1, 1, tzinfo=datetime.timezone.utc),
-        datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
+        datetime.datetime(2019, 1, 1, tzinfo=datetime.UTC),
+        datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC),
     ),
     "valid": lambda: (_utcnow() - datetime.timedelta(days=1), _utcnow() + datetime.timedelta(days=365)),
     "expiring": lambda: (_utcnow() - datetime.timedelta(days=1), _utcnow() + datetime.timedelta(days=10)),

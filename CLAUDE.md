@@ -36,7 +36,7 @@ python -m owasp_scanner.web
 
 **Kiến trúc**
 
-- Python ≥ 3.9, code mới bắt buộc có type hints.
+- Python ≥ 3.12 (quyết định ngày 2026-09-30; môi trường dev dùng 3.14), code mới bắt buộc có type hints.
 - CLI và Web UI phải cho ra cùng JSON. Mọi xử lý đầu ra (redact, sort, `schema_version`, `fingerprint`, gate theo `--fail-on`) nằm ở một chỗ và được cả hai dùng chung.
 - Mỗi check là hàm thuần trong `checks/`: nhận session/response, trả `list[Finding]`, không giữ state toàn cục.
 - Danh sách header, path, chữ ký nội dung là dữ liệu khai báo (dict/list/YAML), không hard-code trong logic.

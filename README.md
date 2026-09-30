@@ -94,7 +94,7 @@ the checks above found a problem.
 
 ## Installation
 
-Requires Python 3.9 or later. The package is not published on PyPI.
+Requires Python 3.12 or later. The package is not published on PyPI.
 
 ```bash
 # From a clone of this repository
@@ -335,7 +335,7 @@ git diff tests/golden/
 | Job | Status check name(s) | What it does |
 |---|---|---|
 | `lint` | `lint` | `ruff check .` and `ruff format --check .` |
-| `test` | `test (ubuntu-24.04, 3.9)`, `test (ubuntu-24.04, 3.14)`, `test (windows-latest, 3.14)` | Offline `pytest` on Ubuntu 24.04 (Python 3.9 and 3.14) and Windows (3.14). `setup-python` has no Python 3.9 build for Windows. |
+| `test` | `test (ubuntu-24.04, 3.12)`, `test (ubuntu-24.04, 3.14)`, `test (windows-latest, 3.14)` | Offline `pytest` on Ubuntu 24.04 (Python 3.12, the oldest supported, and 3.14) and Windows (3.14). |
 | `audit` | `audit` | `pip-audit` of the runtime dependencies declared in `pyproject.toml` |
 | `secrets` | `secrets` | gitleaks over the whole git history, binary checksum verified. The allowlist in `.gitleaks.toml` covers only two fake values used by the redaction tests. |
 
@@ -356,7 +356,7 @@ Required checks:
 lint
 audit
 secrets
-test (ubuntu-24.04, 3.9)
+test (ubuntu-24.04, 3.12)
 test (ubuntu-24.04, 3.14)
 test (windows-latest, 3.14)
 ```
@@ -406,7 +406,7 @@ gh api --method PUT repos/hkbach/oswap_tool/branches/main/protection --input - <
     "strict": true,
     "contexts": [
       "lint", "audit", "secrets",
-      "test (ubuntu-24.04, 3.9)", "test (ubuntu-24.04, 3.14)", "test (windows-latest, 3.14)"
+      "test (ubuntu-24.04, 3.12)", "test (ubuntu-24.04, 3.14)", "test (windows-latest, 3.14)"
     ]
   },
   "enforce_admins": true,

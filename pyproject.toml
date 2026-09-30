@@ -7,7 +7,7 @@ name = "owasp-scanner"
 dynamic = ["version"]
 description = "OWASP-aligned non-intrusive web security configuration scanner (CLI + local web UI)"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
     "requests>=2.31.0",
     "urllib3>=2.0.0",
@@ -40,7 +40,7 @@ pythonpath = ["."]
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S"]

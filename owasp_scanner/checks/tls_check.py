@@ -40,13 +40,13 @@ def _not_valid_after(cert_obj) -> datetime.datetime:
     # versions only have the naive `not_valid_after`.
     if hasattr(cert_obj, "not_valid_after_utc"):
         return cert_obj.not_valid_after_utc
-    return cert_obj.not_valid_after.replace(tzinfo=datetime.timezone.utc)
+    return cert_obj.not_valid_after.replace(tzinfo=datetime.UTC)
 
 
 def _not_valid_before(cert_obj) -> datetime.datetime:
     if hasattr(cert_obj, "not_valid_before_utc"):
         return cert_obj.not_valid_before_utc
-    return cert_obj.not_valid_before.replace(tzinfo=datetime.timezone.utc)
+    return cert_obj.not_valid_before.replace(tzinfo=datetime.UTC)
 
 
 def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int):
@@ -62,7 +62,7 @@ def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int):
                 protocol = ssock.version()
                 cipher = ssock.cipher()
         return der_cert, protocol, cipher, None
-    except (socket.timeout, socket.gaierror, ConnectionRefusedError, OSError, ssl.SSLError) as exc:
+    except (TimeoutError, socket.gaierror, ConnectionRefusedError, OSError, ssl.SSLError) as exc:
         return None, None, None, exc
 
 
@@ -76,7 +76,7 @@ def _verify_trust(hostname: str, port: int, timeout: int, trust: ssl.SSLContext 
         return None
     except ssl.SSLCertVerificationError as exc:
         return exc
-    except (socket.timeout, socket.gaierror, ConnectionRefusedError, OSError, ssl.SSLError):
+    except (TimeoutError, socket.gaierror, ConnectionRefusedError, OSError, ssl.SSLError):
         # Connection-level failure here is not a trust finding; step 1 already
         # reports connectivity problems.
         return None
@@ -145,7 +145,7 @@ def check_tls(
             issuer = cert_obj.issuer.rfc4514_string()
             not_after = _not_valid_after(cert_obj)
             not_before = _not_valid_before(cert_obj)
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = datetime.datetime.now(datetime.UTC)
 
             if now < not_before:
                 cert_time_problem = True

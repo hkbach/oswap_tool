@@ -33,8 +33,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Python 3.9 builds for setup-python exist only for Ubuntu 22.04/24.04.
-          - { os: ubuntu-24.04, python: "3.9" }
+          # Oldest supported (requires-python) and latest Python.
+          - { os: ubuntu-24.04, python: "3.12" }
           - { os: ubuntu-24.04, python: "3.14" }
           - { os: windows-latest, python: "3.14" }
     runs-on: ${{ matrix.os }}

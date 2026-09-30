@@ -123,7 +123,7 @@ Tool chạy độc lập, không có server hay service riêng (quyết định 
 
 - Người vận hành **có quyền hợp pháp** để quét target (sở hữu hệ thống hoặc có văn bản uỷ quyền). Đây là ràng buộc bắt buộc — xem FR-CONSENT-01 và FR-UI-02.
 - Target phản hồi HTTP(S) tiêu chuẩn; tool không hỗ trợ site yêu cầu đăng nhập/OAuth để vào trang chủ.
-- Môi trường chạy có Python ≥ 3.9 và cài được các package `requests`, `urllib3`, `cryptography`. `cryptography` dùng để đọc ngày hiệu lực của chứng chỉ độc lập với bước xác thực trust chain (mục 4.5).
+- Môi trường chạy có Python ≥ 3.12 và cài được các package `requests`, `urllib3`, `cryptography`. `cryptography` dùng để đọc ngày hiệu lực của chứng chỉ độc lập với bước xác thực trust chain (mục 4.5).
 - Web UI cục bộ là lối vào thứ hai của cùng lõi quét. Tài liệu này không đặc tả chi tiết giao diện màn hình.
 
 ### 2.4 Ngoài phạm vi (Out of scope)
@@ -377,7 +377,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | NFR-USA-01 | Khả dụng | Output CLI có phân cách rõ ràng, bảng tổng hợp theo severity ở đầu, rồi mới tới chi tiết. |
 | NFR-USA-02 | Khả dụng | Mọi finding PHẢI có khuyến nghị khắc phục khi khả thi. |
 | NFR-USA-03 | Khả dụng | Ngôn ngữ mặc định của mọi text sản phẩm (UI, báo cáo HTML, output CLI, thông báo lỗi API, nội dung finding) là **tiếng Anh**. Tài liệu dự án (SRS, backlog, README) có thể viết tiếng Việt. |
-| NFR-PORT-01 | Khả chuyển | Tool PHẢI chạy trên Python ≥ 3.9, Linux/macOS/Windows. *Đã chạy toàn bộ test trên Python 3.9, 3.12 và 3.14 (Windows) ngày 2026-09-30. CI của repo (FR-QA-07) chạy trên Ubuntu 24.04 (3.9, 3.14) và Windows (3.14); macOS chưa có trong CI.* |
+| NFR-PORT-01 | Khả chuyển | Tool PHẢI chạy trên Python ≥ 3.12, Linux/macOS/Windows. *Nâng từ ≥ 3.9 lên ≥ 3.12 theo quyết định của chủ sản phẩm ngày 2026-09-30 (3.9 đã hết hỗ trợ, 3.10 hết hỗ trợ 2026-10-31; 3.12 là bản có sẵn trên Ubuntu 24.04). Môi trường dev dùng 3.14. CI của repo (FR-QA-07) chạy trên Ubuntu 24.04 (3.12, 3.14) và Windows (3.14); macOS chưa có trong CI.* |
 | NFR-MAINT-01 | Bảo trì | Mỗi nhóm check nằm trong module riêng, unit test được không cần mạng thật (dùng mock server cục bộ hoặc dữ liệu có sẵn). |
 | NFR-MAINT-02 | Bảo trì | Danh sách header bắt buộc (4.3) và path nhạy cảm (4.8.1) là cấu trúc dữ liệu khai báo ở đầu file. |
 | NFR-COMP-01 | Tuân thủ | README, UI và báo cáo PHẢI nêu rõ giới hạn phạm vi (không phải DAST toàn diện, không thay thế pentest). Không dùng ngôn ngữ đảm bảo tuyệt đối ("website an toàn", "phát hiện 100%"). |
@@ -634,7 +634,6 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 - **TLS mở 2 kết nối** (Bước A và B); chấp nhận được vì chỉ là bắt tay, không lặp.
 - **`TLS-CERT-NOT-TRUSTED` gộp nhiều nguyên nhân** (tự ký, thiếu intermediate, sai hostname, CA lạ) vào một mã (FR-DET-05).
 - **Web UI quét đồng bộ:** trình duyệt chờ tới khi quét xong, không có tiến độ hay nút huỷ (FR-WEB-03). Báo cáo chỉ nằm trong bộ nhớ.
-- **Python 3.9 đã hết hỗ trợ (EOL tháng 10/2025)** nhưng vẫn là mức tối thiểu ở NFR-PORT-01. Bản dựng 3.9 cho CI chỉ còn trên Ubuntu 22.04/24.04, không có cho Windows, và có thể bị gỡ trong tương lai. Việc nâng mức tối thiểu cần chủ sản phẩm quyết định.
 - **Trên Windows có Application Control**, lần đầu nạp DLL native của `cryptography` có thể bị chặn; cần IT allowlist nếu gặp trên máy CI.
 
 ---
