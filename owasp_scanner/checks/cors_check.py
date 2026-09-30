@@ -5,6 +5,7 @@ Sends an ordinary GET with a benign, clearly-marked test Origin header
 Maps to OWASP Top 10 A05:2021 (also touches A01 - Broken Access Control
 when combined with credentialed requests).
 """
+
 from __future__ import annotations
 
 from ..http_utils import safe_get
@@ -47,8 +48,7 @@ def check_cors(session, url: str) -> list[Finding]:
                 description=(
                     "The server echoed back a made-up test Origin in "
                     "Access-Control-Allow-Origin"
-                    + (" with credentials allowed, letting any site read authenticated responses."
-                       if acac else ".")
+                    + (" with credentials allowed, letting any site read authenticated responses." if acac else ".")
                 ),
                 evidence=f"Origin sent: {_TEST_ORIGIN} -> Access-Control-Allow-Origin: {acao}",
                 recommendation="Validate Origin against an explicit allow-list server-side; never reflect it verbatim.",

@@ -1,4 +1,5 @@
 """Acceptance scenarios AT-01 … AT-18 from SRS 1.1 section 9, run offline."""
+
 from __future__ import annotations
 
 import json
@@ -124,8 +125,11 @@ def test_at05_exposed_env_and_git_head(http_server):
         f = by_id(result.findings, finding_id)
         assert f.severity.value == "CRITICAL"
         assert f.owasp_category.startswith("A01:2021")
-    exposure_ids = [i for i in ids(result.findings) if i.startswith("EXPOSURE-") and i not in (
-        "EXPOSURE-DIR-LISTING", "EXPOSURE-ROBOTS-HINTS")]
+    exposure_ids = [
+        i
+        for i in ids(result.findings)
+        if i.startswith("EXPOSURE-") and i not in ("EXPOSURE-DIR-LISTING", "EXPOSURE-ROBOTS-HINTS")
+    ]
     assert sorted(exposure_ids) == ["EXPOSURE-ENV", "EXPOSURE-GIT-HEAD"]
 
 
@@ -199,7 +203,15 @@ def test_at12_json_report(http_server, tmp_path):
     assert set(data) == {"target", "started_at", "finished_at", "checks_run", "summary", "findings", "errors"}
     assert set(data["summary"]) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
     assert set(data["findings"][0]) == {
-        "id", "title", "severity", "owasp_category", "description", "evidence", "recommendation", "url"}
+        "id",
+        "title",
+        "severity",
+        "owasp_category",
+        "description",
+        "evidence",
+        "recommendation",
+        "url",
+    }
     ranks = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
     order = [ranks.index(f["severity"]) for f in data["findings"]]
     assert order == sorted(order)  # FR-REPORT-02

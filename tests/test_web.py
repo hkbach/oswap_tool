@@ -1,4 +1,5 @@
 """Tests for the local web UI server (owasp_scanner.web)."""
+
 from __future__ import annotations
 
 import threading
@@ -80,11 +81,14 @@ def test_report_ids_are_unguessable_and_unknown_ids_404(ui, http_server):
 
 def test_only_recent_reports_are_kept(ui, monkeypatch):
     monkeypatch.setattr(
-        web, "run_scan",
+        web,
+        "run_scan",
         lambda target, timeout, workers: ScanResult(target=target, started_at="2026-01-01T00:00:00Z"),
     )
-    ids = [scan(ui, {"target": "http://127.0.0.1:1", "authorized": True}).json()["report_id"]
-           for _ in range(web._MAX_STORED_REPORTS + 1)]
+    ids = [
+        scan(ui, {"target": "http://127.0.0.1:1", "authorized": True}).json()["report_id"]
+        for _ in range(web._MAX_STORED_REPORTS + 1)
+    ]
     assert requests.get(f"{ui}/api/report/{ids[0]}.html", timeout=5).status_code == 404
     assert requests.get(f"{ui}/api/report/{ids[-1]}.html", timeout=5).status_code == 200
 
@@ -136,15 +140,20 @@ def test_scan_rejects_invalid_targets(ui, monkeypatch, target):
 
 
 def test_scan_rejects_non_json_body(ui):
-    resp = requests.post(f"{ui}/api/scan", data="target=x&authorized=true", timeout=5,
-                         headers={"Content-Type": "application/x-www-form-urlencoded"})
+    resp = requests.post(
+        f"{ui}/api/scan",
+        data="target=x&authorized=true",
+        timeout=5,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
     assert resp.status_code == 415
 
 
 def test_scan_rejects_cross_origin(ui, monkeypatch):
     monkeypatch.setattr(web, "run_scan", lambda *a, **kw: pytest.fail("cross-origin scan ran"))
-    resp = scan(ui, {"target": "https://example.invalid", "authorized": True},
-                headers={"Origin": "https://evil.example"})
+    resp = scan(
+        ui, {"target": "https://example.invalid", "authorized": True}, headers={"Origin": "https://evil.example"}
+    )
     assert resp.status_code == 403
 
 

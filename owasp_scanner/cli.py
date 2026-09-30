@@ -7,6 +7,7 @@ Usage:
 IMPORTANT: only run this against systems you own or have explicit,
 documented authorization to test. See README.md.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -102,8 +103,12 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
         return result
 
     _run_check(
-        result, "security-headers", headers.check_security_headers,
-        base_url, dict(resp.headers), is_https=(parsed.scheme == "https"),
+        result,
+        "security-headers",
+        headers.check_security_headers,
+        base_url,
+        dict(resp.headers),
+        is_https=(parsed.scheme == "https"),
     )
 
     # requests folds repeated Set-Cookie headers into one string, so read them from

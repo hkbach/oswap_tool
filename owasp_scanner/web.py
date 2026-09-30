@@ -13,6 +13,7 @@ API enforces that server-side. The server binds to loopback by default so other
 machines cannot use it as an open scanner, and it rejects requests whose Host or
 Origin is not this server (DNS-rebinding / cross-site request protection).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -172,7 +173,9 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         with self.server.reports_lock:
             report = self.server.reports.get(report_id)
         if report is None:
-            return self._error(404, f"Report not found. Only the last {_MAX_STORED_REPORTS} scans are kept; run the scan again.")
+            return self._error(
+                404, f"Report not found. Only the last {_MAX_STORED_REPORTS} scans are kept; run the scan again."
+            )
         self._send(
             200,
             render_html(report).encode("utf-8"),

@@ -3,6 +3,7 @@
 Everything binds to 127.0.0.1 on an ephemeral port; no test touches the
 internet.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -101,8 +102,10 @@ def _utcnow():
 
 CERT_WINDOWS = {
     # expired since 2020, as in the SRS AT-10 verification
-    "expired": lambda: (datetime.datetime(2019, 1, 1, tzinfo=datetime.timezone.utc),
-                        datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)),
+    "expired": lambda: (
+        datetime.datetime(2019, 1, 1, tzinfo=datetime.timezone.utc),
+        datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
+    ),
     "valid": lambda: (_utcnow() - datetime.timedelta(days=1), _utcnow() + datetime.timedelta(days=365)),
     "expiring": lambda: (_utcnow() - datetime.timedelta(days=1), _utcnow() + datetime.timedelta(days=10)),
     "not_yet_valid": lambda: (_utcnow() + datetime.timedelta(days=10), _utcnow() + datetime.timedelta(days=400)),

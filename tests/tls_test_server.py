@@ -2,6 +2,7 @@
 offline, using a locally-generated cert (expired or self-signed-untrusted).
 Not part of the shipped tool — a throwaway test harness.
 """
+
 import socket
 import ssl
 import sys

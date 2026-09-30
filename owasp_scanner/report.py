@@ -1,4 +1,5 @@
 """CLI rendering and JSON export for scan results."""
+
 from __future__ import annotations
 
 import json
@@ -29,10 +30,7 @@ def print_report(result: ScanResult, use_color: bool = True) -> None:
     print(f" Finished: {result.finished_at}")
     print(f" Checks run: {', '.join(result.checks_run)}")
     print("=" * 72)
-    print(
-        " Summary: "
-        + " | ".join(f"{sev}: {counts[sev]}" for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"))
-    )
+    print(" Summary: " + " | ".join(f"{sev}: {counts[sev]}" for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")))
     print("-" * 72)
 
     if not result.findings:

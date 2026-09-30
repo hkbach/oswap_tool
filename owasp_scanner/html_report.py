@@ -5,6 +5,7 @@ and returns one self-contained HTML document: inline CSS, no scripts, no externa
 resources, so it can be opened offline, archived or attached to a ticket.
 Every value that came from the scanned site is HTML-escaped.
 """
+
 from __future__ import annotations
 
 from html import escape

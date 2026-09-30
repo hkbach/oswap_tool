@@ -6,6 +6,7 @@ are sent — nothing that probes for or exploits a vulnerability.
 Maps to OWASP Top 10 A01:2021 (Broken Access Control) and
 A05:2021 (Security Misconfiguration).
 """
+
 from __future__ import annotations
 
 import re
@@ -35,7 +36,11 @@ _SENSITIVE_PATHS = {
     "phpinfo.php": ("EXPOSURE-PHPINFO", Severity.MEDIUM, "Exposed phpinfo() output"),
     "server-status": ("EXPOSURE-SERVER-STATUS", Severity.MEDIUM, "Exposed Apache mod_status page"),
     "id_rsa": ("EXPOSURE-ID-RSA", Severity.CRITICAL, "Exposed private SSH key"),
-    ".well-known/security.txt": ("EXPOSURE-SECURITY-TXT", Severity.INFO, "security.txt present (informational, not a finding)"),
+    ".well-known/security.txt": (
+        "EXPOSURE-SECURITY-TXT",
+        Severity.INFO,
+        "security.txt present (informational, not a finding)",
+    ),
 }
 
 _SENSITIVE_KEYWORDS = ("admin", "backup", "config", "internal", "private", "secret", "staging", "test")

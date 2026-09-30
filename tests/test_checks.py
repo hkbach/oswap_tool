@@ -1,4 +1,5 @@
 """Unit tests for individual check modules (FR-HDR, FR-COOKIE, FR-TLS, FR-REDIR, FR-CORS, FR-EXP)."""
+
 from __future__ import annotations
 
 import pytest
@@ -129,7 +130,8 @@ def test_tls_weak_protocol_and_cipher(monkeypatch, tmp_path):
 
     der = x509.load_pem_x509_certificate(certfile.read_bytes()).public_bytes(Encoding.DER)
     monkeypatch.setattr(
-        tls_check, "_fetch_raw_cert_and_connection_info",
+        tls_check,
+        "_fetch_raw_cert_and_connection_info",
         lambda h, p, t: (der, "TLSv1", ("RC4-MD5", "TLSv1", 128), None),
     )
     monkeypatch.setattr(tls_check, "_verify_trust", lambda h, p, t: None)
@@ -154,7 +156,7 @@ class _RedirectToHttps(QuietHandler):
 
 
 def test_redirect_missing_https_redirect(http_server):
-    host = http_server(_NoRedirect)[len("http://"):-1]  # "127.0.0.1:<port>"
+    host = http_server(_NoRedirect)[len("http://") : -1]  # "127.0.0.1:<port>"
     found = redirect_check.check_http_to_https_redirect(build_session(timeout=2), host)
     assert ids(found) == ["TLS-NO-HTTPS-REDIRECT"]
 
@@ -162,7 +164,7 @@ def test_redirect_missing_https_redirect(http_server):
 def test_redirect_to_https_is_not_a_finding(http_server):
     # The HTTPS hop fails to connect; the final URL we saw was never HTTPS-verified,
     # but FR-REDIR-02 treats "no response" as acceptable, so nothing is reported.
-    host = http_server(_RedirectToHttps)[len("http://"):-1]
+    host = http_server(_RedirectToHttps)[len("http://") : -1]
     assert redirect_check.check_http_to_https_redirect(build_session(timeout=2), host) == []
 
 

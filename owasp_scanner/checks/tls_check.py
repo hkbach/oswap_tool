@@ -18,6 +18,7 @@ chain is untrusted or expired, this module opens the connection twice:
 Maps to OWASP Top 10 A02:2021 (Cryptographic Failures) and ASVS V9
 (Communications).
 """
+
 from __future__ import annotations
 
 import datetime

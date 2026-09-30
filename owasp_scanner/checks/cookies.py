@@ -2,6 +2,7 @@
 
 Maps to OWASP ASVS V3 (Session Management) and Top 10 A05/A07.
 """
+
 from __future__ import annotations
 
 from http.cookies import SimpleCookie

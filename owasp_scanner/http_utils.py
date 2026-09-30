@@ -7,6 +7,7 @@ Design goals:
 - Bounded timeouts and no retry storms, so the scanner cannot become
   an accidental denial-of-service tool.
 """
+
 from __future__ import annotations
 
 import requests

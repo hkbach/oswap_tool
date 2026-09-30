@@ -2,6 +2,7 @@
 used only to exercise the scanner's HTTP-based checks end-to-end offline
 (TLS/HTTPS-only checks are naturally skipped when scanning plain http://).
 """
+
 from __future__ import annotations
 
 import sys
@@ -43,7 +44,11 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/.env":
             self._send(200, b"DB_PASSWORD=hunter2\n", {"Content-Type": "text/plain"})
         elif path == "/images/":
-            self._send(200, b"<html><title>Index of /images</title><body>Index of /images/</body></html>", {"Content-Type": "text/html"})
+            self._send(
+                200,
+                b"<html><title>Index of /images</title><body>Index of /images/</body></html>",
+                {"Content-Type": "text/html"},
+            )
         elif path.startswith("/owasp-scanner-nonexistent-probe"):
             self._send(404, b"Not Found")
         else:

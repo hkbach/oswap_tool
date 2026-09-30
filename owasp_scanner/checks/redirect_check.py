@@ -2,6 +2,7 @@
 
 Maps to OWASP Top 10 A02:2021 (Cryptographic Failures).
 """
+
 from __future__ import annotations
 
 from ..http_utils import safe_get
