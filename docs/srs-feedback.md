@@ -9,6 +9,22 @@
 
 Bộ test chạy trên Python 3.12 và 3.14 (Windows), toàn bộ trên `127.0.0.1`, không có request nào ra internet. Kết quả trên mã v1.1.0 **chưa sửa**: 65 pass, 10 fail. Sau khi sửa: 76/76 pass.
 
+## Trạng thái xử lý (cập nhật 2026-09-30)
+
+File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. Requirement hiện hành nằm ở `docs/SRS-owasp-scanner.md` v1.2 và `docs/PRODUCT-BACKLOG.md`.
+
+| Mục | Trạng thái | Nằm ở đâu |
+|---|---|---|
+| A1–A5 | Đã sửa trong code, đã đưa vào SRS v1.2 | FR-CLI-01, FR-CLI-03, FR-COOKIE-01, FR-EXP-06, FR-REPORT-05; AT-19…AT-23 |
+| A6 | Đã sửa trong code; không đổi hành vi nên không cần FR | — |
+| B1 | Chuyển thành FR, chưa làm | Backlog FR-CI-10; SRS mục 10 |
+| B2 | Chờ xác nhận | Backlog FR-CI-01 `[CONFIRM]`; SRS mục 13 |
+| B3 | Đã chốt (FIX-09 + D4), chưa làm | Backlog FR-FIX-09; SRS mục 12 |
+| B4 | Đã chốt (FIX-10 + D5), chưa làm | Backlog FR-FIX-10; SRS mục 12 |
+| B5 | Đã giải quyết bằng D1 | SRS mục 3.3, 4.10 |
+| C (User-Agent `/1.0`) | Chuyển thành FR, chưa làm | Backlog FR-FIX-11 |
+| C (các mục còn lại) | Ghi nhận; `--json` không tự tạo thư mục cha đã ghi ở SRS mục 7.2 | — |
+
 ## A. Đã sửa trong mã để khớp SRS 1.1 — cần cập nhật câu chữ SRS
 
 | # | Vấn đề (có test chứng minh) | Sửa trong mã | Đề xuất sửa SRS |
