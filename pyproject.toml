@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "requests>=2.31.0",
     "urllib3>=2.0.0",
-    "cryptography>=41.0.0",
+    "cryptography>=42.0.0",  # not_valid_before_utc / not_valid_after_utc
 ]
 
 [project.optional-dependencies]
