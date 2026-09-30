@@ -24,10 +24,12 @@ from __future__ import annotations
 import datetime
 import socket
 import ssl
+from dataclasses import replace
 
 from cryptography import x509
 
 from ..models import Finding, Severity
+from ..rule_loader import is_interceptor_issuer
 
 _WEAK_PROTOCOLS = {"SSLv2", "SSLv3", "TLSv1", "TLSv1.1"}
 _CERT_EXPIRY_WARN_DAYS = 30
@@ -80,7 +82,8 @@ def _verify_trust(hostname: str, port: int, timeout: int):
         return None
 
 
-def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding]:
+def check_tls(hostname: str, port: int = 443, timeout: int = 10, warnings: list[str] | None = None) -> list[Finding]:
+    """TLS checks; ``warnings`` receives a note when the handshake looks intercepted (FR-DET-16)."""
     findings: list[Finding] = []
     url = f"https://{hostname}:{port}"
 
@@ -127,11 +130,13 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
             )
         )
 
+    issuer = ""
     cert_time_problem = False  # tracks whether an expiry/not-yet-valid finding already explains any trust failure
 
     if der_cert:
         try:
             cert_obj = x509.load_der_x509_certificate(der_cert)
+            issuer = cert_obj.issuer.rfc4514_string()
             not_after = _not_valid_after(cert_obj)
             not_before = _not_valid_before(cert_obj)
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -215,5 +220,16 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
                     instance_key=f"{hostname}:{port}",
                 )
             )
+
+    if issuer and is_interceptor_issuer(issuer):
+        # FR-DET-16: we measured the interceptor (antivirus web shield, TLS-inspection proxy),
+        # not the server; its protocol, cipher and certificate say little about the target.
+        if warnings is not None:
+            warnings.append(
+                f"TLS to {hostname}:{port} appears to be intercepted by local software or a proxy "
+                f"(certificate issued by {issuer!r}); TLS results describe the interceptor, not the server, "
+                "and are marked low confidence. Scan from a machine without TLS inspection."
+            )
+        findings = [replace(f, confidence="low") for f in findings]
 
     return findings

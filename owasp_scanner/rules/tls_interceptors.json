@@ -1,0 +1,23 @@
+{
+  "version": "2026.09.30.1",
+  "description": "Case-insensitive substrings of certificate issuer names used by software or proxies that re-sign TLS (antivirus web shields, TLS-inspection gateways, debugging proxies). A match means the TLS check measured the interceptor, not the server (FR-DET-16). Keep entries specific: never add names of public CAs.",
+  "issuer_keywords": [
+    "avast web/mail shield",
+    "avg web/mail shield",
+    "kaspersky",
+    "eset ssl filter",
+    "bitdefender",
+    "zscaler",
+    "netskope",
+    "fortigate",
+    "fortinet",
+    "palo alto networks",
+    "sophos",
+    "blue coat",
+    "cisco umbrella",
+    "mitmproxy",
+    "do_not_trust_fiddlerroot",
+    "charles proxy",
+    "portswigger"
+  ]
+}

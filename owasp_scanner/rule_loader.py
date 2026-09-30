@@ -129,6 +129,34 @@ def load_sensitive_paths(source: Path | None = None) -> SensitivePathRules:
     return _load_cached(source or _SENSITIVE_PATHS_FILE)
 
 
+_TLS_INTERCEPTORS_FILE = RULES_DIR / "tls_interceptors.json"
+
+
+@dataclass(frozen=True)
+class TlsInterceptorRules:
+    version: str
+    issuer_keywords: tuple[str, ...]  # lower-case substrings of issuer names
+
+
+@functools.cache
+def load_tls_interceptors() -> TlsInterceptorRules:
+    source = _TLS_INTERCEPTORS_FILE
+    data = json.loads(source.read_text(encoding="utf-8"))
+    version = data.get("version")
+    if not isinstance(version, str) or not version.strip():
+        _fail(source, "missing or empty 'version'")
+    keywords = data.get("issuer_keywords")
+    if not isinstance(keywords, list) or not keywords or not all(isinstance(k, str) and k.strip() for k in keywords):
+        _fail(source, "'issuer_keywords' must be a non-empty list of strings")
+    return TlsInterceptorRules(version.strip(), tuple(k.strip().lower() for k in keywords))
+
+
+def is_interceptor_issuer(issuer: str) -> bool:
+    """True if a certificate issuer name belongs to known TLS-intercepting software (FR-DET-16)."""
+    issuer = issuer.lower()
+    return any(keyword in issuer for keyword in load_tls_interceptors().issuer_keywords)
+
+
 def rules_version() -> str:
-    """Version of the bundled rule set, reported as ``rules_version``."""
-    return load_sensitive_paths().version
+    """Version of the bundled rule set, reported as ``rules_version`` (one part per rules file)."""
+    return f"sensitive_paths={load_sensitive_paths().version};tls_interceptors={load_tls_interceptors().version}"

@@ -105,7 +105,7 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
 
     def run_tls(url: str) -> None:
         tls_host, tls_port = _host_port(url)
-        _run_check(result, "tls", tls_check.check_tls, tls_host, port=tls_port, timeout=timeout)
+        _run_check(result, "tls", tls_check.check_tls, tls_host, port=tls_port, timeout=timeout, warnings=result.errors)
 
     # 1. Baseline fetch of the target page
     resp, err, tls_error_url = _fetch_baseline(session, base_url)

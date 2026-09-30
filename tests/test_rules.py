@@ -36,7 +36,7 @@ EXPECTED_PATHS = {
 def test_sensitive_paths_come_from_the_rules_file():
     rules = rule_loader.load_sensitive_paths()
     assert {r.path: (r.id, r.severity.value) for r in rules.paths} == EXPECTED_PATHS
-    assert rules.version and rules.version == rule_loader.rules_version()
+    assert rules.version and f"sensitive_paths={rules.version}" in rule_loader.rules_version()
 
 
 def test_report_carries_the_rules_version(http_server):

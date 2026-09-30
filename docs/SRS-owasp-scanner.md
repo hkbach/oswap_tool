@@ -151,7 +151,7 @@ owasp_scanner/
 ├── output.py          # build_report() + gate_failed(): một bộ xử lý đầu ra cho CLI và Web UI
 ├── redact.py          # redact(): che giá trị cookie và tham số URL nhạy cảm (D2)
 ├── rule_loader.py     # Nạp + kiểm tra rules/*.json; rules_version
-├── rules/             # Bảng khai báo dạng JSON: sensitive_paths.json (bảng 4.8.1)
+├── rules/             # Bảng khai báo dạng JSON: sensitive_paths.json (bảng 4.8.1), tls_interceptors.json (FR-TLS-11)
 ├── soft404.py         # Hồ sơ soft-404: 2 probe ngẫu nhiên, so vân tay nội dung/URL cuối
 ├── http_utils.py      # HTTP session dùng chung: timeout, User-Agent, retry có kiểm soát, phạm vi redirect (ScopedSession)
 ├── models.py          # Kiểu dữ liệu: Severity, Finding, ScanResult
@@ -268,6 +268,7 @@ Kiểm tra gồm **2 bước kết nối độc lập**, vì một context xác 
 | FR-TLS-08 | Tool PHẢI thực hiện Bước B **chỉ khi** FR-TLS-05 và FR-TLS-06 không tạo finding. Nếu Bước B ném `SSLCertVerificationError`, PHẢI tạo finding `TLS-CERT-NOT-TRUSTED` với thông điệp lỗi gốc (gộp các nguyên nhân: tự ký, thiếu intermediate, sai hostname, CA không được tin cậy). Lỗi kết nối ở Bước B không tạo finding. | CRITICAL | A02:2021 | M |
 | FR-TLS-09 | Nếu FR-TLS-05 hoặc FR-TLS-06 đã tạo finding, tool PHẢI bỏ qua Bước B, không tạo thêm `TLS-CERT-NOT-TRUSTED`. | — | — | M |
 | FR-TLS-10 | Nếu không giải mã được chứng chỉ, PHẢI tạo finding `TLS-CERT-PARSE-FAILED` và vẫn chạy Bước B. | INFO | A02:2021 | C |
+| FR-TLS-11 | **Phát hiện TLS bị chặn giữa đường (FR-DET-16).** Nếu issuer của chứng chỉ đọc được ở Bước A chứa một từ khoá trong `rules/tls_interceptors.json` (phần mềm diệt virus có web shield, gateway TLS inspection, proxy debug; không bao giờ là tên CA công khai), tool PHẢI ghi **một cảnh báo** vào `errors` (nêu host:port và issuer) và đặt `confidence` của mọi finding TLS của lần kiểm tra đó là `low`. Đây là cảnh báo, không phải finding. | — | — | S |
 
 ### 4.6 Nhóm kiểm tra Redirect HTTP → HTTPS (`checks/redirect_check.py`)
 
@@ -418,7 +419,7 @@ class ScanResult:
     errors: list[str] = field(default_factory=list)
     scan_id: str             # UUID4, mới cho mỗi lần quét
     scanner_version: str     # owasp_scanner.__version__
-    rules_version: str       # trường "version" của owasp_scanner/rules/sensitive_paths.json
+    rules_version: str       # "sensitive_paths=<version>;tls_interceptors=<version>" của các file rules
 ```
 
 **Quy tắc bắt buộc:**
@@ -426,7 +427,7 @@ class ScanResult:
 - `Finding.id` là mã ổn định theo **loại** lỗi, không đổi giữa các lần chạy. Hai **vị trí** khác nhau của cùng một loại lỗi (ví dụ hai cookie cùng thiếu cờ) có cùng `id` nhưng khác `instance_key` và `fingerprint` (FR-MODEL-01).
 - `fingerprint` = 32 ký tự hex đầu của SHA-256(`id|instance_key|origin`), với `origin` = `scheme://host:port` của target (chữ thường, cổng mặc định 80/443). Không phụ thuộc path, thời gian quét hay giá trị bị che, nên cùng một lỗi ở cùng một chỗ luôn cho cùng fingerprint.
 - `cwe`, `confidence`, `references` lấy từ bảng khai báo `catalog.FINDING_CATALOG` (mỗi finding id một dòng). Mọi id tool sinh ra PHẢI có trong bảng. `cwe` để trống cho 3 finding thông tin không phải điểm yếu: `TLS-CONN-FAILED`, `TLS-CERT-PARSE-FAILED`, `EXPOSURE-SECURITY-TXT`. `COOKIE-FLAGS-MISSING` lấy CWE theo thuộc tính quan trọng nhất đang thiếu: Secure → CWE-614, HttpOnly → CWE-1004, SameSite → CWE-1275.
-- `confidence`: `high` = quan sát trực tiếp từ response/bắt tay (header, cookie, TLS, CORS, directory listing có dấu hiệu nội dung); `medium` = chỉ dựa trên HTTP 200 (path nhạy cảm, `security.txt`); `low` = chỉ là gợi ý (robots.txt, sitemap.xml). FR-DET-03 sẽ tinh chỉnh.
+- `confidence` (FR-DET-03): `high` = quan sát trực tiếp từ response/bắt tay (header, cookie, TLS, CORS, directory listing có dấu hiệu nội dung) hoặc file nhạy cảm có nội dung khớp chữ ký (FR-EXP-04); `medium` = quan sát gián tiếp (hiện chưa có finding nào); `low` = chỉ là gợi ý (robots.txt, sitemap.xml), hoặc finding TLS khi bắt tay có vẻ bị chặn giữa đường (FR-TLS-11).
 - Khi xuất ra (CLI/JSON/HTML), `findings` được sắp theo `severity.rank` tăng dần (CRITICAL trước).
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
@@ -595,6 +596,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-38 | Rules dạng dữ liệu và đọc có giới hạn | Bảng path từ `rules/sensitive_paths.json`; file rules sai định dạng; thêm path chỉ bằng file rules; server trả body 20 MB cho mọi path | Bảng khớp 4.8.1; `rules_version` = version của file; lỗi nạp nêu rõ nguyên nhân; path mới được quét; mỗi response chỉ đọc ≤ 8 KiB, check xong trong vài giây | `test_sensitive_paths_come_from_the_rules_file`, `test_report_carries_the_rules_version`, `test_invalid_rules_are_rejected_with_a_clear_message`, `test_a_new_path_needs_only_a_rules_change`, `test_get_limited_reads_at_most_the_cap`, `test_sensitive_path_check_does_not_download_huge_files` |
 | AT-39 | Kiểm tra nội dung file nhạy cảm (FR-DET-01) | Mỗi path: nội dung thật; trang HTML chung, rỗng, text, JSON; site trả 200 cho mọi path có và không có `.env` thật; path 200 sai nội dung | Nội dung thật khớp chữ ký; response chung không khớp; site catch-all không có finding nhưng `.env` thật vẫn được báo; 200 sai nội dung không báo; evidence không chứa nội dung file; rules thiếu/sai chữ ký bị từ chối | `test_signature_matches_real_content`, `test_signature_rejects_generic_responses`, `test_catch_all_html_site_has_no_exposure_findings`, `test_real_file_on_a_catch_all_site_is_still_found`, `test_200_with_the_wrong_content_is_not_reported`, `test_evidence_never_contains_the_file_content`, `test_invalid_signatures_are_rejected` |
 | AT-40 | Soft-404 theo vân tay (FR-DET-02) | Site trả cùng một trang (có `Contact:` và `Index of /`) cho mọi path; trang in lại path được hỏi; mọi path redirect về `/login`; `.env` và `/images/` thật trên các site đó; site 404 bình thường | Không có finding từ trang chung; file và listing thật vẫn được báo; site 404 có profile rỗng; path probe ngẫu nhiên mỗi lần; `run_scan` chỉ gửi 2 probe | `test_catch_all_page_that_happens_to_match_a_signature_is_ignored`, `test_catch_all_page_echoing_the_path_is_recognised`, `test_redirect_to_login_is_recognised`, `test_real_files_are_still_found_on_soft_404_sites`, `test_real_file_behind_login_redirects_is_still_found`, `test_normal_404_site_has_an_empty_profile`, `test_probe_paths_are_random_per_scan`, `test_run_scan_builds_the_profile_once` |
+| AT-41 | Confidence và TLS bị chặn (FR-DET-03, FR-DET-16) | Finding lộ file có nội dung khớp; robots/sitemap; chứng chỉ có issuer "Avast Web/Mail Shield Root"/"Zscaler …"; chứng chỉ thường; issuer của CA công khai | Lộ file `high`, gợi ý `low`; issuer phần mềm chặn → 1 cảnh báo trong `errors` và finding TLS `low`, kể cả qua `run_scan`; chứng chỉ thường không cảnh báo; tên CA công khai (GlobalSign, Let's Encrypt, DigiCert, Sectigo) không bị nhận nhầm | `test_content_verified_exposure_findings_are_high_confidence`, `test_hint_only_findings_stay_low_confidence`, `test_scanned_exposure_finding_is_high_confidence`, `test_interceptor_issuers_are_recognised`, `test_intercepted_tls_is_flagged_and_findings_are_low_confidence`, `test_run_scan_reports_the_interception_warning`, `test_normal_certificate_gives_no_warning` |
 
 ---
 
@@ -605,7 +607,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 - **False positive:** robots.txt/sitemap.xml (path "nghe nhạy cảm" chưa chắc tồn tại hay lộ). Path nhạy cảm đã kiểm tra nội dung (FR-EXP-04), nhưng chữ ký là heuristic: một file khác vô tình khớp mẫu (ví dụ file text bắt đầu bằng số cho `.svn/entries`) vẫn có thể bị báo, và một file thật có định dạng lạ có thể bị bỏ sót.
 - **False negative:** target dùng CDN/WAF có thể chặn hoặc trả response khác cho User-Agent của scanner. TLS chỉ xét giao thức/cipher **được thương lượng**, không dò các phiên bản cũ server còn bật (FR-DET-04).
 - **Hai kho chứng chỉ khác nhau (B1):** request HTTP (`requests`) tin kho `certifi`, còn nhóm TLS (`ssl.create_default_context()`) tin kho chứng chỉ của hệ điều hành. Nếu có thành phần chặn và ký lại TLS mà CA của nó chỉ nằm trong kho hệ điều hành, `requests` từ chối **mọi** site HTTPS: baseline thất bại ở tầng TLS, nhóm TLS chạy nhưng không báo lỗi, nên báo cáo chỉ có 1 dòng lỗi "Could not fetch", 0 finding, exit code `0`. *Đính chính 2026-09-30:* trên máy dev đã quan sát (2026-09-23), thành phần đó là **phần mềm diệt virus Avast Web/Mail Shield chạy trên chính máy**, không phải proxy mạng như ghi ở bản trước. Sẽ xử lý ở FR-CI-10 (`--ca-bundle` dùng chung).
-- **TLS bị phần mềm cục bộ chặn giữa đường:** trên máy có phần mềm ký lại TLS (ví dụ Avast Web/Mail Shield, kể cả với `127.0.0.1`), nhóm TLS đo **kết nối tới phần mềm đó** chứ không phải tới server: giao thức và cipher là do phần mềm chọn (có thể bỏ sót `TLS-WEAK-PROTOCOL`/`TLS-WEAK-CIPHER`), chứng chỉ là bản do nó ký lại. Kết quả TLS trên các máy như vậy không đáng tin; nên quét từ máy hoặc CI không có TLS inspection. Phát hiện và cảnh báo tự động là FR-DET-16 trong backlog. Test cần bắt tay TLS được tin cậy sẽ tự skip khi phát hiện việc chặn này.
+- **TLS bị phần mềm cục bộ chặn giữa đường:** trên máy có phần mềm ký lại TLS (ví dụ Avast Web/Mail Shield, kể cả với `127.0.0.1`), nhóm TLS đo **kết nối tới phần mềm đó** chứ không phải tới server: giao thức và cipher là do phần mềm chọn (có thể bỏ sót `TLS-WEAK-PROTOCOL`/`TLS-WEAK-CIPHER`), chứng chỉ là bản do nó ký lại. Kết quả TLS trên các máy như vậy không đáng tin; nên quét từ máy hoặc CI không có TLS inspection. Tool tự cảnh báo khi issuer thuộc danh sách phần mềm/proxy chặn TLS đã biết (FR-TLS-11); phần mềm không có trong danh sách sẽ không được nhận ra. Test cần bắt tay TLS được tin cậy sẽ tự skip khi phát hiện việc chặn này.
 - **Che secret dựa trên quy tắc:** chỉ che giá trị cookie và tham số URL có tên thuộc danh sách ở NFR-SEC-04. Secret nằm ở chỗ khác (ví dụ trong nội dung CSP hay header `Server`) sẽ không bị che. Báo cáo vẫn chứa URL, header và cấu hình của target nên chỉ chia sẻ trong phạm vi được phép.
 - **TLS mở 2 kết nối** (Bước A và B); chấp nhận được vì chỉ là bắt tay, không lặp.
 - **`TLS-CERT-NOT-TRUSTED` gộp nhiều nguyên nhân** (tự ký, thiếu intermediate, sai hostname, CA lạ) vào một mã (FR-DET-05).
