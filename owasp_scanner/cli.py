@@ -25,6 +25,7 @@ from .models import ScanResult
 from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, exit_code
 from .redact import redact
 from .report import print_report, write_json
+from .sarif import to_sarif
 from .soft404 import build_profile
 
 CONSENT_BANNER = """
@@ -203,6 +204,7 @@ def main(argv=None) -> int:
     )
     parser.add_argument("target", help="Target URL or hostname, e.g. https://example.com")
     parser.add_argument("--json", metavar="PATH", help="Write full JSON report to PATH")
+    parser.add_argument("--sarif", metavar="PATH", help="Write a SARIF 2.1.0 report to PATH (e.g. for code scanning)")
     parser.add_argument("--timeout", type=int, default=10, help="Per-request timeout in seconds (default: 10)")
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors in CLI output")
@@ -254,6 +256,9 @@ def main(argv=None) -> int:
     if args.json:
         write_json(report, args.json)
         print(f"\nFull JSON report written to: {args.json}")
+    if args.sarif:
+        write_json(to_sarif(report), args.sarif)
+        print(f"SARIF report written to: {args.sarif}")
 
     return exit_code(report)
 

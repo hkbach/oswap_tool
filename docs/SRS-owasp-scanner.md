@@ -149,7 +149,8 @@ owasp_scanner/
 ├── static/            # index.html, app.js, app.css của Web UI
 ├── html_report.py     # render_html(): báo cáo HTML độc lập từ JSON mục 6.2
 ├── catalog.py         # Bảng cwe/confidence/references theo finding id; enrich() + fingerprint
-├── output.py          # build_report() + gate_failed(): một bộ xử lý đầu ra cho CLI và Web UI
+├── output.py          # build_report() + gate_failed() + exit_code(): một bộ xử lý đầu ra cho CLI và Web UI
+├── sarif.py           # to_sarif(): SARIF 2.1.0 từ báo cáo (FR-REPORT-06)
 ├── redact.py          # redact(): che giá trị cookie và tham số URL nhạy cảm (D2)
 ├── rule_loader.py     # Nạp + kiểm tra rules/*.json; rules_version
 ├── rules/             # Bảng khai báo dạng JSON: sensitive_paths.json (bảng 4.8.1), tls_interceptors.json (FR-TLS-11)
@@ -336,6 +337,7 @@ Chỉ gửi 1 GET với header `Origin` giả lập, rõ ràng là request kiể
 | FR-REPORT-03 | Với `--no-color`, output CLI KHÔNG được chứa mã ANSI. | M |
 | FR-REPORT-04 | Với `--json PATH`, tool PHẢI ghi file JSON hợp lệ theo mục 6.2, UTF-8, `ensure_ascii=False`. | M |
 | FR-REPORT-05 | Nếu một check gặp lỗi non-fatal (timeout, lỗi parse, exception bất kỳ), tool PHẢI hoàn tất các check còn lại và ghi lỗi vào `errors` dạng `Check '<tên check>' failed: <mô tả exception>`. Tên check vẫn có trong `checks_run`. | M |
+| FR-REPORT-06 | Với `--sarif PATH`, tool PHẢI ghi báo cáo **SARIF 2.1.0** dựng từ cùng dict của `output.build_report()` (secret đã che). Mỗi `Finding.id` là một rule (`shortDescription` = title, `helpUri` = reference đầu tiên, `help` = recommendation, `properties.tags` gồm OWASP và CWE, `properties.precision` = confidence, `properties.security-severity` theo severity cao nhất của id đó: CRITICAL 9.5, HIGH 8.0, MEDIUM 5.5, LOW 3.0, INFO 0.0); mỗi finding là một result (`level`: CRITICAL/HIGH → `error`, MEDIUM → `warning`, LOW/INFO → `note`; `locations` = URL của finding; `partialFingerprints.owaspScannerFingerprint/v1` = `fingerprint`). `errors` thành `toolExecutionNotifications`; `executionSuccessful` là `false` khi quét không hoàn tất. Kết quả trỏ tới URL, không phải file trong repo, nên công cụ code scanning (ví dụ GitHub) sẽ không gắn được vào dòng code. | S |
 
 ### 4.10 Nhóm Web UI cục bộ (`web.py`, `static/`, `html_report.py`)
 
@@ -491,7 +493,7 @@ AT-12 kiểm tra đúng tập khoá ở cấp gốc, trong `summary` và trong m
 ### 7.1 Cú pháp
 
 ```
-python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no-color] [--yes] [--fail-on LEVEL] [--ca-bundle PATH] [--show-secrets]
+python -m owasp_scanner <target> [--json PATH] [--sarif PATH] [--timeout N] [--workers N] [--no-color] [--yes] [--fail-on LEVEL] [--ca-bundle PATH] [--show-secrets]
 ```
 
 ### 7.2 Bảng tham số
@@ -504,6 +506,7 @@ python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no
 | `--workers N` | Không | `5` | Số luồng song song khi kiểm tra path nhạy cảm. |
 | `--no-color` | Không | tắt | Tắt mã màu ANSI. |
 | `--yes` / `--i-have-authorization` | Không | tắt | Bỏ qua bước hỏi xác nhận tương tác. |
+| `--sarif PATH` | Không | (không xuất) | Ghi báo cáo SARIF 2.1.0 (FR-REPORT-06). |
 | `--fail-on LEVEL` | Không | `high` | Mức thấp nhất làm fail gate (exit `1`): `critical`, `high`, `medium`, `low`, hoặc `none` (không bao giờ fail, kể cả khi quét không hoàn tất). |
 | `--ca-bundle PATH` | Không | env `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE`, rồi kho OS | File PEM các CA được tin, thay cho kho mặc định, cho cả request HTTP và TLS check (FR-CLI-06). |
 | `--show-secrets` | Không | tắt | Không che giá trị cookie và tham số URL nhạy cảm (chỉ để debug cục bộ; NFR-SEC-04). |
@@ -607,6 +610,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-41 | Confidence và TLS bị chặn (FR-DET-03, FR-DET-16) | Finding lộ file có nội dung khớp; robots/sitemap; chứng chỉ có issuer "Avast Web/Mail Shield Root"/"Zscaler …"; chứng chỉ thường; issuer của CA công khai | Lộ file `high`, gợi ý `low`; issuer phần mềm chặn → 1 cảnh báo trong `errors` và finding TLS `low`, kể cả qua `run_scan`; chứng chỉ thường không cảnh báo; tên CA công khai (GlobalSign, Let's Encrypt, DigiCert, Sectigo) không bị nhận nhầm | `test_content_verified_exposure_findings_are_high_confidence`, `test_hint_only_findings_stay_low_confidence`, `test_scanned_exposure_finding_is_high_confidence`, `test_interceptor_issuers_are_recognised`, `test_intercepted_tls_is_flagged_and_findings_are_low_confidence`, `test_run_scan_reports_the_interception_warning`, `test_normal_certificate_gives_no_warning` |
 | AT-42 | Một kho chứng chỉ (FR-CI-10) | Mặc định; `--ca-bundle` với CA tự tạo; biến môi trường; một request HTTPS qua session; file bundle thiếu/sai | Mặc định là kho OS (khác `certifi`); bundle thay kho mặc định; biến môi trường được dùng; `certifi` không bị nạp thêm vào context dùng chung; không có bundle → baseline lỗi + `TLS-CERT-NOT-TRUSTED`; có bundle → check HTTP chạy đủ, không `NOT-TRUSTED`; bundle hỏng → exit `2` | `test_default_trust_is_the_os_store_not_certifi`, `test_ca_bundle_replaces_the_default_store`, `test_env_variables_are_honoured`, `test_requests_never_adds_certifi_to_the_shared_context`, `test_without_ca_bundle_a_private_ca_is_not_trusted`, `test_ca_bundle_trusts_a_private_ca_for_http_and_tls`, `test_cli_ca_bundle_option`, `test_cli_rejects_a_missing_or_invalid_bundle` |
 | AT-43 | Ngưỡng `--fail-on` và exit code `3` (FR-CI-01) | Ma trận ngưỡng × severity; target chỉ có MEDIUM với từng ngưỡng; target có CRITICAL với `none`; target không kết nối được (mặc định và `none`); chứng chỉ hết hạn; Web UI khởi động với `--fail-on medium`; tham số sai | Đúng bảng ngưỡng; exit `1`/`0` theo ngưỡng; `none` → `0`; không kết nối → `3`, với `none` → `0`; chứng chỉ hết hạn → `1` (ưu tiên hơn `3`); JSON `gate` đúng; Web UI `gate_failed` theo ngưỡng của server; báo cáo HTML nêu ngưỡng; tham số sai bị từ chối | `test_threshold`, `test_exit_code_follows_the_threshold`, `test_critical_target_with_fail_on_none_passes`, `test_unreachable_target_exits_3`, `test_unreachable_target_with_fail_on_none_exits_0`, `test_findings_over_the_threshold_win_over_incomplete`, `test_json_records_the_gate`, `test_web_ui_uses_the_server_threshold`, `test_html_report_names_the_threshold`, `test_cli_rejects_an_unknown_threshold` |
+| AT-44 | Xuất SARIF (FR-RPT-02) | Quét mock; từng severity; cùng id với 2 severity; quét không kết nối được; target có secret; `--sarif PATH` | `version` 2.1.0 và `$schema`; mỗi result trỏ đúng rule và có `partialFingerprints` = fingerprint; ánh xạ `level`/`security-severity` đúng; rule lấy severity cao nhất; lỗi thành notification và `executionSuccessful: false`; không lộ secret; file được ghi; output ổn định | `test_top_level_structure`, `test_every_result_points_at_its_rule`, `test_severity_mapping`, `test_rule_severity_is_the_highest_seen_for_that_id`, `test_errors_become_notifications_and_incomplete_scans_are_unsuccessful`, `test_sarif_is_built_from_the_redacted_report`, `test_cli_writes_the_sarif_file`, `test_output_is_deterministic` |
 
 ---
 
