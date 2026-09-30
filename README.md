@@ -321,9 +321,17 @@ targets were not tested, non-fatal errors, and the findings:
   settings in the page.
 - The server listens on `127.0.0.1` by default and rejects requests with an
   unexpected `Host` or `Origin` header (protection against DNS rebinding and
-  cross-site requests). It runs one scan at a time. Do not use
-  `--host 0.0.0.0` unless you really need it: anyone who can reach that port
-  can then start scans from your machine.
+  cross-site requests). It runs one scan at a time.
+- **Binding anywhere other than `127.0.0.1`** (for example `--host 0.0.0.0`)
+  needs `--allow-remote` as well, or the server refuses to start. With
+  `--allow-remote`, every request needs an access token: a random one is
+  generated and printed at startup (or set your own with `--token`), together
+  with a ready-to-open URL (`http://host:port/?token=...`). Opening that URL
+  once sets a cookie for the rest of the browser session; API calls can also
+  send `X-Scanner-Token: <token>`. The token is never written to the server's
+  console log, even when it arrives in the URL. Anyone who has the token can
+  start scans from this machine, so treat it like a password and prefer the
+  default loopback bind unless you really need remote access.
 - No extra dependencies: the server uses Python's `http.server`, and the UI is
   static HTML/CSS/JS in `owasp_scanner/static/` that loads nothing from the
   internet.
