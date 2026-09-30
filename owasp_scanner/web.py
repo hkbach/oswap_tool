@@ -29,6 +29,7 @@ from urllib.parse import urlsplit
 
 from .cli import _normalize_target, run_scan
 from .html_report import render_html
+from .output import build_report, gate_failed
 
 _STATIC_DIR = Path(__file__).with_name("static")
 _STATIC_FILES = {
@@ -161,11 +162,10 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         finally:
             self.server.scan_lock.release()
 
-        report = result.to_dict()
+        report = build_report(result)  # same pipeline as the CLI (FR-WEB-01)
         report_id = self._store_report(report)
-        counts = report["summary"]
         data = dict(report, report_id=report_id, report_url=f"/api/report/{report_id}.html")
-        data["gate_failed"] = bool(counts["CRITICAL"] or counts["HIGH"])  # same rule as CLI exit code 1
+        data["gate_failed"] = gate_failed(report)
         self._json(200, data)
 
     # --- stored reports ----------------------------------------------------------

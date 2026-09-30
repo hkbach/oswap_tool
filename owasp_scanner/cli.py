@@ -21,6 +21,7 @@ from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
 from .http_utils import build_session
 from .models import ScanResult
+from .output import build_report, gate_failed
 from .report import print_report, write_json
 
 CONSENT_BANNER = """
@@ -157,16 +158,14 @@ def main(argv=None) -> int:
     print(f"Scanning {target} ...\n")
 
     result = run_scan(target, timeout=args.timeout, workers=args.workers)
-    print_report(result, use_color=not args.no_color)
+    report = build_report(result)
+    print_report(report, use_color=not args.no_color)
 
     if args.json:
-        write_json(result, args.json)
+        write_json(report, args.json)
         print(f"\nFull JSON report written to: {args.json}")
 
-    counts = result.summary_counts()
-    if counts["CRITICAL"] or counts["HIGH"]:
-        return 1
-    return 0
+    return 1 if gate_failed(report) else 0
 
 
 if __name__ == "__main__":

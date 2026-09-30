@@ -146,6 +146,7 @@ owasp_scanner/
 ├── static/            # index.html, app.js, app.css của Web UI
 ├── html_report.py     # render_html(): báo cáo HTML độc lập từ JSON mục 6.2
 ├── catalog.py         # Bảng cwe/confidence/references theo finding id; enrich() + fingerprint
+├── output.py          # build_report() + gate_failed(): một bộ xử lý đầu ra cho CLI và Web UI
 ├── http_utils.py      # HTTP session dùng chung: timeout mặc định, User-Agent, retry có kiểm soát
 ├── models.py          # Kiểu dữ liệu: Severity, Finding, ScanResult
 ├── report.py          # In báo cáo CLI (màu ANSI) + ghi file JSON
@@ -161,7 +162,7 @@ tests/                 # pytest offline: mock HTTP/HTTPS server, chứng chỉ t
 
 Mỗi module trong `checks/` là **hàm gần như thuần**: nhận session/URL/dữ liệu response, trả về `list[Finding]`, không giữ state toàn cục, nên unit test độc lập được.
 
-`run_scan()` trong `cli.py` là **nguồn sự thật duy nhất** cho kết quả quét: CLI và Web UI đều gọi hàm này.
+`run_scan()` trong `cli.py` là **nguồn sự thật duy nhất** cho kết quả quét: CLI và Web UI đều gọi hàm này. Mọi đầu ra (console, `--json`, response của Web UI, báo cáo HTML) được dựng từ **cùng một dict** do `output.build_report()` trả về, và quy tắc gate nằm ở một hàm duy nhất `output.gate_failed()` (FR-WEB-01).
 
 ### 3.2 Luồng xử lý chính (FR-CLI-01 → FR-REPORT-05)
 
@@ -340,7 +341,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | FR-UI-06 | Sau mỗi lần quét, server PHẢI lưu báo cáo trong bộ nhớ dưới một id ngẫu nhiên không đoán được (`secrets.token_urlsafe(16)`), giữ tối đa 20 báo cáo gần nhất. `GET /api/report/<id>.html` PHẢI trả báo cáo HTML dạng tệp đính kèm (`Content-Disposition: attachment`, tên `owasp-scan-<host>-<thời điểm>.html`); id không tồn tại → 404. | M |
 | FR-UI-07 | Báo cáo HTML (`render_html()`) PHẢI là một tệp độc lập: CSS nhúng, không có script, không tải tài nguyên ngoài; mọi giá trị lấy từ target PHẢI được HTML-escape. Nội dung gồm thời gian, check đã chạy, trạng thái gate, bảng tổng hợp, lỗi non-fatal, danh sách finding, và phần giới hạn phạm vi. | M |
 | FR-UI-08 | Trang UI PHẢI gửi các header: `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. Dữ liệu quét trên trang chỉ được hiển thị bằng `textContent` (không `innerHTML`). | M |
-| FR-UI-09 | Trường `gate_failed` PHẢI dùng cùng quy tắc với exit code `1` của CLI (FR-CLI-04). | M |
+| FR-UI-09 | Trường `gate_failed` PHẢI dùng cùng quy tắc với exit code `1` của CLI (FR-CLI-04), qua cùng hàm `output.gate_failed()`. Ngoài `gate_failed`, `report_id`, `report_url` và các trường thay đổi theo lần quét (`scan_id`, thời gian), JSON của Web UI PHẢI giống hệt JSON `--json` của CLI cho cùng target. Lỗi của cả hai endpoint trả `application/json` dạng `{"error": "..."}`. | M |
 
 ---
 
@@ -568,6 +569,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-28 | Web UI: tiếng Anh | File tĩnh của UI | `lang="en"`, không có ký tự tiếng Việt | `test_ui_text_is_english` |
 | AT-29 | Mô hình finding | Quét mock có nhiều loại lỗi; quét lại lần 2 | Mọi finding có `instance_key`, `fingerprint` 32 hex, `confidence`, `references`, `cwe` (trừ 3 id thông tin); 2 cookie thiếu cờ có 2 fingerprint khác nhau; fingerprint giống nhau giữa 2 lần quét và không phụ thuộc path | `test_every_finding_of_a_real_scan_is_enriched`, `test_same_type_in_two_places_gets_two_fingerprints`, `test_fingerprints_are_stable_across_scans`, `test_fingerprint_uses_origin_not_path_or_time`, `test_catalog_covers_every_finding_id` |
 | AT-30 | JSON có version và khớp schema | `--json`; quét lỗi kết nối; response của Web UI (bỏ 3 trường riêng) | Cả ba khớp `docs/report.schema.json`; `schema_version` = `1.1`; `scan_id` là UUID4 mới mỗi lần quét; schema từ chối khoá lạ | `test_cli_json_report_matches_schema`, `test_failed_scan_report_matches_schema`, `test_web_response_is_the_report_plus_web_fields`, `test_every_scan_gets_a_new_scan_id`, `test_schema_rejects_unknown_fields` |
+| AT-31 | CLI và Web UI cho cùng kết quả | Quét cùng một mock qua CLI `--json` và qua `POST /api/scan` | JSON giống nhau (trừ trường riêng của UI và trường thay đổi theo lần quét); `gate_failed` khớp exit code; mã lỗi và Content-Type của 2 endpoint đúng hợp đồng | `test_cli_and_web_ui_produce_the_same_report`, `test_scan_errors_are_json_with_an_error_message`, `test_report_endpoint_contract` |
 
 ---
 

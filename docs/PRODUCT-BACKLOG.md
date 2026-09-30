@@ -400,7 +400,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 Theo D1: Web UI chạy chung tiến trình với scanner. Các mục dưới đây thay cho FR-PLAT-09/10 ở giai đoạn hiện tại.
 
-- [ ] **FR-WEB-01** (P0 · all) **Một nguồn sự thật**: Web UI và CLI cùng gọi `run_scan()` và cùng bộ xử lý đầu ra (redact, sort, `schema_version`, `fingerprint`, `gate_failed` theo `--fail-on`). JSON thêm của Web UI (`gate_failed`, `report_id`, `report_url`) được khai báo trong schema.
+- [x] **FR-WEB-01** (P0 · all) *(xong ở Sprint 3: `output.py`, AT-31; `--fail-on` và redact nối vào cùng chỗ ở FR-CI-01, FR-AUTH-02)* **Một nguồn sự thật**: Web UI và CLI cùng gọi `run_scan()` và cùng bộ xử lý đầu ra (redact, sort, `schema_version`, `fingerprint`, `gate_failed` theo `--fail-on`). JSON thêm của Web UI (`gate_failed`, `report_id`, `report_url`) được khai báo trong schema.
   AC: contract test cho `POST /api/scan` và `GET /api/report/<id>.html` (mã lỗi, Content-Type, schema); test so sánh JSON của CLI và Web UI cho cùng mock target.
 - [ ] **FR-WEB-02** (P0 · all) **Giữ an toàn mặc định của server cục bộ**: mặc định bind `127.0.0.1`; bind địa chỉ khác phải qua cờ tường minh kèm cảnh báo và **bắt buộc token truy cập**; giữ kiểm tra Host/Origin/Content-Type/kích thước body và bổ sung test cho từng kiểm tra (chống DNS rebinding, CSRF từ trang khác); header bảo mật cho chính trang UI (CSP, `X-Content-Type-Options`, `frame-ancestors 'none'`).
   AC: request Host/Origin lạ → 403; body quá lớn → 413; thiếu `authorized` → 400; tool tự quét UI của chính nó không ra finding header mức MEDIUM trở lên.

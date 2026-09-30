@@ -11,6 +11,7 @@ from __future__ import annotations
 from html import escape
 
 from . import __version__
+from .output import gate_failed
 
 _SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
 
@@ -60,8 +61,7 @@ def _e(value) -> str:
 
 
 def _gate(report: dict) -> tuple[str, str]:
-    counts = report.get("summary", {})
-    if counts.get("CRITICAL") or counts.get("HIGH"):
+    if gate_failed({"summary": report.get("summary", {})}):
         return "fail", "CRITICAL/HIGH findings present: the CLI exits with code 1 (fails the CI gate)."
     if any(str(e).startswith("Could not fetch") for e in report.get("errors", [])):
         return "warn", "The target home page could not be fetched, so most checks did not run. See the errors below."
