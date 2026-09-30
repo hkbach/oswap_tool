@@ -21,6 +21,7 @@ import ipaddress
 import json
 import re
 import secrets
+import sys
 import threading
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -30,6 +31,7 @@ from urllib.parse import urlsplit
 from .cli import _ca_bundle, _normalize_target, run_scan
 from .html_report import render_html
 from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report
+from .redact import redact
 
 _STATIC_DIR = Path(__file__).with_name("static")
 _STATIC_FILES = {
@@ -166,10 +168,14 @@ class ScanUIHandler(BaseHTTPRequestHandler):
                 workers=self.server.scan_workers,
                 ca_bundle=self.server.scan_ca_bundle,
             )
+            report = build_report(result, fail_on=self.server.scan_fail_on)  # same pipeline as the CLI (FR-WEB-01)
+        except Exception as exc:  # a bug must still answer the browser instead of dropping the connection
+            # One redacted line on the server console; the message can contain the target URL.
+            print(f"Scan failed: {type(exc).__name__}: {redact(str(exc))}", file=sys.stderr)
+            return self._error(500, "The scan failed with an internal error; see the server console for details.")
         finally:
             self.server.scan_lock.release()
 
-        report = build_report(result, fail_on=self.server.scan_fail_on)  # same pipeline as the CLI (FR-WEB-01)
         report_id = self._store_report(report)
         data = dict(report, report_id=report_id, report_url=f"/api/report/{report_id}.html")
         data["gate_failed"] = report["gate"]["failed"]

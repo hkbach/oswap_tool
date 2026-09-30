@@ -351,7 +351,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | FR-UI-02 | `POST /api/scan` PHẢI từ chối (HTTP 400, không quét) nếu trường `authorized` không phải đúng giá trị JSON `true`. UI PHẢI có ô xác nhận quyền quét và không gửi request khi chưa tick. | M |
 | FR-UI-03 | Khi server bind loopback, mọi request có `Host` không phải loopback PHẢI bị từ chối (403) để chống DNS rebinding. `POST /api/scan` có `Origin` khác `Host` PHẢI bị từ chối (403). | M |
 | FR-UI-04 | `POST /api/scan` PHẢI yêu cầu `Content-Type: application/json` (415 nếu khác), body tối đa 4096 byte (413), là JSON object hợp lệ (400), `target` là chuỗi không rỗng và sau chuẩn hoá có scheme `http`/`https` và hostname (400). | M |
-| FR-UI-05 | Mỗi lúc chỉ chạy một lần quét; request quét thứ hai trong lúc đang quét PHẢI nhận 429. | M |
+| FR-UI-05 | Mỗi lúc chỉ chạy một lần quét; request quét thứ hai trong lúc đang quét PHẢI nhận 429. Nếu lần quét gặp lỗi nội bộ (exception), server PHẢI trả 500 với `{"error": "The scan failed with an internal error; see the server console for details."}`, ghi một dòng đã che secret ra stderr, và giải phóng lượt quét (từ v1.6.0; trước đó kết nối bị đóng không có response). | M |
 | FR-UI-06 | Sau mỗi lần quét, server PHẢI lưu báo cáo trong bộ nhớ dưới một id ngẫu nhiên không đoán được (`secrets.token_urlsafe(16)`), giữ tối đa 20 báo cáo gần nhất. `GET /api/report/<id>.html` PHẢI trả báo cáo HTML dạng tệp đính kèm (`Content-Disposition: attachment`, tên `owasp-scan-<host>-<thời điểm>.html`); id không tồn tại → 404. | M |
 | FR-UI-07 | Báo cáo HTML (`render_html()`) PHẢI là một tệp độc lập: CSS nhúng, không có script, không tải tài nguyên ngoài; mọi giá trị lấy từ target PHẢI được HTML-escape. Nội dung gồm thời gian, check đã chạy, trạng thái gate, bảng tổng hợp, lỗi non-fatal, danh sách finding, và phần giới hạn phạm vi. | M |
 | FR-UI-08 | Trang UI PHẢI gửi các header: `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. Dữ liệu quét trên trang chỉ được hiển thị bằng `textContent` (không `innerHTML`). | M |
@@ -541,7 +541,7 @@ python -m owasp_scanner.web [--host 127.0.0.1] [--port 8765] [--timeout N] [--wo
 | Endpoint | Mô tả |
 |---|---|
 | `GET /`, `/app.js`, `/app.css` | Trang UI và file tĩnh. |
-| `POST /api/scan` | Chạy quét đồng bộ, trả JSON mục 6.2 + 6.3. Mã lỗi: 400, 403, 413, 415, 429 (FR-UI-02…05). |
+| `POST /api/scan` | Chạy quét đồng bộ, trả JSON mục 6.2 + 6.3. Mã lỗi: 400, 403, 413, 415, 429, 500 (FR-UI-02…05). |
 | `GET /api/report/<id>.html` | Tải báo cáo HTML (FR-UI-06). 404 nếu không còn. |
 
 ---
@@ -595,7 +595,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-23 | Target https không kết nối được | `https://` tới cổng đóng | 0 finding; 1 lỗi; không chạy nhóm TLS | `test_unreachable_https_target_has_no_findings` |
 | AT-24 | Web UI: bắt buộc xác nhận quyền quét | `authorized` thiếu/`false`/`"true"`/`1` | HTTP 400; không quét | `test_scan_requires_explicit_authorization` |
 | AT-25 | Web UI: chống request chéo site và DNS rebinding | `Origin` lạ; `Host` không phải loopback | HTTP 403; không quét | `test_scan_rejects_cross_origin`, `test_rejects_dns_rebinding_host`, `test_report_download_blocks_rebinding_host` |
-| AT-26 | Web UI: một lần quét mỗi lúc | Gửi lần quét thứ hai khi lần đầu chưa xong | HTTP 429 | `test_only_one_scan_at_a_time` |
+| AT-26 | Web UI: một lần quét mỗi lúc | Gửi lần quét thứ hai khi lần đầu chưa xong | HTTP 429; lỗi nội bộ khi quét → HTTP 500, secret không vào log, lần quét sau vẫn chạy được | `test_only_one_scan_at_a_time`, `test_internal_scan_error_returns_500_and_frees_the_scan_slot` |
 | AT-27 | Web UI: tải báo cáo HTML | Quét mock rồi mở `report_url` | 200, `Content-Disposition: attachment`; nội dung từ target được escape | `test_scan_result_links_to_downloadable_html_report`, `test_values_from_target_are_escaped` |
 | AT-28 | Web UI: tiếng Anh | File tĩnh của UI | `lang="en"`, không có ký tự tiếng Việt | `test_ui_text_is_english` |
 | AT-29 | Mô hình finding | Quét mock có nhiều loại lỗi; quét lại lần 2 | Mọi finding có `instance_key`, `fingerprint` 32 hex, `confidence`, `references`, `cwe` (trừ 3 id thông tin); 2 cookie thiếu cờ có 2 fingerprint khác nhau; fingerprint giống nhau giữa 2 lần quét và không phụ thuộc path | `test_every_finding_of_a_real_scan_is_enriched`, `test_same_type_in_two_places_gets_two_fingerprints`, `test_fingerprints_are_stable_across_scans`, `test_fingerprint_uses_origin_not_path_or_time`, `test_catalog_covers_every_finding_id` |
