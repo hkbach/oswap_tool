@@ -216,7 +216,7 @@ Cách đọc: `- [ ] **ID** (Ưu tiên · Tier) Mô tả.` theo sau là `AC:` (a
   AC: quét `http://` không sinh finding HDR-STRICT-TRANSPORT-SECURITY-MISSING sai ngữ cảnh.
 - [x] **FR-FIX-06** (P0 · all) *(xong từ code v1.1.0; test AT-17)* FR-HDR-04 (thiếu X-Frame-Options) không sinh finding nếu CSP có `frame-ancestors` hợp lệ.
   AC: có test cho cả hai trường hợp; thống nhất với FR-HDR-05.
-- [ ] **FR-FIX-07** (P0 · all) Áp dụng quyết định **D3** cho CORS: `CORS-WILDCARD-WITH-CREDENTIALS` → MEDIUM (trình duyệt từ chối tổ hợp này, rủi ro chủ yếu là cấu hình sai và client không phải trình duyệt); `CORS-REFLECTS-ARBITRARY-ORIGIN` → HIGH nếu có credentials, MEDIUM nếu không; `CORS-WILDCARD` → INFO.
+- [x] **FR-FIX-07** (P0 · all) *(xong ở Sprint 3: AT-33; changelog v1.2.0)* Áp dụng quyết định **D3** cho CORS: `CORS-WILDCARD-WITH-CREDENTIALS` → MEDIUM (trình duyệt từ chối tổ hợp này, rủi ro chủ yếu là cấu hình sai và client không phải trình duyệt); `CORS-REFLECTS-ARBITRARY-ORIGIN` → HIGH nếu có credentials, MEDIUM nếu không; `CORS-WILDCARD` → INFO.
   AC: test cho 4 tổ hợp; description/recommendation của từng finding giải thích lý do mức độ; SRS mục 4.7 và mục 12 cập nhật khi code xong; exit code thay đổi được ghi changelog (`*`+credentials không còn làm exit 1).
 - [x] **FR-FIX-08** (P0 · all) *(xong: SRS v1.2 mục 3.3, 4.10, 6.3, 7.4 đã đối chiếu `web.py`)* Cập nhật SRS để mô tả Web UI cục bộ (đã có trong code) và đối chiếu lại với code thật.
   AC: SRS mô tả khớp với `web.py`; mọi khác biệt được sửa ở tài liệu hoặc code.
@@ -259,10 +259,10 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 ### E2. Mô hình finding và ánh xạ tuân thủ
 
-- [ ] **FR-MODEL-01** (P0 · all) Mở rộng `Finding`: `cwe`, `confidence`, `references[]` (link OWASP/MDN/RFC), `instance_key` (khóa vị trí: URL/tên cookie/tên header/path), `fingerprint = hash(id + instance_key + target)`.
+- [x] **FR-MODEL-01** (P0 · all) *(xong ở Sprint 3: `catalog.py`, SRS 6.1, AT-29)* Mở rộng `Finding`: `cwe`, `confidence`, `references[]` (link OWASP/MDN/RFC), `instance_key` (khóa vị trí: URL/tên cookie/tên header/path), `fingerprint = hash(id + instance_key + target)`.
   AC: cùng một lỗi ở lần quét sau cho cùng `fingerprint`; hai cookie thiếu cờ khác nhau cho hai fingerprint khác nhau; fingerprint không phụ thuộc giá trị bị redact hay thời gian quét.
   Là tiền đề cho: FR-CI-02 (baseline), FR-RPT-06 (so sánh), FR-RPT-02 (SARIF).
-- [ ] **FR-MODEL-02** (P0 · all) Thêm `schema_version`, `scanner_version`, `scan_id` (UUID), `rules_version` vào JSON; giữ tương thích ngược hoặc nâng version có changelog.
+- [x] **FR-MODEL-02** (P0 · all) *(xong ở Sprint 3: `schema_version` 1.1, `docs/report.schema.json`, AT-30)* Thêm `schema_version`, `scanner_version`, `scan_id` (UUID), `rules_version` vào JSON; giữ tương thích ngược hoặc nâng version có changelog.
   AC: test schema (jsonschema) cho JSON output; AT-12 vẫn đạt.
 - [ ] **FR-MODEL-03** (P1 · Pro) Điểm số: `cvss_vector`/`cvss_score` ước tính theo loại finding (ghi rõ "estimated") hoặc bảng severity có lý do; báo cáo giải thích cách tính.
   `[CONFIRM]` chọn CVSS v3.1 hay v4.0 và chính sách trình bày.
@@ -355,7 +355,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 - [ ] **FR-AUTH-01** (P0 · Pro) **Auth profile** khai báo trong config: `bearer`, `api_key`, `basic`, `cookie`, `header`; giá trị lấy từ **biến môi trường/secret store**, không ghi thẳng vào file cấu hình.
   AC: cấu hình chứa secret dạng plaintext → cảnh báo; secret không xuất hiện trong log, evidence, báo cáo, JSON.
-- [ ] **FR-AUTH-02** (P0 · all) Hàm `redact()` dùng chung theo quyết định **D2**: che giá trị `Authorization`, `Cookie`, `Set-Cookie`, token, tham số nhạy cảm trong URL (`token`, `key`, `session`, `password`, `sig`...). **Thay FR-COOKIE-04**: evidence giữ tên cookie + thuộc tính, giá trị thay bằng `<redacted len=N>`.
+- [x] **FR-AUTH-02** (P0 · all) *(xong ở Sprint 3: `redact.py`, NFR-SEC-04, AT-32; SARIF áp dụng khi có FR-RPT-02)* Hàm `redact()` dùng chung theo quyết định **D2**: che giá trị `Authorization`, `Cookie`, `Set-Cookie`, token, tham số nhạy cảm trong URL (`token`, `key`, `session`, `password`, `sig`...). **Thay FR-COOKIE-04**: evidence giữ tên cookie + thuộc tính, giá trị thay bằng `<redacted len=N>`.
   Cờ `--show-secrets` (chỉ CLI): tắt che để debug cục bộ; in cảnh báo ra stderr; JSON có `"secrets_redacted": false`; HTML hiển thị băng cảnh báo. Web UI **không** nhận tham số này dưới bất kỳ hình thức nào.
   AC: test quét toàn bộ output (console/JSON/HTML/SARIF, cả CLI và Web UI) và fail nếu còn secret mẫu; test `POST /api/scan` có trường `show_secrets` vẫn bị che.
   Là tiền đề cho: FR-RPT-02, FR-RPT-09, FR-CI-02, E8.
@@ -400,7 +400,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 Theo D1: Web UI chạy chung tiến trình với scanner. Các mục dưới đây thay cho FR-PLAT-09/10 ở giai đoạn hiện tại.
 
-- [ ] **FR-WEB-01** (P0 · all) **Một nguồn sự thật**: Web UI và CLI cùng gọi `run_scan()` và cùng bộ xử lý đầu ra (redact, sort, `schema_version`, `fingerprint`, `gate_failed` theo `--fail-on`). JSON thêm của Web UI (`gate_failed`, `report_id`, `report_url`) được khai báo trong schema.
+- [x] **FR-WEB-01** (P0 · all) *(xong ở Sprint 3: `output.py`, AT-31; `--fail-on` và redact nối vào cùng chỗ ở FR-CI-01, FR-AUTH-02)* **Một nguồn sự thật**: Web UI và CLI cùng gọi `run_scan()` và cùng bộ xử lý đầu ra (redact, sort, `schema_version`, `fingerprint`, `gate_failed` theo `--fail-on`). JSON thêm của Web UI (`gate_failed`, `report_id`, `report_url`) được khai báo trong schema.
   AC: contract test cho `POST /api/scan` và `GET /api/report/<id>.html` (mã lỗi, Content-Type, schema); test so sánh JSON của CLI và Web UI cho cùng mock target.
 - [ ] **FR-WEB-02** (P0 · all) **Giữ an toàn mặc định của server cục bộ**: mặc định bind `127.0.0.1`; bind địa chỉ khác phải qua cờ tường minh kèm cảnh báo và **bắt buộc token truy cập**; giữ kiểm tra Host/Origin/Content-Type/kích thước body và bổ sung test cho từng kiểm tra (chống DNS rebinding, CSRF từ trang khác); header bảo mật cho chính trang UI (CSP, `X-Content-Type-Options`, `frame-ancestors 'none'`).
   AC: request Host/Origin lạ → 403; body quá lớn → 413; thiếu `authorized` → 400; tool tự quét UI của chính nó không ra finding header mức MEDIUM trở lên.
@@ -503,12 +503,12 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 ### E21. Chất lượng, kiểm thử và benchmark
 
 - [ ] **FR-QA-01** (P0 · all) Bộ kiểm thử tự động chạy **offline** bằng mock server (headers, cookies, TLS giả lập, redirect, CORS, path, directory listing, soft-404, robots); bao phủ tất cả FR đang có + FR mới.
-- [ ] **FR-QA-02** (P0 · all) Test **golden file** cho JSON/SARIF/HTML (snapshot) và test không-lộ-secret (FR-AUTH-02).
+- [ ] **FR-QA-02** (P0 · all) *(test không-lộ-secret đã có ở Sprint 3; còn golden file)* Test **golden file** cho JSON/SARIF/HTML (snapshot) và test không-lộ-secret (FR-AUTH-02).
 - [ ] **FR-QA-03** (P1 · Pro) **Benchmark độ chính xác** trên ứng dụng cố ý dễ tổn thương chạy **local/nội bộ** (ví dụ OWASP Juice Shop, DVWA, crAPI, VAmPI – kiểm tra license và điều khoản từng dự án): đo precision/recall theo từng loại lỗi, lưu kết quả theo phiên bản scanner để phát hiện hồi quy.
 - [ ] **FR-QA-04** (P1 · Pro) **Corpus false positive**: mỗi false positive khách báo → thêm test hồi quy; mục tiêu độ chính xác đặt sau khi có số đo baseline `[CONFIRM]` (không hứa con số khi chưa đo).
 - [ ] **FR-QA-05** (P1 · Pro) Kiểm thử tải/an toàn: chứng minh scanner tuân thủ giới hạn tốc độ và không gây tải bất thường lên mock server.
 - [ ] **FR-QA-06** (P1 · Business) Kiểm thử phân quyền/đa tenant tự động (không đọc chéo org, chống IDOR trên chính API của nền tảng).
-- [ ] **FR-QA-07** (P0 · all) CI cho repo: `ruff check` + `ruff format --check`, `pytest` (offline), quét phụ thuộc (ví dụ `pip-audit`), quét secret; ma trận Python 3.9 và bản mới nhất; chặn merge khi fail. Type-check (mypy/pyright) và build image thêm sau.
+- [ ] **FR-QA-07** (P0 · all) *(phần cấu hình xong ở Sprint 3: `pyproject.toml`, ruff sạch, test đạt trên Python 3.9/3.12/3.14; còn workflow CI)* CI cho repo: `ruff check` + `ruff format --check`, `pytest` (offline), quét phụ thuộc (ví dụ `pip-audit`), quét secret; ma trận Python 3.9 và bản mới nhất; chặn merge khi fail. Type-check (mypy/pyright) và build image thêm sau.
   AC: cấu hình ruff trong `pyproject.toml`; workflow CI chạy được trên nhánh mẫu; README ghi lệnh chạy cục bộ.
 
 ### E22. Tài liệu và tài sản đưa ra thị trường
@@ -577,7 +577,7 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 |---|---|---|---|
 | 1 | Chốt 3 câu hỏi: UI, redact cookie, mức CORS | D1, D2, D3 (mục 1.4) | Xong |
 | 2 | Thêm `CLAUDE.md`, đưa backlog + SRS vào `docs/`; SRS v1.2; sửa FIX-01/02/04/08 và README | FR-FIX-01/02/04/08 | Xong trên branch `docs/sprint-2-srs-v1.2`, chờ review |
-| 3 | Cấu hình `ruff` + `pyproject.toml`; `redact()` + mô hình finding (fingerprint, `schema_version`) + Web UI dùng chung đầu ra; CORS theo D3 | FR-QA-07 (phần cấu hình), FR-AUTH-02, FR-MODEL-01, FR-MODEL-02, FR-WEB-01, FR-FIX-07 | Chưa làm |
+| 3 | Cấu hình `ruff` + `pyproject.toml`; `redact()` + mô hình finding (fingerprint, `schema_version`) + Web UI dùng chung đầu ra; CORS theo D3 | FR-QA-07 (phần cấu hình), FR-AUTH-02, FR-MODEL-01, FR-MODEL-02, FR-WEB-01, FR-FIX-07 | Xong (v1.2.0) trên branch `feat/sprint-3`, chờ review |
 | 3b | Scope khi theo redirect (D4); redirect check luôn chạy; header/HSTS xét trên response cuối; bỏ chữ "Passive" trong code | FR-FIX-09, FR-FIX-10, FR-FIX-11 | Chưa làm; FIX-10 cần xong FR-MODEL-02 |
 | 4 | Kiểm tra nội dung file nhạy cảm + confidence | FR-DET-01, FR-DET-02, FR-DET-03 | Chưa làm |
 | 5 | `--ca-bundle` (gỡ B1), `--fail-on`, SARIF, `--html`, template CI | FR-CI-10, FR-CI-01, FR-RPT-02, FR-RPT-09, FR-CI-03 | Chưa làm |
@@ -648,19 +648,19 @@ Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên l�
 
 | Epic | P0 xong | P1 xong | P2 xong | Ghi chú |
 |---|---|---|---|---|
-| E0 | ☐ | – | – | FIX-01…06, 08 xong; còn FIX-07, 09, 10, 11 |
+| E0 | ☐ | – | – | FIX-01…08 xong; còn FIX-09, 10, 11 |
 | E1 | ☐ | ☐ | ☐ | |
-| E2 | ☐ | ☐ | – | |
+| E2 | ☑ | ☐ | – | MODEL-01, 02 xong (Sprint 3) |
 | E3 | ☐ | ☐ | ☐ | |
 | E4 | ☐ | ☐ | – | |
 | E5 | ☐ | ☐ | – | |
 | E6 | ☐ | ☐ | ☐ | |
 | E7 | ☐ | ☐ | ☐ | |
-| E8 | ☐ | ☐ | ☐ | |
+| E8 | ☐ | ☐ | ☐ | AUTH-02 xong (Sprint 3) |
 | E9 | – | ☐ | ☐ | |
 | E10 | – | ☐ | ☐ | |
 | E11 | – | ☐ | ☐ | |
-| E12a | ☐ | ☐ | – | Web UI cục bộ |
+| E12a | ☐ | ☐ | – | Web UI cục bộ; WEB-01 xong (Sprint 3), còn WEB-02 |
 | E12–E14, E16–E20 | ☐ | ☐ | ☐ | E15 (UI) đã loại; E12 chỉ khi SaaS |
 | E21–E22 | ☐ | ☐ | – | |
 

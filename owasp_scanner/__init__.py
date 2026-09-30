@@ -7,4 +7,4 @@ attack payloads. Intended for use ONLY on systems you own or have
 explicit written authorization to test.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"

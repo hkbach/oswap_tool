@@ -2,11 +2,16 @@
 
 Maps to OWASP ASVS V3 (Session Management) and Top 10 A05/A07.
 """
+
 from __future__ import annotations
 
-from http.cookies import SimpleCookie
+from http.cookies import CookieError, SimpleCookie
 
 from ..models import Finding, Severity
+from ..redact import cookie_redaction
+
+# CWE for the most important missing attribute (they are listed Secure, HttpOnly, SameSite).
+_CWE_BY_ATTRIBUTE = {"Secure": "CWE-614", "HttpOnly": "CWE-1004", "SameSite": "CWE-1275"}
 
 
 def check_cookies(url: str, set_cookie_headers: list[str]) -> list[Finding]:
@@ -16,7 +21,7 @@ def check_cookies(url: str, set_cookie_headers: list[str]) -> list[Finding]:
         cookie = SimpleCookie()
         try:
             cookie.load(raw)
-        except Exception:
+        except CookieError:  # unparseable header: nothing to evaluate
             continue
 
         for name, morsel in cookie.items():
@@ -45,6 +50,9 @@ def check_cookies(url: str, set_cookie_headers: list[str]) -> list[Finding]:
                             "SameSite=Lax/Strict on all session/auth cookies."
                         ),
                         url=url,
+                        instance_key=name,
+                        cwe=_CWE_BY_ATTRIBUTE[missing[0].split("(")[0]],
+                        redactions=[pair] if (pair := cookie_redaction(raw)) else [],
                     )
                 )
 

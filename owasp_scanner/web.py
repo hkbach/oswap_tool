@@ -13,6 +13,7 @@ API enforces that server-side. The server binds to loopback by default so other
 machines cannot use it as an open scanner, and it rejects requests whose Host or
 Origin is not this server (DNS-rebinding / cross-site request protection).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +29,7 @@ from urllib.parse import urlsplit
 
 from .cli import _normalize_target, run_scan
 from .html_report import render_html
+from .output import build_report, gate_failed
 
 _STATIC_DIR = Path(__file__).with_name("static")
 _STATIC_FILES = {
@@ -36,6 +38,7 @@ _STATIC_FILES = {
     "/app.css": ("app.css", "text/css; charset=utf-8"),
 }
 _MAX_BODY_BYTES = 4096
+_MAX_DRAIN_BYTES = 65536  # how much of an oversized body we read before replying 413
 _MAX_STORED_REPORTS = 20
 _REPORT_PATH = re.compile(r"^/api/report/([A-Za-z0-9_-]{16,64})\.html$")
 _SECURITY_HEADERS = {
@@ -112,6 +115,21 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         self._send(200, (_STATIC_DIR / filename).read_bytes(), content_type)
 
     def do_POST(self):
+        # Read the (bounded) body before any early error response: replying and closing
+        # with unread request data makes some TCP stacks (Windows) reset the connection,
+        # so the client never sees the status code.
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return self._error(400, "Invalid Content-Length")
+        if length < 0:
+            return self._error(400, "Invalid Content-Length")
+        if length > _MAX_BODY_BYTES:
+            self.rfile.read(min(length, _MAX_DRAIN_BYTES))
+            self.close_connection = True
+            return self._error(413, "Request body too large")
+        body = self.rfile.read(length)
+
         if self.path != "/api/scan":
             return self._error(404, "Not found")
         if not self._host_allowed() or not self._same_origin():
@@ -120,13 +138,7 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
             return self._error(415, "Content-Type must be application/json")
         try:
-            length = int(self.headers.get("Content-Length") or 0)
-        except ValueError:
-            return self._error(400, "Invalid Content-Length")
-        if length > _MAX_BODY_BYTES:
-            return self._error(413, "Request body too large")
-        try:
-            payload = json.loads(self.rfile.read(length) or b"{}")
+            payload = json.loads(body or b"{}")
         except ValueError:
             return self._error(400, "Body is not valid JSON")
         if not isinstance(payload, dict):
@@ -150,11 +162,10 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         finally:
             self.server.scan_lock.release()
 
-        report = result.to_dict()
+        report = build_report(result)  # same pipeline as the CLI (FR-WEB-01)
         report_id = self._store_report(report)
-        counts = report["summary"]
         data = dict(report, report_id=report_id, report_url=f"/api/report/{report_id}.html")
-        data["gate_failed"] = bool(counts["CRITICAL"] or counts["HIGH"])  # same rule as CLI exit code 1
+        data["gate_failed"] = gate_failed(report)
         self._json(200, data)
 
     # --- stored reports ----------------------------------------------------------
@@ -172,7 +183,9 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         with self.server.reports_lock:
             report = self.server.reports.get(report_id)
         if report is None:
-            return self._error(404, f"Report not found. Only the last {_MAX_STORED_REPORTS} scans are kept; run the scan again.")
+            return self._error(
+                404, f"Report not found. Only the last {_MAX_STORED_REPORTS} scans are kept; run the scan again."
+            )
         self._send(
             200,
             render_html(report).encode("utf-8"),

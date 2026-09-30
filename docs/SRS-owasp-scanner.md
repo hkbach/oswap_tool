@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | OWASP-Aligned Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.2 |
-| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23) |
+| **Phiên bản tài liệu** | 1.3 |
+| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2: 2026-09-30) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.1.0` trong repo `hkbach/oswap_tool` (gồm các bản sửa sau v1.1.0 và Web UI cục bộ). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.2.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 3). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -25,6 +25,7 @@
 | 1.0 | 2026-09-22 | Bản as-built đầu tiên (code v1.0.0). |
 | 1.1 | 2026-09-23 | Theo code v1.1.0: TLS kiểm tra 2 bước (FR-TLS-01…09); tách robots.txt/sitemap.xml (FR-EXP-08a/b); HSTS chỉ áp dụng cho `https://`; `frame-ancestors` loại trừ cả nhánh "thiếu" X-Frame-Options; `Finding.id` khai báo tường minh cho từng path; thêm AT-15…18. |
 | 1.2 | 2026-09-30 | Gộp bản 1.1 ở trên với bản sửa tài liệu ngày 2026-09-30. Chi tiết ở mục 0.1. |
+| 1.3 | 2026-09-30 | Theo code v1.2.0 (Sprint 3): mô hình finding có `cwe`/`confidence`/`references`/`instance_key`/`fingerprint` (FR-MODEL-01); JSON `schema_version` 1.1 và `docs/report.schema.json` (FR-MODEL-02); một bộ xử lý đầu ra dùng chung (FR-WEB-01); che secret mặc định (D2, FR-COOKIE-04, NFR-SEC-04); severity CORS theo D3; thứ tự finding cố định (FR-REPORT-02); NFR-PORT-01 đã kiểm chứng Python 3.9; AT-29…AT-33. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -145,6 +146,9 @@ owasp_scanner/
 ├── web.py             # Web UI cục bộ: http.server, /api/scan, /api/report/<id>.html
 ├── static/            # index.html, app.js, app.css của Web UI
 ├── html_report.py     # render_html(): báo cáo HTML độc lập từ JSON mục 6.2
+├── catalog.py         # Bảng cwe/confidence/references theo finding id; enrich() + fingerprint
+├── output.py          # build_report() + gate_failed(): một bộ xử lý đầu ra cho CLI và Web UI
+├── redact.py          # redact(): che giá trị cookie và tham số URL nhạy cảm (D2)
 ├── http_utils.py      # HTTP session dùng chung: timeout mặc định, User-Agent, retry có kiểm soát
 ├── models.py          # Kiểu dữ liệu: Severity, Finding, ScanResult
 ├── report.py          # In báo cáo CLI (màu ANSI) + ghi file JSON
@@ -160,7 +164,7 @@ tests/                 # pytest offline: mock HTTP/HTTPS server, chứng chỉ t
 
 Mỗi module trong `checks/` là **hàm gần như thuần**: nhận session/URL/dữ liệu response, trả về `list[Finding]`, không giữ state toàn cục, nên unit test độc lập được.
 
-`run_scan()` trong `cli.py` là **nguồn sự thật duy nhất** cho kết quả quét: CLI và Web UI đều gọi hàm này.
+`run_scan()` trong `cli.py` là **nguồn sự thật duy nhất** cho kết quả quét: CLI và Web UI đều gọi hàm này. Mọi đầu ra (console, `--json`, response của Web UI, báo cáo HTML) được dựng từ **cùng một dict** do `output.build_report()` trả về, và quy tắc gate nằm ở một hàm duy nhất `output.gate_failed()` (FR-WEB-01).
 
 ### 3.2 Luồng xử lý chính (FR-CLI-01 → FR-REPORT-05)
 
@@ -236,7 +240,7 @@ Cơ sở: OWASP Secure Headers Project. Tên header so khớp không phân biệ
 | FR-COOKIE-01 | Với mỗi header `Set-Cookie` của response baseline **và của mọi response redirect trung gian** trước nó, tool PHẢI parse tên cookie và kiểm tra 3 thuộc tính `Secure`, `HttpOnly`, `SameSite`. Mỗi cookie thiếu thuộc tính tạo 1 finding `COOKIE-FLAGS-MISSING`. | — (xem FR-COOKIE-02) | A05:2021 | M |
 | FR-COOKIE-02 | Thiếu `Secure` hoặc `HttpOnly` → MEDIUM. Chỉ thiếu `SameSite` (đã có Secure + HttpOnly) → LOW. | — | — | M |
 | FR-COOKIE-03 | Nếu `SameSite` có giá trị không thuộc {`Lax`,`Strict`,`None`} (không phân biệt hoa/thường), PHẢI coi là thiếu và liệt kê giá trị sai trong finding. | — | — | S |
-| FR-COOKIE-04 | Evidence PHẢI chứa nguyên văn header `Set-Cookie` gốc. *(Sẽ đổi theo D2, mục 12: giá trị cookie được che mặc định.)* | — | — | S |
+| FR-COOKIE-04 | Evidence PHẢI chứa header `Set-Cookie` gốc với **giá trị cookie được che**: giữ tên cookie và mọi thuộc tính, giá trị thay bằng `<redacted len=N>` (ví dụ `session=<redacted len=6>; Path=/`). Chỉ CLI với `--show-secrets` mới in nguyên văn (NFR-SEC-04). | — | — | S |
 
 ### 4.5 Nhóm kiểm tra TLS/Chứng chỉ (`checks/tls_check.py`)
 
@@ -275,9 +279,9 @@ Chỉ gửi 1 GET với header `Origin` giả lập, rõ ràng là request kiể
 | ID | Yêu cầu | Severity | OWASP | Priority |
 |---|---|---|---|---|
 | FR-CORS-01 | Tool PHẢI gửi GET tới target kèm `Origin: https://owasp-scanner-cors-test.invalid`. | — | — | M |
-| FR-CORS-02 | Nếu `Access-Control-Allow-Origin: *` và `Access-Control-Allow-Credentials: true` cùng xuất hiện, PHẢI tạo finding `CORS-WILDCARD-WITH-CREDENTIALS`. Mô tả PHẢI nêu rõ trình duyệt tự chặn tổ hợp này, nên đây là dấu hiệu cấu hình CORS bị sao chép/nhầm, không phải lỗ hổng khai thác trực tiếp qua trình duyệt. | CRITICAL *(sẽ hạ còn MEDIUM theo D3, mục 12)* | A05:2021 | M |
-| FR-CORS-03 | Nếu `Access-Control-Allow-Origin` phản xạ đúng Origin giả lập, PHẢI tạo finding `CORS-REFLECTS-ARBITRARY-ORIGIN`: HIGH nếu có `Access-Control-Allow-Credentials: true`, ngược lại MEDIUM. | HIGH/MEDIUM | A05:2021 | M |
-| FR-CORS-04 | Nếu `Access-Control-Allow-Origin: *` không kèm credentials, PHẢI tạo finding `CORS-WILDCARD`. | INFO | A05:2021 | S |
+| FR-CORS-02 | Nếu `Access-Control-Allow-Origin: *` và `Access-Control-Allow-Credentials: true` cùng xuất hiện, PHẢI tạo finding `CORS-WILDCARD-WITH-CREDENTIALS`. Mô tả PHẢI nêu rõ trình duyệt từ chối request có credentials khi origin là `*`, nên tổ hợp này không khai thác trực tiếp được qua trình duyệt; nó cho thấy CORS bị cấu hình sao chép/nhầm và client không phải trình duyệt vẫn có thể làm theo, nên cần rà soát toàn bộ policy. *(Trước D3, ngày 2026-09-30, mức này là CRITICAL.)* | MEDIUM | A05:2021 | M |
+| FR-CORS-03 | Nếu `Access-Control-Allow-Origin` phản xạ đúng Origin giả lập, PHẢI tạo finding `CORS-REFLECTS-ARBITRARY-ORIGIN`: HIGH nếu có `Access-Control-Allow-Credentials: true` (mọi website người dùng đã đăng nhập ghé qua đều đọc được response có xác thực), ngược lại MEDIUM (chỉ đọc được response không xác thực). | HIGH/MEDIUM | A05:2021 | M |
+| FR-CORS-04 | Nếu `Access-Control-Allow-Origin: *` không kèm credentials, PHẢI tạo finding `CORS-WILDCARD` (chấp nhận được với API công khai, không xác thực). | INFO | A05:2021 | S |
 
 ### 4.8 Nhóm kiểm tra lộ file/path nhạy cảm (`checks/exposure.py`)
 
@@ -320,7 +324,7 @@ Chỉ gửi 1 GET với header `Origin` giả lập, rõ ràng là request kiể
 | ID | Yêu cầu | Priority |
 |---|---|---|
 | FR-REPORT-01 | CLI PHẢI in: target, thời điểm bắt đầu/kết thúc (UTC, ISO 8601, hậu tố `Z`), danh sách check đã chạy, bảng tổng hợp theo severity, và chi tiết từng finding (severity, title, OWASP category, description, evidence nếu có, recommendation nếu có, URL). | M |
-| FR-REPORT-02 | Finding trong output CLI, JSON và HTML PHẢI sắp xếp theo severity giảm dần: CRITICAL → HIGH → MEDIUM → LOW → INFO. | M |
+| FR-REPORT-02 | Finding trong output CLI, JSON và HTML PHẢI sắp xếp theo severity giảm dần: CRITICAL → HIGH → MEDIUM → LOW → INFO; cùng severity thì theo `id`, rồi `instance_key`, để hai lần quét cùng một target cho cùng thứ tự. | M |
 | FR-REPORT-03 | Với `--no-color`, output CLI KHÔNG được chứa mã ANSI. | M |
 | FR-REPORT-04 | Với `--json PATH`, tool PHẢI ghi file JSON hợp lệ theo mục 6.2, UTF-8, `ensure_ascii=False`. | M |
 | FR-REPORT-05 | Nếu một check gặp lỗi non-fatal (timeout, lỗi parse, exception bất kỳ), tool PHẢI hoàn tất các check còn lại và ghi lỗi vào `errors` dạng `Check '<tên check>' failed: <mô tả exception>`. Tên check vẫn có trong `checks_run`. | M |
@@ -339,7 +343,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | FR-UI-06 | Sau mỗi lần quét, server PHẢI lưu báo cáo trong bộ nhớ dưới một id ngẫu nhiên không đoán được (`secrets.token_urlsafe(16)`), giữ tối đa 20 báo cáo gần nhất. `GET /api/report/<id>.html` PHẢI trả báo cáo HTML dạng tệp đính kèm (`Content-Disposition: attachment`, tên `owasp-scan-<host>-<thời điểm>.html`); id không tồn tại → 404. | M |
 | FR-UI-07 | Báo cáo HTML (`render_html()`) PHẢI là một tệp độc lập: CSS nhúng, không có script, không tải tài nguyên ngoài; mọi giá trị lấy từ target PHẢI được HTML-escape. Nội dung gồm thời gian, check đã chạy, trạng thái gate, bảng tổng hợp, lỗi non-fatal, danh sách finding, và phần giới hạn phạm vi. | M |
 | FR-UI-08 | Trang UI PHẢI gửi các header: `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. Dữ liệu quét trên trang chỉ được hiển thị bằng `textContent` (không `innerHTML`). | M |
-| FR-UI-09 | Trường `gate_failed` PHẢI dùng cùng quy tắc với exit code `1` của CLI (FR-CLI-04). | M |
+| FR-UI-09 | Trường `gate_failed` PHẢI dùng cùng quy tắc với exit code `1` của CLI (FR-CLI-04), qua cùng hàm `output.gate_failed()`. Ngoài `gate_failed`, `report_id`, `report_url` và các trường thay đổi theo lần quét (`scan_id`, thời gian), JSON của Web UI PHẢI giống hệt JSON `--json` của CLI cho cùng target. Lỗi của cả hai endpoint trả `application/json` dạng `{"error": "..."}`. | M |
 
 ---
 
@@ -350,6 +354,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | NFR-SEC-01 | Bảo mật/đạo đức | Tool TUYỆT ĐỐI KHÔNG gửi payload khai thác (SQLi, XSS thật, command injection, path traversal thật, brute-force). Mọi request tới target là GET tiêu chuẩn, không sửa dữ liệu phía target. |
 | NFR-SEC-02 | Bảo mật/đạo đức | Bước xác nhận quyền quét không tắt được bằng cấu hình mặc định: CLI chỉ bỏ qua bằng cờ `--yes`; Web UI luôn yêu cầu `authorized: true`. |
 | NFR-SEC-03 | Bảo mật/đạo đức | Mọi request PHẢI gửi `User-Agent` nhận diện rõ là scanner (hiện là `TECHVIFY-OWASP-Scanner/1.0 (+passive security header/config check)`), không giả mạo trình duyệt. |
+| NFR-SEC-04 | Bảo mật | Mọi đầu ra (console, `--json`, response Web UI, báo cáo HTML) PHẢI qua `output.build_report()`, nơi che (1) cặp `tên=giá trị` của cookie do check khai báo chính xác, và (2) giá trị của mọi tham số URL có tên chứa `token`, `key`, `session`, `sess`, `password`, `passwd`, `pwd`, `secret`, `sig`, `auth`, `jwt` — trong `target`, `errors`, và `title`/`description`/`evidence`/`url`/`instance_key` của finding. Dòng `Scanning <target>` của CLI cũng được che. Cờ `--show-secrets` **chỉ có ở CLI**: in cảnh báo ra stderr, JSON có `secrets_redacted: false`, báo cáo HTML có băng cảnh báo. Web UI luôn che, bỏ qua mọi trường yêu cầu tắt che. |
 | NFR-PERF-01 | Hiệu năng | Mỗi request PHẢI có timeout cấu hình được (mặc định 10 giây). |
 | NFR-PERF-02 | Hiệu năng | Số luồng song song khi kiểm tra path nhạy cảm PHẢI giới hạn qua `--workers` (mặc định 5). |
 | NFR-PERF-03 | Hiệu năng | Không retry khi target trả 4xx/5xx; chỉ retry ở tầng kết nối/đọc, tối đa 1 lần. |
@@ -358,7 +363,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | NFR-USA-01 | Khả dụng | Output CLI có phân cách rõ ràng, bảng tổng hợp theo severity ở đầu, rồi mới tới chi tiết. |
 | NFR-USA-02 | Khả dụng | Mọi finding PHẢI có khuyến nghị khắc phục khi khả thi. |
 | NFR-USA-03 | Khả dụng | Ngôn ngữ mặc định của mọi text sản phẩm (UI, báo cáo HTML, output CLI, thông báo lỗi API, nội dung finding) là **tiếng Anh**. Tài liệu dự án (SRS, backlog, README) có thể viết tiếng Việt. |
-| NFR-PORT-01 | Khả chuyển | Tool PHẢI chạy trên Python ≥ 3.9, Linux/macOS/Windows. *Hiện mới chạy test thực tế trên Python 3.12 và 3.14 (Windows); Python 3.9 sẽ được kiểm chứng trong CI (FR-QA-07).* |
+| NFR-PORT-01 | Khả chuyển | Tool PHẢI chạy trên Python ≥ 3.9, Linux/macOS/Windows. *Đã chạy toàn bộ test trên Python 3.9, 3.12 và 3.14 (Windows) ngày 2026-09-30; Linux/macOS sẽ được kiểm chứng trong CI (FR-QA-07).* |
 | NFR-MAINT-01 | Bảo trì | Mỗi nhóm check nằm trong module riêng, unit test được không cần mạng thật (dùng mock server cục bộ hoặc dữ liệu có sẵn). |
 | NFR-MAINT-02 | Bảo trì | Danh sách header bắt buộc (4.3) và path nhạy cảm (4.8.1) là cấu trúc dữ liệu khai báo ở đầu file. |
 | NFR-COMP-01 | Tuân thủ | README, UI và báo cáo PHẢI nêu rõ giới hạn phạm vi (không phải DAST toàn diện, không thay thế pentest). Không dùng ngôn ngữ đảm bảo tuyệt đối ("website an toàn", "phát hiện 100%"). |
@@ -388,6 +393,11 @@ class Finding:
     evidence: str = ""
     recommendation: str = ""
     url: str = ""
+    instance_key: str = ""  # vị trí: tên header, tên cookie, path, host:port, URL (do check đặt)
+    cwe: str = ""           # VD "CWE-693"; rỗng với finding thông tin không phải điểm yếu
+    confidence: str = ""    # "high" | "medium" | "low"
+    references: list[str] = field(default_factory=list)  # link OWASP/CWE, chỉ https://
+    fingerprint: str = ""   # 32 hex, ổn định giữa các lần quét
 
 @dataclass
 class ScanResult:
@@ -397,19 +407,30 @@ class ScanResult:
     findings: list[Finding] = field(default_factory=list)
     checks_run: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    scan_id: str             # UUID4, mới cho mỗi lần quét
+    scanner_version: str     # owasp_scanner.__version__
+    rules_version: str       # bằng scanner_version cho tới khi rule nằm trong file dữ liệu (FR-DET-01)
 ```
 
 **Quy tắc bắt buộc:**
 
-- `Finding.id` là mã ổn định theo **loại** lỗi, không đổi giữa các lần chạy. Lưu ý: hiện chưa phân biệt được hai **vị trí** khác nhau của cùng một loại lỗi (ví dụ hai cookie cùng thiếu cờ đều có id `COOKIE-FLAGS-MISSING`). Khoá theo vị trí (`instance_key`, `fingerprint`) là FR-MODEL-01 trong backlog.
+- `Finding.id` là mã ổn định theo **loại** lỗi, không đổi giữa các lần chạy. Hai **vị trí** khác nhau của cùng một loại lỗi (ví dụ hai cookie cùng thiếu cờ) có cùng `id` nhưng khác `instance_key` và `fingerprint` (FR-MODEL-01).
+- `fingerprint` = 32 ký tự hex đầu của SHA-256(`id|instance_key|origin`), với `origin` = `scheme://host:port` của target (chữ thường, cổng mặc định 80/443). Không phụ thuộc path, thời gian quét hay giá trị bị che, nên cùng một lỗi ở cùng một chỗ luôn cho cùng fingerprint.
+- `cwe`, `confidence`, `references` lấy từ bảng khai báo `catalog.FINDING_CATALOG` (mỗi finding id một dòng). Mọi id tool sinh ra PHẢI có trong bảng. `cwe` để trống cho 3 finding thông tin không phải điểm yếu: `TLS-CONN-FAILED`, `TLS-CERT-PARSE-FAILED`, `EXPOSURE-SECURITY-TXT`. `COOKIE-FLAGS-MISSING` lấy CWE theo thuộc tính quan trọng nhất đang thiếu: Secure → CWE-614, HttpOnly → CWE-1004, SameSite → CWE-1275.
+- `confidence`: `high` = quan sát trực tiếp từ response/bắt tay (header, cookie, TLS, CORS, directory listing có dấu hiệu nội dung); `medium` = chỉ dựa trên HTTP 200 (path nhạy cảm, `security.txt`); `low` = chỉ là gợi ý (robots.txt, sitemap.xml). FR-DET-03 sẽ tinh chỉnh.
 - Khi xuất ra (CLI/JSON/HTML), `findings` được sắp theo `severity.rank` tăng dần (CRITICAL trước).
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
 
-JSON hiện **chưa có** `schema_version` (sẽ thêm ở FR-MODEL-02).
+Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.1`**: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` chỉ **thêm** các trường `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01), không bỏ hay đổi nghĩa trường nào. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
 
 ```json
 {
+  "schema_version": "1.1",
+  "scanner_version": "1.1.0",
+  "rules_version": "1.1.0",
+  "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
+  "secrets_redacted": true,
   "target": "https://example.com/",
   "started_at": "2026-09-22T08:26:08.822920Z",
   "finished_at": "2026-09-22T08:26:09.273000Z",
@@ -421,17 +442,22 @@ JSON hiện **chưa có** `schema_version` (sẽ thêm ở FR-MODEL-02).
       "title": "Exposed .env file (often contains secrets)",
       "severity": "CRITICAL",
       "owasp_category": "A01:2021 - Broken Access Control",
+      "cwe": "CWE-538",
+      "confidence": "medium",
       "description": "GET .env returned HTTP 200, suggesting the file/path is publicly accessible.",
       "evidence": "HTTP 200 for https://example.com/.env",
       "recommendation": "Remove the file from the web root or block access at the web server/proxy layer.",
-      "url": "https://example.com/.env"
+      "url": "https://example.com/.env",
+      "references": ["https://owasp.org/Top10/A01_2021-Broken_Access_Control/", "https://cwe.mitre.org/data/definitions/538.html"],
+      "instance_key": ".env",
+      "fingerprint": "<32 ký tự hex>"
     }
   ],
   "errors": []
 }
 ```
 
-AT-12 kiểm tra đúng tập khoá ở cấp gốc, trong `summary` và trong mỗi finding.
+AT-12 kiểm tra đúng tập khoá ở cấp gốc, trong `summary` và trong mỗi finding; AT-30 kiểm tra output khớp `docs/report.schema.json`.
 
 ### 6.3 Trường bổ sung của Web UI
 
@@ -450,7 +476,7 @@ AT-12 kiểm tra đúng tập khoá ở cấp gốc, trong `summary` và trong m
 ### 7.1 Cú pháp
 
 ```
-python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no-color] [--yes]
+python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no-color] [--yes] [--show-secrets]
 ```
 
 ### 7.2 Bảng tham số
@@ -463,6 +489,7 @@ python -m owasp_scanner <target> [--json PATH] [--timeout N] [--workers N] [--no
 | `--workers N` | Không | `5` | Số luồng song song khi kiểm tra path nhạy cảm. |
 | `--no-color` | Không | tắt | Tắt mã màu ANSI. |
 | `--yes` / `--i-have-authorization` | Không | tắt | Bỏ qua bước hỏi xác nhận tương tác. |
+| `--show-secrets` | Không | tắt | Không che giá trị cookie và tham số URL nhạy cảm (chỉ để debug cục bộ; NFR-SEC-04). |
 
 ### 7.3 Exit code
 
@@ -520,7 +547,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-01 | Từ chối quét khi chưa xác nhận | Trả lời `no`/rỗng/EOF ở prompt | Không có request nào; exit code `2` | `test_at01_*` |
 | AT-02 | Bỏ qua consent bằng `--yes` | `--yes` | Không hỏi; banner vẫn in; quét chạy bình thường | `test_at02_yes_flag_skips_prompt` |
 | AT-03 | Thiếu toàn bộ security headers | Response không có header nào (https) | Đủ 6 finding FR-HDR-01…04, 06, 07, đúng severity | `test_at03_all_security_headers_missing` |
-| AT-04 | Cookie thiếu cờ | `Set-Cookie: session=abc123; Path=/` | Finding MEDIUM liệt kê thiếu Secure, HttpOnly, SameSite | `test_at04_cookie_missing_flags` |
+| AT-04 | Cookie thiếu cờ | `Set-Cookie: session=abc123; Path=/` | Finding MEDIUM liệt kê thiếu Secure, HttpOnly, SameSite; evidence trong output là `session=<redacted len=6>; Path=/` | `test_at04_cookie_missing_flags` |
 | AT-05 | Lộ `.env` và `.git/HEAD` | Mock trả 200 cho 2 path này | Đúng 2 finding CRITICAL, A01:2021 | `test_at05_exposed_env_and_git_head` |
 | AT-06 | Soft-404 | Mock trả 200 cho mọi path | Không có finding A01 nào | `test_at06_soft_404_suppresses_exposure_findings` |
 | AT-07 | Directory listing | `/images/` chứa `Index of /images/` | Finding MEDIUM `EXPOSURE-DIR-LISTING` | `test_at07_directory_listing` |
@@ -545,6 +572,11 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-26 | Web UI: một lần quét mỗi lúc | Gửi lần quét thứ hai khi lần đầu chưa xong | HTTP 429 | `test_only_one_scan_at_a_time` |
 | AT-27 | Web UI: tải báo cáo HTML | Quét mock rồi mở `report_url` | 200, `Content-Disposition: attachment`; nội dung từ target được escape | `test_scan_result_links_to_downloadable_html_report`, `test_values_from_target_are_escaped` |
 | AT-28 | Web UI: tiếng Anh | File tĩnh của UI | `lang="en"`, không có ký tự tiếng Việt | `test_ui_text_is_english` |
+| AT-29 | Mô hình finding | Quét mock có nhiều loại lỗi; quét lại lần 2 | Mọi finding có `instance_key`, `fingerprint` 32 hex, `confidence`, `references`, `cwe` (trừ 3 id thông tin); 2 cookie thiếu cờ có 2 fingerprint khác nhau; fingerprint giống nhau giữa 2 lần quét và không phụ thuộc path | `test_every_finding_of_a_real_scan_is_enriched`, `test_same_type_in_two_places_gets_two_fingerprints`, `test_fingerprints_are_stable_across_scans`, `test_fingerprint_uses_origin_not_path_or_time`, `test_catalog_covers_every_finding_id` |
+| AT-30 | JSON có version và khớp schema | `--json`; quét lỗi kết nối; response của Web UI (bỏ 3 trường riêng) | Cả ba khớp `docs/report.schema.json`; `schema_version` = `1.1`; `scan_id` là UUID4 mới mỗi lần quét; schema từ chối khoá lạ | `test_cli_json_report_matches_schema`, `test_failed_scan_report_matches_schema`, `test_web_response_is_the_report_plus_web_fields`, `test_every_scan_gets_a_new_scan_id`, `test_schema_rejects_unknown_fields` |
+| AT-31 | CLI và Web UI cho cùng kết quả | Quét cùng một mock qua CLI `--json` và qua `POST /api/scan` | JSON giống nhau (trừ trường riêng của UI và trường thay đổi theo lần quét); `gate_failed` khớp exit code; mã lỗi và Content-Type của 2 endpoint đúng hợp đồng | `test_cli_and_web_ui_produce_the_same_report`, `test_scan_errors_are_json_with_an_error_message`, `test_report_endpoint_contract` |
+| AT-32 | Không lộ secret | Mock đặt cookie `session=<giá trị mẫu>`; target có `?access_token=<giá trị mẫu>` | Console, `--json`, JSON và báo cáo HTML của Web UI không chứa hai giá trị mẫu; `secrets_redacted: true`; `--show-secrets` in cảnh báo stderr và cho `secrets_redacted: false`; Web UI vẫn che khi client gửi `show_secrets` | `test_cli_console_and_json_are_redacted`, `test_show_secrets_is_explicit_and_warns`, `test_web_ui_always_redacts_even_if_asked_not_to`, `test_html_report_warns_when_secrets_are_shown`, `test_errors_are_redacted`, `test_sensitive_url_parameters_are_masked` |
+| AT-33 | Severity CORS theo D3 | Server trả 4 tổ hợp: `*` + credentials; phản xạ + credentials; phản xạ không credentials; `*` đơn lẻ | Lần lượt MEDIUM, HIGH, MEDIUM, INFO; mô tả mỗi finding giải thích lý do mức độ; mọi finding có khuyến nghị | `test_cors`, `test_cors_findings_explain_their_severity_and_how_to_fix` |
 
 ---
 
@@ -555,7 +587,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 - **False positive:** robots.txt/sitemap.xml (path "nghe nhạy cảm" chưa chắc tồn tại hay lộ); path nhạy cảm chỉ dựa trên HTTP 200, không kiểm tra nội dung (FR-DET-01 trong backlog).
 - **False negative:** target dùng CDN/WAF có thể chặn hoặc trả response khác cho User-Agent của scanner. TLS chỉ xét giao thức/cipher **được thương lượng**, không dò các phiên bản cũ server còn bật (FR-DET-04).
 - **Hai kho chứng chỉ khác nhau (B1):** request HTTP (`requests`) tin kho `certifi`, còn nhóm TLS (`ssl.create_default_context()`) tin kho chứng chỉ của hệ điều hành. Trên mạng có TLS inspection (đã xác minh trên mạng TECHVIFY ngày 2026-09-23), `requests` từ chối **mọi** site HTTPS: baseline thất bại ở tầng TLS, nhóm TLS chạy nhưng không báo lỗi vì kho OS tin CA của proxy, nên báo cáo chỉ có 1 dòng lỗi "Could not fetch", 0 finding, exit code `0`. Sẽ xử lý ở FR-CI-10 (`--ca-bundle` dùng chung).
-- **Evidence chứa giá trị cookie:** theo FR-COOKIE-04, evidence giữ nguyên `Set-Cookie`, nên JSON và báo cáo HTML tải về có thể chứa session cookie của target. Chỉ chia sẻ báo cáo trong phạm vi được phép cho tới khi D2 được triển khai (FR-AUTH-02).
+- **Che secret dựa trên quy tắc:** chỉ che giá trị cookie và tham số URL có tên thuộc danh sách ở NFR-SEC-04. Secret nằm ở chỗ khác (ví dụ trong nội dung CSP hay header `Server`) sẽ không bị che. Báo cáo vẫn chứa URL, header và cấu hình của target nên chỉ chia sẻ trong phạm vi được phép.
 - **TLS mở 2 kết nối** (Bước A và B); chấp nhận được vì chỉ là bắt tay, không lặp.
 - **`TLS-CERT-NOT-TRUSTED` gộp nhiều nguyên nhân** (tự ký, thiếu intermediate, sai hostname, CA lạ) vào một mã (FR-DET-05).
 - **Web UI quét đồng bộ:** trình duyệt chờ tới khi quét xong, không có tiến độ hay nút huỷ (FR-WEB-03). Báo cáo chỉ nằm trong bộ nhớ.
@@ -571,13 +603,11 @@ Lộ trình chi tiết, độ ưu tiên và thứ tự sprint nằm ở `docs/PR
 
 ## 12. Quyết định đã chốt, chưa triển khai
 
-Các quyết định dưới đây đã được chủ sản phẩm chốt ngày 2026-09-30. Code hiện chưa làm (trừ D1). Khi code xong: cập nhật các FR tương ứng ở mục 4, thêm AT ở mục 9, rồi xoá dòng khỏi bảng.
+Các quyết định dưới đây đã được chủ sản phẩm chốt ngày 2026-09-30. Code hiện chưa làm, trừ D1 (mục 3.3), D2 (Sprint 3: FR-COOKIE-04, NFR-SEC-04) và D3 (Sprint 3: FR-CORS-02…04). Khi code xong: cập nhật các FR tương ứng ở mục 4, thêm AT ở mục 9, rồi xoá dòng khỏi bảng.
 
 | ID | Quyết định | FR sẽ thay đổi | Phụ thuộc | Backlog |
 |---|---|---|---|---|
 | D1 | Web UI là công cụ cục bộ chạy chung tiến trình, gọi thẳng `run_scan()`; không có server/service riêng. **Đã triển khai** (mục 3.3, 4.10). | — | — | 1.4 |
-| D2 | Giá trị cookie và secret trong evidence được che mặc định (giữ tên + thuộc tính, giá trị thay bằng `<redacted len=N>`). Cờ `--show-secrets` chỉ có ở CLI để debug cục bộ; Web UI không bật được cờ này dưới bất kỳ hình thức nào. | FR-COOKIE-04 | — | FR-AUTH-02 |
-| D3 | Severity CORS: `*` + credentials → MEDIUM; phản xạ origin + credentials → HIGH; phản xạ origin không credentials → MEDIUM; `*` đơn lẻ → INFO. Thay quyết định ngày 2026-09-23 giữ CRITICAL. Hệ quả: `*` + credentials không còn làm exit code `1`. | FR-CORS-02 | — | FR-FIX-07 |
 | D4 | **Quy tắc phạm vi (scope) khi theo redirect:** chỉ được theo redirect tới cùng host, hoặc host chỉ khác tiền tố `www.` (ví dụ `example.com` ↔ `www.example.com`). Redirect ra ngoài phạm vi thì tool không gửi request tới host đó, dừng lại và ghi vào `errors`. Không dùng Public Suffix List (tránh dependency mới). | FR-CLI-03, FR-REDIR-01 | — | FR-AUTHZ-03 (một phần), FR-FIX-09 |
 | D5 | **Cookie xét trên toàn chuỗi redirect**, header xét trên response cuối. Giữ hành vi A3 của FR-COOKIE-01. | FR-COOKIE-01 (giữ), FR-HDR-* | — | FR-FIX-10 |
 | FIX-09 | **Điều kiện chạy redirect check.** Luôn chạy redirect check cho hostname của target, kể cả khi người dùng nhập `http://`. Nếu `http://` được chuyển sang `https://` trong phạm vi (D4), tool chạy nhóm TLS trên URL cuối. Nếu không được chuyển, tool báo `TLS-NO-HTTPS-REDIRECT`. Lỗi chứng chỉ không chặn redirect check; hai loại lỗi được báo riêng. Hệ quả: target `http://` có thể sinh thêm finding TLS mức CRITICAL/HIGH, làm exit code thay đổi — phải ghi changelog. | FR-CLI-05, FR-REDIR-01, FR-CLI-04 (hệ quả) | D4 | FR-FIX-09 |
@@ -593,4 +623,4 @@ Các quyết định dưới đây đã được chủ sản phẩm chốt ngày
 
 ---
 
-*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.1.0` trong repo (gồm các bản sửa sau v1.1.0 và Web UI cục bộ), đã đối chiếu với code và với 110 test tự động ngày 2026-09-30. Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*
+*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.2.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với 204 test tự động ngày 2026-09-30. Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*

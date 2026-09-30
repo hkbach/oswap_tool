@@ -1,2 +1,2 @@
--r requirements.txt
-pytest>=8.0
+# Development dependencies are declared in pyproject.toml ([project.optional-dependencies] dev).
+-e .[dev]

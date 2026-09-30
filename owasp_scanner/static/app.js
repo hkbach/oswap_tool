@@ -86,6 +86,21 @@ function detailRow(label, value, asCode) {
   return row;
 }
 
+function referencesRow(links) {
+  const row = el("div", "detail");
+  row.append(el("dt", null, "References"));
+  const dd = el("dd", "references");
+  for (const ref of links) {
+    const link = el("a", null, ref);
+    link.href = ref;
+    link.rel = "noopener noreferrer";
+    link.target = "_blank";
+    dd.append(link);
+  }
+  row.append(dd);
+  return row;
+}
+
 function renderFindings() {
   const filter = $("severity-filter").value;
   const findings = lastResult.findings.filter((f) => filter === "ALL" || f.severity === filter);
@@ -97,13 +112,16 @@ function renderFindings() {
     const head = el("div", "finding-head");
     head.append(el("span", "badge", f.severity), el("h3", "finding-title", f.title));
     item.append(head);
-    item.append(el("p", "finding-owasp", `${f.owasp_category} · ${f.id}`));
+    const classification = [f.owasp_category, f.cwe, f.confidence ? `confidence ${f.confidence}` : "", f.id];
+    item.append(el("p", "finding-owasp", classification.filter(Boolean).join(" · ")));
     item.append(el("p", "finding-desc", f.description));
 
     const details = el("dl", "details");
     if (f.evidence) details.append(detailRow("Evidence", f.evidence, true));
     if (f.recommendation) details.append(detailRow("Recommendation", f.recommendation, false));
     if (f.url) details.append(detailRow("URL", f.url, true));
+    const links = (f.references || []).filter((ref) => String(ref).startsWith("https://"));
+    if (links.length) details.append(referencesRow(links));
     if (details.childElementCount) item.append(details);
     list.append(item);
   }

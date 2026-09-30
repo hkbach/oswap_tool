@@ -7,6 +7,7 @@ Usage:
 IMPORTANT: only run this against systems you own or have explicit,
 documented authorization to test. See README.md.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,9 +17,12 @@ from urllib.parse import urlparse, urlsplit, urlunsplit
 
 import requests
 
+from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
 from .http_utils import build_session
 from .models import ScanResult
+from .output import build_report, gate_failed
+from .redact import redact
 from .report import print_report, write_json
 
 CONSENT_BANNER = """
@@ -65,7 +69,7 @@ def _run_check(result: ScanResult, name: str, check, *args, **kwargs) -> None:
     result.checks_run.append(name)
     try:
         for f in check(*args, **kwargs):
-            result.add(f)
+            result.add(enrich(f, result.target))
     except Exception as exc:  # one broken check must not abort the scan (FR-REPORT-05)
         result.errors.append(f"Check '{name}' failed: {exc!r}")
 
@@ -102,8 +106,12 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
         return result
 
     _run_check(
-        result, "security-headers", headers.check_security_headers,
-        base_url, dict(resp.headers), is_https=(parsed.scheme == "https"),
+        result,
+        "security-headers",
+        headers.check_security_headers,
+        base_url,
+        dict(resp.headers),
+        is_https=(parsed.scheme == "https"),
     )
 
     # requests folds repeated Set-Cookie headers into one string, so read them from
@@ -135,6 +143,11 @@ def main(argv=None) -> int:
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors in CLI output")
     parser.add_argument(
+        "--show-secrets",
+        action="store_true",
+        help="Do not redact cookie values and sensitive URL parameters (local debugging only).",
+    )
+    parser.add_argument(
         "--yes",
         "--i-have-authorization",
         dest="assume_yes",
@@ -148,19 +161,23 @@ def main(argv=None) -> int:
         return 2
 
     target = _normalize_target(args.target)
-    print(f"Scanning {target} ...\n")
+    print(f"Scanning {target if args.show_secrets else redact(target)} ...\n")
 
     result = run_scan(target, timeout=args.timeout, workers=args.workers)
-    print_report(result, use_color=not args.no_color)
+    if args.show_secrets:
+        print(
+            "WARNING: --show-secrets is set: cookie values and sensitive URL parameters are NOT redacted. "
+            "Do not share this output.",
+            file=sys.stderr,
+        )
+    report = build_report(result, show_secrets=args.show_secrets)
+    print_report(report, use_color=not args.no_color)
 
     if args.json:
-        write_json(result, args.json)
+        write_json(report, args.json)
         print(f"\nFull JSON report written to: {args.json}")
 
-    counts = result.summary_counts()
-    if counts["CRITICAL"] or counts["HIGH"]:
-        return 1
-    return 0
+    return 1 if gate_failed(report) else 0
 
 
 if __name__ == "__main__":

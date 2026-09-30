@@ -18,6 +18,7 @@ chain is untrusted or expired, this module opens the connection twice:
 Maps to OWASP Top 10 A02:2021 (Cryptographic Failures) and ASVS V9
 (Communications).
 """
+
 from __future__ import annotations
 
 import datetime
@@ -93,6 +94,7 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
                 owasp_category="A02:2021 - Cryptographic Failures",
                 description=f"Connection to {hostname}:{port} failed: {conn_err}",
                 url=url,
+                instance_key=f"{hostname}:{port}",
             )
         )
         return findings
@@ -107,6 +109,7 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
                 description=f"The server negotiated {protocol}, which is deprecated/insecure.",
                 recommendation="Disable protocols below TLS 1.2 (prefer TLS 1.3) in the server/load balancer config.",
                 url=url,
+                instance_key=f"{hostname}:{port}",
             )
         )
 
@@ -120,6 +123,7 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
                 description=f"Negotiated cipher suite '{cipher[0]}' is considered weak.",
                 recommendation="Restrict the server's cipher list to modern AEAD suites (e.g. AES-GCM, ChaCha20).",
                 url=url,
+                instance_key=f"{hostname}:{port}",
             )
         )
 
@@ -143,6 +147,7 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
                         description=f"Certificate's validity period starts on {not_before.isoformat()}.",
                         recommendation="Check the certificate issuance date and the server/client clock for skew.",
                         url=url,
+                        instance_key=f"{hostname}:{port}",
                     )
                 )
             elif now > not_after:
@@ -156,6 +161,7 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
                         description=f"Certificate expired on {not_after.isoformat()}.",
                         recommendation="Renew the certificate immediately.",
                         url=url,
+                        instance_key=f"{hostname}:{port}",
                     )
                 )
             else:
@@ -168,8 +174,11 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
                             severity=Severity.MEDIUM,
                             owasp_category="A02:2021 - Cryptographic Failures",
                             description=f"Certificate expires on {not_after.isoformat()}.",
-                            recommendation="Renew the certificate (or confirm auto-renewal, e.g. ACME/Let's Encrypt, is working).",
+                            recommendation=(
+                                "Renew the certificate (or confirm auto-renewal, e.g. ACME/Let's Encrypt, is working)."
+                            ),
                             url=url,
+                            instance_key=f"{hostname}:{port}",
                         )
                     )
         except Exception as exc:  # malformed certificate bytes, unsupported encoding, etc.
@@ -181,6 +190,7 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
                     owasp_category="A02:2021 - Cryptographic Failures",
                     description=f"Failed to decode the certificate for validity-period checks: {exc}",
                     url=url,
+                    instance_key=f"{hostname}:{port}",
                 )
             )
 
@@ -202,6 +212,7 @@ def check_tls(hostname: str, port: int = 443, timeout: int = 10) -> list[Finding
                         "exact hostname, with a complete chain (including intermediates)."
                     ),
                     url=url,
+                    instance_key=f"{hostname}:{port}",
                 )
             )
 

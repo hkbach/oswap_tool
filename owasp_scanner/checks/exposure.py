@@ -6,6 +6,7 @@ are sent — nothing that probes for or exploits a vulnerability.
 Maps to OWASP Top 10 A01:2021 (Broken Access Control) and
 A05:2021 (Security Misconfiguration).
 """
+
 from __future__ import annotations
 
 import re
@@ -35,7 +36,11 @@ _SENSITIVE_PATHS = {
     "phpinfo.php": ("EXPOSURE-PHPINFO", Severity.MEDIUM, "Exposed phpinfo() output"),
     "server-status": ("EXPOSURE-SERVER-STATUS", Severity.MEDIUM, "Exposed Apache mod_status page"),
     "id_rsa": ("EXPOSURE-ID-RSA", Severity.CRITICAL, "Exposed private SSH key"),
-    ".well-known/security.txt": ("EXPOSURE-SECURITY-TXT", Severity.INFO, "security.txt present (informational, not a finding)"),
+    ".well-known/security.txt": (
+        "EXPOSURE-SECURITY-TXT",
+        Severity.INFO,
+        "security.txt present (informational, not a finding)",
+    ),
 }
 
 _SENSITIVE_KEYWORDS = ("admin", "backup", "config", "internal", "private", "secret", "staging", "test")
@@ -74,6 +79,7 @@ def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[
                             owasp_category="A05:2021 - Security Misconfiguration",
                             description="A security.txt disclosure policy was found (good practice).",
                             url=url,
+                            instance_key=path,
                         )
                     )
                 continue
@@ -87,8 +93,11 @@ def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[
                         owasp_category="A01:2021 - Broken Access Control",
                         description=f"GET {path} returned HTTP 200, suggesting the file/path is publicly accessible.",
                         evidence=f"HTTP {resp.status_code} for {url}",
-                        recommendation="Remove the file from the web root or block access at the web server/proxy layer.",
+                        recommendation=(
+                            "Remove the file from the web root or block access at the web server/proxy layer."
+                        ),
                         url=url,
+                        instance_key=path,
                     )
                 )
 
@@ -116,6 +125,7 @@ def check_directory_listing(session, base_url: str, paths: list[str] | None = No
                     evidence=url,
                     recommendation="Disable autoindex/directory listing in the web server configuration.",
                     url=url,
+                    instance_key=path,
                 )
             )
 
@@ -149,8 +159,11 @@ def _check_robots_txt(session, base_url: str) -> list[Finding]:
                     "block direct access and can act as a roadmap for attackers."
                 ),
                 evidence=", ".join(interesting[:10]),
-                recommendation="Enforce access control on these paths server-side; don't rely on robots.txt to hide them.",
+                recommendation=(
+                    "Enforce access control on these paths server-side; don't rely on robots.txt to hide them."
+                ),
                 url=url,
+                instance_key="robots.txt",
             )
         )
     return findings
@@ -185,8 +198,11 @@ def _check_sitemap_xml(session, base_url: str) -> list[Finding]:
                     "stronger disclosure signal."
                 ),
                 evidence=", ".join(interesting[:10]),
-                recommendation="Remove sensitive/internal URLs from the public sitemap; enforce access control server-side.",
+                recommendation=(
+                    "Remove sensitive/internal URLs from the public sitemap; enforce access control server-side."
+                ),
                 url=url,
+                instance_key="sitemap.xml",
             )
         )
     return findings

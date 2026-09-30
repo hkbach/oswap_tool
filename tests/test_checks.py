@@ -1,4 +1,5 @@
 """Unit tests for individual check modules (FR-HDR, FR-COOKIE, FR-TLS, FR-REDIR, FR-CORS, FR-EXP)."""
+
 from __future__ import annotations
 
 import pytest
@@ -129,7 +130,8 @@ def test_tls_weak_protocol_and_cipher(monkeypatch, tmp_path):
 
     der = x509.load_pem_x509_certificate(certfile.read_bytes()).public_bytes(Encoding.DER)
     monkeypatch.setattr(
-        tls_check, "_fetch_raw_cert_and_connection_info",
+        tls_check,
+        "_fetch_raw_cert_and_connection_info",
         lambda h, p, t: (der, "TLSv1", ("RC4-MD5", "TLSv1", 128), None),
     )
     monkeypatch.setattr(tls_check, "_verify_trust", lambda h, p, t: None)
@@ -154,7 +156,7 @@ class _RedirectToHttps(QuietHandler):
 
 
 def test_redirect_missing_https_redirect(http_server):
-    host = http_server(_NoRedirect)[len("http://"):-1]  # "127.0.0.1:<port>"
+    host = http_server(_NoRedirect)[len("http://") : -1]  # "127.0.0.1:<port>"
     found = redirect_check.check_http_to_https_redirect(build_session(timeout=2), host)
     assert ids(found) == ["TLS-NO-HTTPS-REDIRECT"]
 
@@ -162,7 +164,7 @@ def test_redirect_missing_https_redirect(http_server):
 def test_redirect_to_https_is_not_a_finding(http_server):
     # The HTTPS hop fails to connect; the final URL we saw was never HTTPS-verified,
     # but FR-REDIR-02 treats "no response" as acceptable, so nothing is reported.
-    host = http_server(_RedirectToHttps)[len("http://"):-1]
+    host = http_server(_RedirectToHttps)[len("http://") : -1]
     assert redirect_check.check_http_to_https_redirect(build_session(timeout=2), host) == []
 
 
@@ -190,7 +192,7 @@ def _cors_handler(acao, acac=None):
 @pytest.mark.parametrize(
     "acao, acac, expected",
     [
-        ("*", "true", ("CORS-WILDCARD-WITH-CREDENTIALS", "CRITICAL")),
+        ("*", "true", ("CORS-WILDCARD-WITH-CREDENTIALS", "MEDIUM")),  # D3: browsers refuse this pair
         ("echo", "true", ("CORS-REFLECTS-ARBITRARY-ORIGIN", "HIGH")),
         ("echo", None, ("CORS-REFLECTS-ARBITRARY-ORIGIN", "MEDIUM")),
         ("*", None, ("CORS-WILDCARD", "INFO")),
@@ -265,3 +267,18 @@ def test_robots_hints_capped_at_ten(http_server):
 
     found = exposure.check_robots_and_sitemap(build_session(timeout=2), http_server(H))
     assert len(found) == 1 and len(found[0].evidence.split(", ")) == 10
+
+
+@pytest.mark.parametrize(
+    "acao, acac, reason",
+    [
+        ("*", "true", "browsers refuse"),
+        ("echo", "true", "any website"),
+        ("echo", None, "without credentials"),
+        ("*", None, "public"),
+    ],
+)
+def test_cors_findings_explain_their_severity_and_how_to_fix(http_server, acao, acac, reason):
+    (finding,) = cors_check.check_cors(build_session(timeout=2), http_server(_cors_handler(acao, acac)))
+    assert reason in finding.description.lower()
+    assert finding.recommendation

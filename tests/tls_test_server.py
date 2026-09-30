@@ -2,10 +2,10 @@
 offline, using a locally-generated cert (expired or self-signed-untrusted).
 Not part of the shipped tool — a throwaway test harness.
 """
+
 import socket
 import ssl
 import sys
-import threading
 
 
 def serve_once_forever(port: int, certfile: str, keyfile: str):
@@ -22,14 +22,14 @@ def serve_once_forever(port: int, certfile: str, keyfile: str):
             with ctx.wrap_socket(conn, server_side=True) as ssock:
                 try:
                     ssock.recv(4096)
-                except Exception:
+                except OSError:  # client closed early
                     pass
-        except Exception:
+        except OSError:  # handshake refused by a verifying client: expected
             pass
         finally:
             try:
                 conn.close()
-            except Exception:
+            except OSError:
                 pass
 
 

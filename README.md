@@ -11,9 +11,27 @@ Công cụ Python (CLI + Web UI cục bộ) quét cấu hình bảo mật của 
 - [`docs/PRODUCT-BACKLOG.md`](./docs/PRODUCT-BACKLOG.md) — backlog, quyết định
   đã chốt, thứ tự sprint.
 - [`CLAUDE.md`](./CLAUDE.md) — quy tắc làm việc trong repo.
+- [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema của báo cáo `--json`
+  (`schema_version` 1.1).
 
 ## Changelog
 
+- **v1.2.0** (Sprint 3) — thay đổi hành vi cần lưu ý:
+  - **Che secret mặc định (D2):** giá trị cookie và tham số URL nhạy cảm
+    (`token`, `key`, `session`, `password`, `sig`…) được thay bằng
+    `<redacted len=N>` trong mọi output. CLI có `--show-secrets` để debug cục
+    bộ; Web UI luôn che.
+  - **Severity CORS (D3):** `CORS-WILDCARD-WITH-CREDENTIALS` hạ từ CRITICAL
+    xuống MEDIUM, nên tổ hợp này **không còn làm exit code `1`**.
+  - **JSON `schema_version` 1.1** (chỉ thêm trường): `scanner_version`,
+    `rules_version`, `scan_id`, `secrets_redacted`; mỗi finding thêm `cwe`,
+    `confidence`, `references`, `instance_key`, `fingerprint`. Schema ở
+    `docs/report.schema.json`.
+  - Thứ tự finding cố định giữa các lần quét (severity → id → instance_key).
+  - CLI và Web UI dùng chung một bộ xử lý đầu ra; Web UI đọc hết body request
+    trước khi trả lỗi (tránh connection reset trên Windows).
+  - Dev: `pyproject.toml`, ruff, `jsonschema` (MIT); đã chạy test trên Python
+    3.9, 3.12, 3.14.
 - **v1.1.0** — sửa 6 vấn đề phát hiện khi review SRS v1.0: (1) TLS check tách
   thành 2 bước kết nối để không bỏ lỡ finding hết hạn chứng chỉ khi trust
   chain cũng lỗi; (2) sitemap.xml được parse đúng cú pháp `<loc>` thay vì áp

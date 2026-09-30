@@ -2,6 +2,7 @@
 Project (https://owasp.org/www-project-secure-headers/) and the
 security-header portions of OWASP ASVS chapter V14 (Configuration).
 """
+
 from __future__ import annotations
 
 from ..models import Finding, Severity
@@ -17,8 +18,7 @@ _REQUIRED_HEADERS = {
     "content-security-policy": (
         Severity.MEDIUM,
         "A05:2021 - Security Misconfiguration",
-        "Define a Content-Security-Policy to restrict script/style/frame "
-        "sources and reduce the impact of XSS.",
+        "Define a Content-Security-Policy to restrict script/style/frame sources and reduce the impact of XSS.",
     ),
     "x-content-type-options": (
         Severity.LOW,
@@ -28,8 +28,7 @@ _REQUIRED_HEADERS = {
     "x-frame-options": (
         Severity.MEDIUM,
         "A05:2021 - Security Misconfiguration",
-        "Send 'X-Frame-Options: DENY' or 'SAMEORIGIN' (or a CSP "
-        "'frame-ancestors' directive) to prevent clickjacking.",
+        "Send 'X-Frame-Options: DENY' or 'SAMEORIGIN' (or a CSP 'frame-ancestors' directive) to prevent clickjacking.",
     ),
     "referrer-policy": (
         Severity.LOW,
@@ -79,6 +78,7 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
                     description=f"The response did not include a '{header}' header.",
                     recommendation=advice,
                     url=url,
+                    instance_key=header,
                 )
             )
         elif header == "x-frame-options":
@@ -93,6 +93,7 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
                         description=f"X-Frame-Options value observed: '{lower_headers[header]}'.",
                         recommendation="Use 'DENY' or 'SAMEORIGIN', or migrate to CSP frame-ancestors.",
                         url=url,
+                        instance_key=header,
                     )
                 )
 
@@ -108,6 +109,7 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
                 evidence=csp_value,
                 recommendation="Remove 'unsafe-inline'/'unsafe-eval'; use nonces or hashes instead.",
                 url=url,
+                instance_key="content-security-policy",
             )
         )
     # Legacy header that should be actively disabled, not just absent
@@ -126,6 +128,7 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
                 ),
                 evidence=f"X-XSS-Protection: {xxp}",
                 url=url,
+                instance_key="x-xss-protection",
             )
         )
 
@@ -141,6 +144,7 @@ def check_security_headers(url: str, headers: dict, is_https: bool = True) -> li
                     evidence=f"{h}: {lower_headers[h]}",
                     recommendation="Suppress or generalize this header at the reverse proxy/web server level.",
                     url=url,
+                    instance_key=h,
                 )
             )
 

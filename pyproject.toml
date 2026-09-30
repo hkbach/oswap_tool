@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "owasp-scanner"
+dynamic = ["version"]
+description = "OWASP-aligned non-intrusive web security configuration scanner (CLI + local web UI)"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.31.0",
+    "urllib3>=2.0.0",
+    "cryptography>=41.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.14,<0.15",
+    "jsonschema>=4.18",
+]
+
+[project.scripts]
+owasp-scanner = "owasp_scanner.cli:main"
+owasp-scanner-web = "owasp_scanner.web:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "owasp_scanner.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["owasp_scanner*"]
+
+[tool.setuptools.package-data]
+owasp_scanner = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Plain asserts are how pytest checks results.
+"tests/**" = ["S101"]

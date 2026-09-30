@@ -1,4 +1,5 @@
 """Regression tests for gaps found while reviewing v1.1.0 against SRS 1.1."""
+
 from __future__ import annotations
 
 import warnings
@@ -59,16 +60,24 @@ def test_unreachable_https_target_has_no_findings(closed_port):
 class MultiCookieHandler(QuietHandler):
     def do_GET(self):
         if self.path == "/":
-            self.send(302, b"", [
-                ("Location", "/home"),
-                ("Set-Cookie", "hop=1; Secure; HttpOnly; SameSite=Lax"),
-                ("Set-Cookie", "hop_weak=1; Path=/"),
-            ])
+            self.send(
+                302,
+                b"",
+                [
+                    ("Location", "/home"),
+                    ("Set-Cookie", "hop=1; Secure; HttpOnly; SameSite=Lax"),
+                    ("Set-Cookie", "hop_weak=1; Path=/"),
+                ],
+            )
         elif self.path == "/home":
-            self.send(200, b"home", [
-                ("Set-Cookie", "good=1; Secure; HttpOnly; SameSite=Strict"),
-                ("Set-Cookie", "bad=1; Path=/"),
-            ])
+            self.send(
+                200,
+                b"home",
+                [
+                    ("Set-Cookie", "good=1; Secure; HttpOnly; SameSite=Strict"),
+                    ("Set-Cookie", "bad=1; Path=/"),
+                ],
+            )
         else:
             self.send(404)
 

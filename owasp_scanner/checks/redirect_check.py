@@ -2,6 +2,7 @@
 
 Maps to OWASP Top 10 A02:2021 (Cryptographic Failures).
 """
+
 from __future__ import annotations
 
 from ..http_utils import safe_get
@@ -28,6 +29,7 @@ def check_http_to_https_redirect(session, hostname: str) -> list[Finding]:
                 description=f"Requesting {http_url} did not result in an HTTPS URL (final URL: {final_url}).",
                 recommendation="Redirect all HTTP traffic to HTTPS (301) at the web server/load balancer.",
                 url=http_url,
+                instance_key=http_url,
             )
         )
 
