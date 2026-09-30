@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
+
+from . import __version__
+
+# Version of the JSON report layout (docs/report.schema.json). Bump on any change to the
+# report shape: minor for added fields, major for removed/renamed fields or changed meaning.
+# "1.0" was the unversioned layout of scanner v1.1.0.
+SCHEMA_VERSION = "1.1"
 
 
 class Severity(str, Enum):
@@ -74,6 +82,10 @@ class ScanResult:
     findings: list = field(default_factory=list)
     checks_run: list = field(default_factory=list)
     errors: list = field(default_factory=list)
+    scan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    scanner_version: str = __version__
+    # Version of the built-in check tables; follows the scanner until rules move to data files (FR-DET-01).
+    rules_version: str = __version__
 
     def add(self, finding: Finding) -> None:
         self.findings.append(finding)
@@ -86,6 +98,10 @@ class ScanResult:
 
     def to_dict(self) -> dict:
         return {
+            "schema_version": SCHEMA_VERSION,
+            "scanner_version": self.scanner_version,
+            "rules_version": self.rules_version,
+            "scan_id": self.scan_id,
             "target": self.target,
             "started_at": self.started_at,
             "finished_at": self.finished_at,

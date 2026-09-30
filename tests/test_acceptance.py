@@ -200,7 +200,10 @@ def test_at12_json_report(http_server, tmp_path):
     out = tmp_path / "out.json"
     cli.main([http_server(MockHandler), "--yes", "--no-color", "--json", str(out)])
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert set(data) == {"target", "started_at", "finished_at", "checks_run", "summary", "findings", "errors"}
+    assert set(data) == {
+        "target", "started_at", "finished_at", "checks_run", "summary", "findings", "errors",
+        "schema_version", "scanner_version", "rules_version", "scan_id",  # FR-MODEL-02
+    }  # fmt: skip
     assert set(data["summary"]) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
     assert set(data["findings"][0]) == {
         "id",

@@ -11,6 +11,8 @@ Công cụ Python (CLI + Web UI cục bộ) quét cấu hình bảo mật của 
 - [`docs/PRODUCT-BACKLOG.md`](./docs/PRODUCT-BACKLOG.md) — backlog, quyết định
   đã chốt, thứ tự sprint.
 - [`CLAUDE.md`](./CLAUDE.md) — quy tắc làm việc trong repo.
+- [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema của báo cáo `--json`
+  (`schema_version` 1.1).
 
 ## Changelog
 

@@ -262,7 +262,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [x] **FR-MODEL-01** (P0 · all) *(xong ở Sprint 3: `catalog.py`, SRS 6.1, AT-29)* Mở rộng `Finding`: `cwe`, `confidence`, `references[]` (link OWASP/MDN/RFC), `instance_key` (khóa vị trí: URL/tên cookie/tên header/path), `fingerprint = hash(id + instance_key + target)`.
   AC: cùng một lỗi ở lần quét sau cho cùng `fingerprint`; hai cookie thiếu cờ khác nhau cho hai fingerprint khác nhau; fingerprint không phụ thuộc giá trị bị redact hay thời gian quét.
   Là tiền đề cho: FR-CI-02 (baseline), FR-RPT-06 (so sánh), FR-RPT-02 (SARIF).
-- [ ] **FR-MODEL-02** (P0 · all) Thêm `schema_version`, `scanner_version`, `scan_id` (UUID), `rules_version` vào JSON; giữ tương thích ngược hoặc nâng version có changelog.
+- [x] **FR-MODEL-02** (P0 · all) *(xong ở Sprint 3: `schema_version` 1.1, `docs/report.schema.json`, AT-30)* Thêm `schema_version`, `scanner_version`, `scan_id` (UUID), `rules_version` vào JSON; giữ tương thích ngược hoặc nâng version có changelog.
   AC: test schema (jsonschema) cho JSON output; AT-12 vẫn đạt.
 - [ ] **FR-MODEL-03** (P1 · Pro) Điểm số: `cvss_vector`/`cvss_score` ước tính theo loại finding (ghi rõ "estimated") hoặc bảng severity có lý do; báo cáo giải thích cách tính.
   `[CONFIRM]` chọn CVSS v3.1 hay v4.0 và chính sách trình bày.

@@ -403,6 +403,9 @@ class ScanResult:
     findings: list[Finding] = field(default_factory=list)
     checks_run: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    scan_id: str             # UUID4, mới cho mỗi lần quét
+    scanner_version: str     # owasp_scanner.__version__
+    rules_version: str       # bằng scanner_version cho tới khi rule nằm trong file dữ liệu (FR-DET-01)
 ```
 
 **Quy tắc bắt buộc:**
@@ -415,10 +418,14 @@ class ScanResult:
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
 
-JSON hiện **chưa có** `schema_version` (sẽ thêm ở FR-MODEL-02). Các trường `cwe`, `confidence`, `references`, `instance_key`, `fingerprint` của mỗi finding có từ FR-MODEL-01.
+Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.1`**: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` chỉ **thêm** các trường `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02) và 5 trường mới của finding (FR-MODEL-01), không bỏ hay đổi nghĩa trường nào. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
 
 ```json
 {
+  "schema_version": "1.1",
+  "scanner_version": "1.1.0",
+  "rules_version": "1.1.0",
+  "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "target": "https://example.com/",
   "started_at": "2026-09-22T08:26:08.822920Z",
   "finished_at": "2026-09-22T08:26:09.273000Z",
@@ -445,7 +452,7 @@ JSON hiện **chưa có** `schema_version` (sẽ thêm ở FR-MODEL-02). Các tr
 }
 ```
 
-AT-12 kiểm tra đúng tập khoá ở cấp gốc, trong `summary` và trong mỗi finding.
+AT-12 kiểm tra đúng tập khoá ở cấp gốc, trong `summary` và trong mỗi finding; AT-30 kiểm tra output khớp `docs/report.schema.json`.
 
 ### 6.3 Trường bổ sung của Web UI
 
@@ -560,6 +567,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-27 | Web UI: tải báo cáo HTML | Quét mock rồi mở `report_url` | 200, `Content-Disposition: attachment`; nội dung từ target được escape | `test_scan_result_links_to_downloadable_html_report`, `test_values_from_target_are_escaped` |
 | AT-28 | Web UI: tiếng Anh | File tĩnh của UI | `lang="en"`, không có ký tự tiếng Việt | `test_ui_text_is_english` |
 | AT-29 | Mô hình finding | Quét mock có nhiều loại lỗi; quét lại lần 2 | Mọi finding có `instance_key`, `fingerprint` 32 hex, `confidence`, `references`, `cwe` (trừ 3 id thông tin); 2 cookie thiếu cờ có 2 fingerprint khác nhau; fingerprint giống nhau giữa 2 lần quét và không phụ thuộc path | `test_every_finding_of_a_real_scan_is_enriched`, `test_same_type_in_two_places_gets_two_fingerprints`, `test_fingerprints_are_stable_across_scans`, `test_fingerprint_uses_origin_not_path_or_time`, `test_catalog_covers_every_finding_id` |
+| AT-30 | JSON có version và khớp schema | `--json`; quét lỗi kết nối; response của Web UI (bỏ 3 trường riêng) | Cả ba khớp `docs/report.schema.json`; `schema_version` = `1.1`; `scan_id` là UUID4 mới mỗi lần quét; schema từ chối khoá lạ | `test_cli_json_report_matches_schema`, `test_failed_scan_report_matches_schema`, `test_web_response_is_the_report_plus_web_fields`, `test_every_scan_gets_a_new_scan_id`, `test_schema_rejects_unknown_fields` |
 
 ---
 
