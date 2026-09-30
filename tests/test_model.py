@@ -41,8 +41,12 @@ class EverythingHandler(QuietHandler):
             self.send(200, b"<urlset><url><loc>http://x/staging/</loc></url></urlset>")
         elif path == "/images/":
             self.send(200, b"<title>Index of /images</title>")
-        elif path in ("/.env", "/.git/HEAD", "/.well-known/security.txt"):
-            self.send(200, b"x")
+        elif path == "/.env":
+            self.send(200, b"DB_PASSWORD=fake\n")
+        elif path == "/.git/HEAD":
+            self.send(200, b"ref: refs/heads/main\n")
+        elif path == "/.well-known/security.txt":
+            self.send(200, b"Contact: mailto:security@example.com\n")
         else:
             self.send(404)
 

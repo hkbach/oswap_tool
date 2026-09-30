@@ -292,36 +292,36 @@ Chỉ gửi 1 GET với header `Origin` giả lập, rõ ràng là request kiể
 | ID | Yêu cầu | Priority |
 |---|---|---|
 | FR-EXP-01 | Tool PHẢI duy trì danh sách path nhạy cảm kèm `Finding.id` và severity (bảng 4.8.1) trong file dữ liệu **`owasp_scanner/rules/sensitive_paths.json`**, được kiểm tra khi nạp (thiếu trường, severity lạ, id hoặc path trùng, path tuyệt đối → lỗi rõ ràng). Thêm path chỉ cần sửa file này, không sửa code. Trường `version` của file là `rules_version` trong báo cáo. | M |
-| FR-EXP-02 | Trước khi kiểm tra danh sách, tool PHẢI gửi 1 request probe tới path chắc chắn không tồn tại (`owasp-scanner-nonexistent-probe-4f8c2b/`) để phát hiện soft-404. | M |
-| FR-EXP-03 | Nếu phát hiện soft-404 (probe trả 200), tool KHÔNG được tạo finding lộ file chỉ dựa trên mã 200. | M |
-| FR-EXP-04 | Nếu không có soft-404 và path trả HTTP 200, PHẢI tạo finding với id và severity đã khai báo, category `A01:2021 - Broken Access Control`, evidence gồm mã trạng thái và URL đầy đủ. | M |
+| FR-EXP-02 | *(Thay bằng chữ ký nội dung, FR-EXP-04; probe soft-404 cố định đã bỏ ở Sprint 4. Phát hiện soft-404 theo vân tay nội dung là FR-DET-02 trong backlog.)* | — |
+| FR-EXP-03 | Tool KHÔNG được tạo finding lộ file chỉ dựa trên mã 200. Trang chung trả 200 cho mọi path (SPA, trang lỗi tuỳ biến, trang chặn của WAF) không tạo finding vì không khớp chữ ký nội dung (FR-EXP-04); nhờ vậy một file thật bị lộ trên site như vậy vẫn được phát hiện. | M |
+| FR-EXP-04 | Nếu path trả HTTP 200 **và nội dung (tối đa 8 KiB đầu, NFR-PERF-04) khớp chữ ký của path** (cột "Chữ ký nội dung" bảng 4.8.1, khai báo trong `rules/sensitive_paths.json`), PHẢI tạo finding với id và severity đã khai báo, category `A01:2021 - Broken Access Control`. Chữ ký là regex trên text đã giải mã và/hoặc magic bytes ở đầu file; body là trang HTML (`<!doctype html`/`<html`) thì không khớp, trừ path được đánh dấu `allow_html`. Evidence gồm mã trạng thái, URL và mô tả chữ ký đã khớp; **KHÔNG BAO GIỜ chứa nội dung file** (có thể là secret thật). | M |
 | FR-EXP-05 | Các request kiểm tra path PHẢI chạy song song có giới hạn (thread pool), số luồng tối đa lấy từ `--workers` (mặc định 5). | M |
-| FR-EXP-06 | `.well-known/security.txt` được xử lý riêng: nếu trả 200 **và không phát hiện soft-404**, tạo finding INFO `EXPOSURE-SECURITY-TXT` mang tính tích cực, không phải lỗ hổng. | S |
+| FR-EXP-06 | `.well-known/security.txt` được xử lý riêng: nếu trả 200 và nội dung có trường `Contact:` (RFC 9116), tạo finding INFO `EXPOSURE-SECURITY-TXT` mang tính tích cực, không phải lỗ hổng. | S |
 | FR-EXP-07 | Tool PHẢI kiểm tra directory listing tại `images/`, `uploads/`, `backup/`, `files/`, `assets/`, `static/`. Nếu response 200 và 2000 ký tự đầu chứa `Index of /`, `<title>Index of` hoặc `Directory Listing For`, PHẢI tạo finding `EXPOSURE-DIR-LISTING` mức MEDIUM, category A05:2021. | M |
 | FR-EXP-08a | Tool PHẢI tải `robots.txt` (nếu có), trích các dòng `Disallow:`, lọc path chứa từ khoá nhạy cảm (`admin`, `backup`, `config`, `internal`, `private`, `secret`, `staging`, `test`; không phân biệt hoa/thường). Có ít nhất 1 path khớp → finding `EXPOSURE-ROBOTS-HINTS` mức LOW, A01:2021, evidence là tối đa 10 path đầu. | S |
 | FR-EXP-08b | Tool PHẢI tải `sitemap.xml` (nếu có), trích nội dung thẻ `<loc>…</loc>`, lấy phần path của từng URL và so với cùng danh sách từ khoá. Có ít nhất 1 URL khớp → finding `EXPOSURE-SITEMAP-HINTS` mức LOW, A01:2021, evidence là tối đa 10 URL đầu. | S |
 
-**Bảng 4.8.1 — Danh sách path nhạy cảm mặc định.** `Finding.id` khai báo tường minh cho từng path, không suy ra từ chuỗi path.
+**Bảng 4.8.1 — Danh sách path nhạy cảm mặc định.** `Finding.id` khai báo tường minh cho từng path, không suy ra từ chuỗi path. Regex đầy đủ nằm trong `owasp_scanner/rules/sensitive_paths.json`.
 
-| Path | `Finding.id` | Severity |
-|---|---|---|
-| `.git/HEAD` | `EXPOSURE-GIT-HEAD` | CRITICAL |
-| `.git/config` | `EXPOSURE-GIT-CONFIG` | CRITICAL |
-| `.env` | `EXPOSURE-ENV` | CRITICAL |
-| `.env.local` | `EXPOSURE-ENV-LOCAL` | CRITICAL |
-| `.env.production` | `EXPOSURE-ENV-PRODUCTION` | CRITICAL |
-| `wp-config.php.bak` | `EXPOSURE-WP-CONFIG-BAK` | CRITICAL |
-| `config.php.bak` | `EXPOSURE-CONFIG-PHP-BAK` | CRITICAL |
-| `backup.sql` | `EXPOSURE-BACKUP-SQL` | CRITICAL |
-| `id_rsa` | `EXPOSURE-ID-RSA` | CRITICAL |
-| `.svn/entries` | `EXPOSURE-SVN-ENTRIES` | HIGH |
-| `docker-compose.yml` | `EXPOSURE-DOCKER-COMPOSE` | HIGH |
-| `backup.zip` | `EXPOSURE-BACKUP-ZIP` | HIGH |
-| `web.config` | `EXPOSURE-WEB-CONFIG` | MEDIUM |
-| `phpinfo.php` | `EXPOSURE-PHPINFO` | MEDIUM |
-| `server-status` | `EXPOSURE-SERVER-STATUS` | MEDIUM |
-| `.DS_Store` | `EXPOSURE-DS-STORE` | LOW |
-| `.well-known/security.txt` | `EXPOSURE-SECURITY-TXT` | INFO (xử lý riêng, FR-EXP-06) |
+| Path | `Finding.id` | Severity | Chữ ký nội dung |
+|---|---|---|---|
+| `.git/HEAD` | `EXPOSURE-GIT-HEAD` | CRITICAL | a git HEAD reference |
+| `.git/config` | `EXPOSURE-GIT-CONFIG` | CRITICAL | a git config file |
+| `.env` | `EXPOSURE-ENV` | CRITICAL | KEY=VALUE environment variables |
+| `.env.local` | `EXPOSURE-ENV-LOCAL` | CRITICAL | KEY=VALUE environment variables |
+| `.env.production` | `EXPOSURE-ENV-PRODUCTION` | CRITICAL | KEY=VALUE environment variables |
+| `wp-config.php.bak` | `EXPOSURE-WP-CONFIG-BAK` | CRITICAL | PHP source code |
+| `config.php.bak` | `EXPOSURE-CONFIG-PHP-BAK` | CRITICAL | PHP source code |
+| `web.config` | `EXPOSURE-WEB-CONFIG` | MEDIUM | an IIS/ASP.NET configuration file |
+| `.svn/entries` | `EXPOSURE-SVN-ENTRIES` | HIGH | a Subversion entries file |
+| `.DS_Store` | `EXPOSURE-DS-STORE` | LOW | a macOS .DS_Store file; magic `0000000142756431` |
+| `docker-compose.yml` | `EXPOSURE-DOCKER-COMPOSE` | HIGH | a Docker Compose file |
+| `backup.zip` | `EXPOSURE-BACKUP-ZIP` | HIGH | a ZIP archive; magic `504b0304` |
+| `backup.sql` | `EXPOSURE-BACKUP-SQL` | CRITICAL | an SQL dump |
+| `phpinfo.php` | `EXPOSURE-PHPINFO` | MEDIUM | phpinfo() output; chấp nhận HTML |
+| `server-status` | `EXPOSURE-SERVER-STATUS` | MEDIUM | an Apache server-status page; chấp nhận HTML |
+| `id_rsa` | `EXPOSURE-ID-RSA` | CRITICAL | a private key |
+| `.well-known/security.txt` | `EXPOSURE-SECURITY-TXT` | INFO (xử lý riêng, FR-EXP-06) | a security.txt policy (RFC 9116) |
 
 ### 4.9 Nhóm báo cáo kết quả (`report.py`)
 
@@ -592,6 +592,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-36 | Header xét trên response cuối (FIX-10) | Redirect `/` → `/home`; không redirect; baseline lỗi; `http://` → HTTPS được tin; đổi host với/không có HSTS ở host gốc | `final_url`/`redirect_chain` đúng và được che secret; không đòi HSTS khi response cuối là HTTP, có đòi khi là HTTPS; `HDR-HSTS-MISSING-ON-START-HOST` mức LOW khi host gốc thiếu HSTS; không áp dụng khi cùng host hoặc response cuối là HTTP; host gốc không kết nối được → lỗi, không finding | `test_report_records_final_url_and_redirect_chain`, `test_no_redirect_gives_empty_chain`, `test_failed_baseline_has_no_final_url`, `test_final_url_and_chain_are_redacted`, `test_hsts_is_not_required_when_the_final_response_is_http`, `test_http_target_redirected_to_https_is_held_to_hsts` (skip khi TLS bị chặn), `test_start_host_without_hsts_is_reported`, `test_start_host_with_hsts_is_fine`, `test_start_host_check_does_not_apply`, `test_unreachable_start_host_is_an_error_not_a_finding` |
 | AT-37 | Text sản phẩm không còn "passive" (FIX-11) | Banner CLI, `--help` của CLI và Web UI, file tĩnh của UI, báo cáo HTML, User-Agent | Không chứa "passive"; User-Agent đúng mẫu NFR-SEC-03 với `__version__`; footer UI trỏ tới `docs/SRS-owasp-scanner.md` | `test_product_text_does_not_say_passive`, `test_cli_help_does_not_say_passive`, `test_user_agent_identifies_the_scanner_and_its_version`, `test_ui_footer_points_at_the_current_srs` |
 | AT-38 | Rules dạng dữ liệu và đọc có giới hạn | Bảng path từ `rules/sensitive_paths.json`; file rules sai định dạng; thêm path chỉ bằng file rules; server trả body 20 MB cho mọi path | Bảng khớp 4.8.1; `rules_version` = version của file; lỗi nạp nêu rõ nguyên nhân; path mới được quét; mỗi response chỉ đọc ≤ 8 KiB, check xong trong vài giây | `test_sensitive_paths_come_from_the_rules_file`, `test_report_carries_the_rules_version`, `test_invalid_rules_are_rejected_with_a_clear_message`, `test_a_new_path_needs_only_a_rules_change`, `test_get_limited_reads_at_most_the_cap`, `test_sensitive_path_check_does_not_download_huge_files` |
+| AT-39 | Kiểm tra nội dung file nhạy cảm (FR-DET-01) | Mỗi path: nội dung thật; trang HTML chung, rỗng, text, JSON; site trả 200 cho mọi path có và không có `.env` thật; path 200 sai nội dung | Nội dung thật khớp chữ ký; response chung không khớp; site catch-all không có finding nhưng `.env` thật vẫn được báo; 200 sai nội dung không báo; evidence không chứa nội dung file; rules thiếu/sai chữ ký bị từ chối | `test_signature_matches_real_content`, `test_signature_rejects_generic_responses`, `test_catch_all_html_site_has_no_exposure_findings`, `test_real_file_on_a_catch_all_site_is_still_found`, `test_200_with_the_wrong_content_is_not_reported`, `test_evidence_never_contains_the_file_content`, `test_invalid_signatures_are_rejected` |
 
 ---
 
@@ -599,7 +600,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 
 - **Không phải DAST toàn diện:** không phát hiện injection thật, broken authentication ở tầng logic, IDOR, SSRF, lỗi business logic.
 - **Chỉ quét trang chủ** cho phần lớn check; không crawl, có thể bỏ sót cấu hình khác nhau giữa các route.
-- **False positive:** robots.txt/sitemap.xml (path "nghe nhạy cảm" chưa chắc tồn tại hay lộ); path nhạy cảm chỉ dựa trên HTTP 200, không kiểm tra nội dung (FR-DET-01 trong backlog).
+- **False positive:** robots.txt/sitemap.xml (path "nghe nhạy cảm" chưa chắc tồn tại hay lộ). Path nhạy cảm đã kiểm tra nội dung (FR-EXP-04), nhưng chữ ký là heuristic: một file khác vô tình khớp mẫu (ví dụ file text bắt đầu bằng số cho `.svn/entries`) vẫn có thể bị báo, và một file thật có định dạng lạ có thể bị bỏ sót.
 - **False negative:** target dùng CDN/WAF có thể chặn hoặc trả response khác cho User-Agent của scanner. TLS chỉ xét giao thức/cipher **được thương lượng**, không dò các phiên bản cũ server còn bật (FR-DET-04).
 - **Hai kho chứng chỉ khác nhau (B1):** request HTTP (`requests`) tin kho `certifi`, còn nhóm TLS (`ssl.create_default_context()`) tin kho chứng chỉ của hệ điều hành. Nếu có thành phần chặn và ký lại TLS mà CA của nó chỉ nằm trong kho hệ điều hành, `requests` từ chối **mọi** site HTTPS: baseline thất bại ở tầng TLS, nhóm TLS chạy nhưng không báo lỗi, nên báo cáo chỉ có 1 dòng lỗi "Could not fetch", 0 finding, exit code `0`. *Đính chính 2026-09-30:* trên máy dev đã quan sát (2026-09-23), thành phần đó là **phần mềm diệt virus Avast Web/Mail Shield chạy trên chính máy**, không phải proxy mạng như ghi ở bản trước. Sẽ xử lý ở FR-CI-10 (`--ca-bundle` dùng chung).
 - **TLS bị phần mềm cục bộ chặn giữa đường:** trên máy có phần mềm ký lại TLS (ví dụ Avast Web/Mail Shield, kể cả với `127.0.0.1`), nhóm TLS đo **kết nối tới phần mềm đó** chứ không phải tới server: giao thức và cipher là do phần mềm chọn (có thể bỏ sót `TLS-WEAK-PROTOCOL`/`TLS-WEAK-CIPHER`), chứng chỉ là bản do nó ký lại. Kết quả TLS trên các máy như vậy không đáng tin; nên quét từ máy hoặc CI không có TLS inspection. Phát hiện và cảnh báo tự động là FR-DET-16 trong backlog. Test cần bắt tay TLS được tin cậy sẽ tự skip khi phát hiện việc chặn này.

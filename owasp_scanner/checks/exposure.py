@@ -28,58 +28,55 @@ _LISTING_MARKERS = ("Index of /", "<title>Index of", "Directory Listing For")
 def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[Finding]:
     findings: list[Finding] = []
 
-    # Baseline: request a clearly-nonexistent path to detect "soft 404" behavior
-    # (custom error pages that return HTTP 200), so we don't report false positives.
-    probe_url = urljoin(base_url, "owasp-scanner-nonexistent-probe-4f8c2b/")
-    probe_resp, _, _ = get_limited(session, probe_url)
-    soft_404 = probe_resp is not None and probe_resp.status_code == 200
-
     rules = {rule.path: rule for rule in load_sensitive_paths().paths}
 
     def fetch(path):
         url = urljoin(base_url, path)
         resp, body, err = get_limited(session, url)
-        return path, url, resp, err
+        return path, url, resp, body, err
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [pool.submit(fetch, p) for p in rules]
         for fut in as_completed(futures):
-            path, url, resp, err = fut.result()
-            if err or resp is None:
+            path, url, resp, body, err = fut.result()
+            if err or resp is None or resp.status_code != 200:
                 continue
             rule = rules[path]
-            finding_id, severity, label = rule.id, rule.severity, rule.title
-            if path == ".well-known/security.txt":
-                if resp.status_code == 200 and not soft_404:
-                    findings.append(
-                        Finding(
-                            id=finding_id,
-                            title=label,
-                            severity=Severity.INFO,
-                            owasp_category="A05:2021 - Security Misconfiguration",
-                            description="A security.txt disclosure policy was found (good practice).",
-                            url=url,
-                            instance_key=path,
-                        )
-                    )
+            # FR-DET-01: HTTP 200 alone proves nothing (catch-all pages, WAF block pages);
+            # the content has to look like the file. That also covers FR-EXP-03 (soft-404).
+            if not rule.signature.matches(body):
                 continue
-
-            if resp.status_code == 200 and not soft_404:
+            evidence = f"HTTP {resp.status_code} for {url}; content matches {rule.signature.description}"
+            if rule.id == "EXPOSURE-SECURITY-TXT":
                 findings.append(
                     Finding(
-                        id=finding_id,
-                        title=label,
-                        severity=severity,
-                        owasp_category="A01:2021 - Broken Access Control",
-                        description=f"GET {path} returned HTTP 200, suggesting the file/path is publicly accessible.",
-                        evidence=f"HTTP {resp.status_code} for {url}",
-                        recommendation=(
-                            "Remove the file from the web root or block access at the web server/proxy layer."
-                        ),
+                        id=rule.id,
+                        title=rule.title,
+                        severity=Severity.INFO,
+                        owasp_category="A05:2021 - Security Misconfiguration",
+                        description="A security.txt disclosure policy was found (good practice).",
+                        evidence=evidence,
                         url=url,
                         instance_key=path,
                     )
                 )
+                continue
+            findings.append(
+                Finding(
+                    id=rule.id,
+                    title=rule.title,
+                    severity=rule.severity,
+                    owasp_category="A01:2021 - Broken Access Control",
+                    description=(
+                        f"GET {path} returned HTTP 200 and the content looks like {rule.signature.description}, "
+                        "so the file is publicly readable."
+                    ),
+                    evidence=evidence,  # never the file content itself: it may hold real secrets
+                    recommendation="Remove the file from the web root or block access at the web server/proxy layer.",
+                    url=url,
+                    instance_key=path,
+                )
+            )
 
     return findings
 

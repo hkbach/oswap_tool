@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,12 +20,37 @@ _SENSITIVE_PATHS_FILE = RULES_DIR / "sensitive_paths.json"
 _REQUIRED_PATH_FIELDS = ("path", "id", "severity", "title")
 
 
+_HTML_START = (b"<!doctype html", b"<html")
+
+
+def looks_like_html(body: bytes) -> bool:
+    return body.lstrip()[:32].lower().startswith(_HTML_START)
+
+
+@dataclass(frozen=True)
+class Signature:
+    """What the content of an exposed file looks like (FR-DET-01)."""
+
+    description: str
+    pattern: re.Pattern | None = None  # searched in the decoded text
+    magic: bytes = b""  # required prefix of the raw bytes
+    allow_html: bool = False  # most files are never HTML; an HTML body is a generic page
+
+    def matches(self, body: bytes) -> bool:
+        if not body or (not self.allow_html and looks_like_html(body)):
+            return False
+        if self.magic and not body.startswith(self.magic):
+            return False
+        return self.pattern is None or self.pattern.search(body.decode("utf-8", errors="replace")) is not None
+
+
 @dataclass(frozen=True)
 class SensitivePath:
     path: str
     id: str
     severity: Severity
     title: str
+    signature: Signature
 
 
 @dataclass(frozen=True)
@@ -35,6 +61,30 @@ class SensitivePathRules:
 
 def _fail(source: Path, message: str) -> None:
     raise ValueError(f"{source.name}: {message}")
+
+
+def _parse_signature(source: Path, n: int, raw) -> Signature:
+    if not isinstance(raw, dict):
+        _fail(source, f"entry {n}: missing 'signature' (every path needs a content signature, FR-DET-01)")
+    description = raw.get("description")
+    if not isinstance(description, str) or not description.strip():
+        _fail(source, f"entry {n}: signature needs a 'description'")
+    regex, magic_hex = raw.get("regex"), raw.get("magic_hex")
+    if not regex and not magic_hex:
+        _fail(source, f"entry {n}: signature needs a regex or magic_hex")
+    pattern = None
+    if regex:
+        try:
+            pattern = re.compile(regex)
+        except re.error as exc:
+            _fail(source, f"entry {n}: invalid signature regex: {exc}")
+    magic = b""
+    if magic_hex:
+        try:
+            magic = bytes.fromhex(magic_hex)
+        except ValueError:
+            _fail(source, f"entry {n}: invalid signature magic_hex {magic_hex!r}")
+    return Signature(description.strip(), pattern, magic, bool(raw.get("allow_html", False)))
 
 
 def _parse_sensitive_paths(source: Path) -> SensitivePathRules:
@@ -64,7 +114,8 @@ def _parse_sensitive_paths(source: Path) -> SensitivePathRules:
             _fail(source, f"entry {n}: duplicate path {path!r}")
         seen_ids.add(finding_id)
         seen_paths.add(path)
-        paths.append(SensitivePath(path, finding_id, Severity[entry["severity"]], entry["title"]))
+        signature = _parse_signature(source, n, entry.get("signature"))
+        paths.append(SensitivePath(path, finding_id, Severity[entry["severity"]], entry["title"], signature))
     return SensitivePathRules(version.strip(), tuple(paths))
 
 

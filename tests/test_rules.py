@@ -54,7 +54,13 @@ def _write(tmp_path, paths, version="t1"):
     return f
 
 
-GOOD = {"path": "a.txt", "id": "EXPOSURE-A", "severity": "LOW", "title": "A"}
+GOOD = {
+    "path": "a.txt",
+    "id": "EXPOSURE-A",
+    "severity": "LOW",
+    "title": "A",
+    "signature": {"description": "anything", "regex": "."},
+}
 
 
 @pytest.mark.parametrize(
