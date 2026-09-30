@@ -577,7 +577,7 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 |---|---|---|---|
 | 1 | Chốt 3 câu hỏi: UI, redact cookie, mức CORS | D1, D2, D3 (mục 1.4) | Xong |
 | 2 | Thêm `CLAUDE.md`, đưa backlog + SRS vào `docs/`; SRS v1.2; sửa FIX-01/02/04/08 và README | FR-FIX-01/02/04/08 | Xong trên branch `docs/sprint-2-srs-v1.2`, chờ review |
-| 3 | Cấu hình `ruff` + `pyproject.toml`; `redact()` + mô hình finding (fingerprint, `schema_version`) + Web UI dùng chung đầu ra; CORS theo D3 | FR-QA-07 (phần cấu hình), FR-AUTH-02, FR-MODEL-01, FR-MODEL-02, FR-WEB-01, FR-FIX-07 | Chưa làm |
+| 3 | Cấu hình `ruff` + `pyproject.toml`; `redact()` + mô hình finding (fingerprint, `schema_version`) + Web UI dùng chung đầu ra; CORS theo D3 | FR-QA-07 (phần cấu hình), FR-AUTH-02, FR-MODEL-01, FR-MODEL-02, FR-WEB-01, FR-FIX-07 | Xong (v1.2.0) trên branch `feat/sprint-3`, chờ review |
 | 3b | Scope khi theo redirect (D4); redirect check luôn chạy; header/HSTS xét trên response cuối; bỏ chữ "Passive" trong code | FR-FIX-09, FR-FIX-10, FR-FIX-11 | Chưa làm; FIX-10 cần xong FR-MODEL-02 |
 | 4 | Kiểm tra nội dung file nhạy cảm + confidence | FR-DET-01, FR-DET-02, FR-DET-03 | Chưa làm |
 | 5 | `--ca-bundle` (gỡ B1), `--fail-on`, SARIF, `--html`, template CI | FR-CI-10, FR-CI-01, FR-RPT-02, FR-RPT-09, FR-CI-03 | Chưa làm |
@@ -648,19 +648,19 @@ Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên l�
 
 | Epic | P0 xong | P1 xong | P2 xong | Ghi chú |
 |---|---|---|---|---|
-| E0 | ☐ | – | – | FIX-01…06, 08 xong; còn FIX-07, 09, 10, 11 |
+| E0 | ☐ | – | – | FIX-01…08 xong; còn FIX-09, 10, 11 |
 | E1 | ☐ | ☐ | ☐ | |
-| E2 | ☐ | ☐ | – | |
+| E2 | ☑ | ☐ | – | MODEL-01, 02 xong (Sprint 3) |
 | E3 | ☐ | ☐ | ☐ | |
 | E4 | ☐ | ☐ | – | |
 | E5 | ☐ | ☐ | – | |
 | E6 | ☐ | ☐ | ☐ | |
 | E7 | ☐ | ☐ | ☐ | |
-| E8 | ☐ | ☐ | ☐ | |
+| E8 | ☐ | ☐ | ☐ | AUTH-02 xong (Sprint 3) |
 | E9 | – | ☐ | ☐ | |
 | E10 | – | ☐ | ☐ | |
 | E11 | – | ☐ | ☐ | |
-| E12a | ☐ | ☐ | – | Web UI cục bộ |
+| E12a | ☐ | ☐ | – | Web UI cục bộ; WEB-01 xong (Sprint 3), còn WEB-02 |
 | E12–E14, E16–E20 | ☐ | ☐ | ☐ | E15 (UI) đã loại; E12 chỉ khi SaaS |
 | E21–E22 | ☐ | ☐ | – | |
 

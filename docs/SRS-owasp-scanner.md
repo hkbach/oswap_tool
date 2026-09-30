@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | OWASP-Aligned Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.2 |
-| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23) |
+| **Phiên bản tài liệu** | 1.3 |
+| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2: 2026-09-30) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.1.0` trong repo `hkbach/oswap_tool` (gồm các bản sửa sau v1.1.0 và Web UI cục bộ). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.2.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 3). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -25,6 +25,7 @@
 | 1.0 | 2026-09-22 | Bản as-built đầu tiên (code v1.0.0). |
 | 1.1 | 2026-09-23 | Theo code v1.1.0: TLS kiểm tra 2 bước (FR-TLS-01…09); tách robots.txt/sitemap.xml (FR-EXP-08a/b); HSTS chỉ áp dụng cho `https://`; `frame-ancestors` loại trừ cả nhánh "thiếu" X-Frame-Options; `Finding.id` khai báo tường minh cho từng path; thêm AT-15…18. |
 | 1.2 | 2026-09-30 | Gộp bản 1.1 ở trên với bản sửa tài liệu ngày 2026-09-30. Chi tiết ở mục 0.1. |
+| 1.3 | 2026-09-30 | Theo code v1.2.0 (Sprint 3): mô hình finding có `cwe`/`confidence`/`references`/`instance_key`/`fingerprint` (FR-MODEL-01); JSON `schema_version` 1.1 và `docs/report.schema.json` (FR-MODEL-02); một bộ xử lý đầu ra dùng chung (FR-WEB-01); che secret mặc định (D2, FR-COOKIE-04, NFR-SEC-04); severity CORS theo D3; thứ tự finding cố định (FR-REPORT-02); NFR-PORT-01 đã kiểm chứng Python 3.9; AT-29…AT-33. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -622,4 +623,4 @@ Các quyết định dưới đây đã được chủ sản phẩm chốt ngày
 
 ---
 
-*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.1.0` trong repo (gồm các bản sửa sau v1.1.0 và Web UI cục bộ), đã đối chiếu với code và với 110 test tự động ngày 2026-09-30. Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*
+*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.2.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với 204 test tự động ngày 2026-09-30. Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*
