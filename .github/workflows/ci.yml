@@ -1,6 +1,6 @@
 # CI for this repository (FR-QA-07): lint, offline tests, dependency audit, secret scan.
 # Branch protection on main ("require status checks to pass") is a GitHub setting
-# that a repository admin turns on; see README "Phát triển".
+# that a repository admin turns on; see README "Branch protection for main".
 name: ci
 
 on:
