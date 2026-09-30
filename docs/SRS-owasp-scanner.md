@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | OWASP-Aligned Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.9 |
-| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.8: 2026-09-30) |
+| **Phiên bản tài liệu** | 1.10 |
+| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.9: 2026-09-30) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.7.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 8). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.8.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 9). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -32,6 +32,7 @@
 | 1.7 | 2026-09-30 | Theo code v1.5.1 (Sprint 6, chất lượng repo; không đổi hành vi tool): workflow CI của repo (FR-QA-07); golden file JSON/SARIF/HTML (FR-QA-02); mọi finding ID có test (FR-QA-01); NFR-PORT-01 ghi ma trận CI; mục 10 thêm rủi ro Python 3.9 hết hỗ trợ; AT-47…AT-49. |
 | 1.8 | 2026-09-30 | Theo code v1.6.0 (Sprint 7): Python ≥ 3.12 (NFR-PORT-01, mục 2; bỏ rủi ro 3.9 ở mục 10); Bước A của TLS chấp nhận TLS 1.0/1.1 và cipher cũ (FR-TLS-01, FR-TLS-04); che userinfo trong URL và gộp redaction theo fingerprint (NFR-SEC-04, AT-32); parse Set-Cookie theo RFC 6265 (FR-COOKIE-01, AT-04); robots/sitemap đọc tối đa 512 KiB, charset lạ không làm dừng check (NFR-PERF-04, AT-38); Web UI trả 500 khi quét lỗi (FR-UI-05, AT-26); `gate_status`/`gate_message` và `output.gate_message()` (FR-UI-09, mục 6.3); AT-50…AT-51. |
 | 1.9 | 2026-09-30 | Theo code v1.7.0 (Sprint 8): nhóm mục tiêu kiểm thử `catalog.CHECK_GROUPS` và chọn nhóm khi quét (mục 4.11, FR-GRP-01…03); `--checks`, `--list-checks` (mục 7); JSON `schema_version` 1.4 với `scan_groups` và `check` (mục 6.2); Web UI chọn nhóm và nhóm kết quả theo test target/OWASP Top 10, `GET /api/checks`, `groups`/`owasp_groups` (FR-UI-10, FR-UI-11, mục 6.3); báo cáo HTML theo nhóm (FR-UI-07); AT-52…AT-55. |
+| 1.10 | 2026-09-30 | Theo code v1.8.0 (Sprint 9, đóng Phase A): Web UI bind ra ngoài bắt buộc `--allow-remote` + access token (FR-UI-01, mục 6.3, 7); `output.SCOPE_NOTE` dùng chung cho console và HTML (FR-RPT-08, NFR-COMP-01); kiểm kê license `THIRD_PARTY_LICENSES.md` (FR-SEC-10, NFR-LEGAL-01); image Docker chính thức và job CI `docker` (FR-CI-04), sửa Jenkinsfile dùng source archive; rà lại toàn bộ README (FR-DOC-01); AT-56…AT-60. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -470,7 +471,7 @@ class ScanResult:
 ```json
 {
   "schema_version": "1.4",
-  "scanner_version": "1.7.0",
+  "scanner_version": "1.8.0",
   "rules_version": "1.1.0",
   "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "secrets_redacted": true,
@@ -709,4 +710,4 @@ Hiện không có điểm nào. Exit code `3` (Q1 cũ) đã được xác nhận
 
 ---
 
-*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.7.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với các test tự động của v1.7.0 ngày 2026-09-30 (các test cần bắt tay TLS được tin cậy tự skip trên máy có phần mềm chặn TLS). Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*
+*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.8.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với các test tự động của v1.8.0 ngày 2026-09-30 (các test cần bắt tay TLS được tin cậy tự skip trên máy có phần mềm chặn TLS). Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*

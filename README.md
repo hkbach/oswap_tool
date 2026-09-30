@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.7.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.8.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.7.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.8.0.tar.gz"
 ```
 
 Installing the package adds two commands: `owasp-scanner` (same as
@@ -230,7 +230,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.7.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.8.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -530,6 +530,20 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 
 ## Changelog
 
+- **v1.8.0** (Sprint 9, closing Phase A). Changes to note:
+  - **Binding the web UI to anything other than `127.0.0.1` now needs
+    `--allow-remote`**, or the server refuses to start (before: it started
+    with only a warning). With `--allow-remote`, every request needs an
+    access token (`--token`, or a random one printed at startup).
+  - Console and HTML reports end with a scope-and-limitations note
+    (`output.SCOPE_NOTE`); no format uses absolute-assurance language.
+  - New `THIRD_PARTY_LICENSES.md`; a `Dockerfile` (non-root, built and
+    smoke-tested in CI, not yet published to a registry); the Jenkins
+    template installs from the source archive instead of `git+apt-get`,
+    fixing the known non-root failure.
+  - Required CI status checks: the new `docker` job joins the required
+    list (eight checks now); update branch protection.
+  - JSON report and `schema_version` (1.4) are unchanged.
 - **v1.7.0** (Sprint 8, test targets):
   - **Choose the test targets of a scan:** `--checks headers,tls,...` and
     `--list-checks` in the CLI, checkboxes on the web page. Unselected test
