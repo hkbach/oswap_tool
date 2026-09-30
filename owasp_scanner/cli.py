@@ -24,6 +24,7 @@ from .models import ScanResult
 from .output import build_report, gate_failed
 from .redact import redact
 from .report import print_report, write_json
+from .soft404 import build_profile
 
 CONSENT_BANNER = """
 ==========================================================================
@@ -104,7 +105,7 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
 
     def run_tls(url: str) -> None:
         tls_host, tls_port = _host_port(url)
-        _run_check(result, "tls", tls_check.check_tls, tls_host, port=tls_port, timeout=timeout)
+        _run_check(result, "tls", tls_check.check_tls, tls_host, port=tls_port, timeout=timeout, warnings=result.errors)
 
     # 1. Baseline fetch of the target page
     resp, err, tls_error_url = _fetch_baseline(session, base_url)
@@ -154,8 +155,20 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
         _run_check(result, "http-to-https-redirect", redirect_check.evaluate_redirect_chain, base_url, chain)
 
     _run_check(result, "cors", cors_check.check_cors, session, base_url)
-    _run_check(result, "sensitive-paths", exposure.check_sensitive_paths, session, base_url, max_workers=workers)
-    _run_check(result, "directory-listing", exposure.check_directory_listing, session, base_url)
+    # One soft-404 profile (2 random probes) shared by both path-based checks (FR-DET-02).
+    profile = build_profile(session, base_url)
+    _run_check(
+        result,
+        "sensitive-paths",
+        exposure.check_sensitive_paths,
+        session,
+        base_url,
+        max_workers=workers,
+        soft404_profile=profile,
+    )
+    _run_check(
+        result, "directory-listing", exposure.check_directory_listing, session, base_url, soft404_profile=profile
+    )
     _run_check(result, "robots-sitemap", exposure.check_robots_and_sitemap, session, base_url)
 
     result.errors.extend(session.blocked_redirects.values())

@@ -7,6 +7,7 @@ from conftest import CERT_WINDOWS, QuietHandler, make_self_signed_cert
 
 from owasp_scanner.checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
 from owasp_scanner.http_utils import USER_AGENT, build_session
+from owasp_scanner.rule_loader import load_sensitive_paths
 
 
 def ids(findings):
@@ -222,13 +223,10 @@ def test_cors_sends_placeholder_origin_and_scanner_user_agent(http_server):
 # --- exposure --------------------------------------------------------------------
 
 
-def test_sensitive_paths_table_matches_srs_4_8_1():
-    table = {path: (fid, sev.value) for path, (fid, sev, _) in exposure._SENSITIVE_PATHS.items()}
-    assert len(table) == 17
-    assert len({fid for fid, _ in table.values()}) == 17  # ids are unique
-    assert table[".git/HEAD"] == ("EXPOSURE-GIT-HEAD", "CRITICAL")
-    assert table[".DS_Store"] == ("EXPOSURE-DS-STORE", "LOW")
-    assert table[".well-known/security.txt"] == ("EXPOSURE-SECURITY-TXT", "INFO")
+def test_sensitive_path_ids_are_unique():
+    # Full table check against SRS 4.8.1 is in test_rules.py.
+    rules = load_sensitive_paths().paths
+    assert len(rules) == 17 and len({r.id for r in rules}) == 17
 
 
 def test_security_txt_is_positive_info(http_server):

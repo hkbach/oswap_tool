@@ -32,7 +32,7 @@ version = { attr = "owasp_scanner.__version__" }
 include = ["owasp_scanner*"]
 
 [tool.setuptools.package-data]
-owasp_scanner = ["static/*"]
+owasp_scanner = ["static/*", "rules/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -47,8 +47,10 @@ def _meta(cwe: str, confidence: str, *refs: str) -> FindingMeta:
 
 # Confidence reflects how directly the finding was observed:
 #   high   - read straight from the response or handshake (headers, cookies, TLS, CORS)
-#   medium - inferred from an HTTP 200 without checking the content (sensitive paths)
-#   low    - a hint only (robots.txt / sitemap.xml mention a sensitive-sounding path)
+#   high   - also: exposed files whose content matched the file type (FR-DET-01)
+#   medium - an indirect observation (none today)
+#   low    - a hint only (robots.txt / sitemap.xml mention a sensitive-sounding path);
+#            TLS findings are lowered to low when the handshake looks intercepted (FR-DET-16)
 _HDR = (_SECURE_HEADERS, _CS_HEADERS, _TOP10_A05)
 _EXPOSED = (_TOP10_A01,)
 
@@ -84,24 +86,24 @@ FINDING_CATALOG: dict[str, FindingMeta] = {
     "CORS-WILDCARD-WITH-CREDENTIALS": _meta("CWE-942", "high", _CS_HTML5, _TOP10_A05),
     "CORS-REFLECTS-ARBITRARY-ORIGIN": _meta("CWE-942", "high", _CS_HTML5, _TOP10_A05),
     "CORS-WILDCARD": _meta("CWE-942", "high", _CS_HTML5, _TOP10_A05),
-    # exposed files: status 200 only, content not verified yet (FR-DET-01)
-    "EXPOSURE-GIT-HEAD": _meta("CWE-527", "medium", *_EXPOSED),
-    "EXPOSURE-GIT-CONFIG": _meta("CWE-527", "medium", *_EXPOSED),
-    "EXPOSURE-SVN-ENTRIES": _meta("CWE-527", "medium", *_EXPOSED),
-    "EXPOSURE-ENV": _meta("CWE-538", "medium", *_EXPOSED),
-    "EXPOSURE-ENV-LOCAL": _meta("CWE-538", "medium", *_EXPOSED),
-    "EXPOSURE-ENV-PRODUCTION": _meta("CWE-538", "medium", *_EXPOSED),
-    "EXPOSURE-WEB-CONFIG": _meta("CWE-538", "medium", *_EXPOSED),
-    "EXPOSURE-DOCKER-COMPOSE": _meta("CWE-538", "medium", *_EXPOSED),
-    "EXPOSURE-ID-RSA": _meta("CWE-538", "medium", *_EXPOSED),
-    "EXPOSURE-DS-STORE": _meta("CWE-538", "medium", *_EXPOSED),
-    "EXPOSURE-WP-CONFIG-BAK": _meta("CWE-530", "medium", *_EXPOSED),
-    "EXPOSURE-CONFIG-PHP-BAK": _meta("CWE-530", "medium", *_EXPOSED),
-    "EXPOSURE-BACKUP-ZIP": _meta("CWE-530", "medium", *_EXPOSED),
-    "EXPOSURE-BACKUP-SQL": _meta("CWE-530", "medium", *_EXPOSED),
-    "EXPOSURE-PHPINFO": _meta("CWE-497", "medium", *_EXPOSED),
-    "EXPOSURE-SERVER-STATUS": _meta("CWE-497", "medium", *_EXPOSED),
-    "EXPOSURE-SECURITY-TXT": _meta("", "medium", "https://securitytxt.org/"),
+    # exposed files: HTTP 200 and content matching the file type (FR-DET-01)
+    "EXPOSURE-GIT-HEAD": _meta("CWE-527", "high", *_EXPOSED),
+    "EXPOSURE-GIT-CONFIG": _meta("CWE-527", "high", *_EXPOSED),
+    "EXPOSURE-SVN-ENTRIES": _meta("CWE-527", "high", *_EXPOSED),
+    "EXPOSURE-ENV": _meta("CWE-538", "high", *_EXPOSED),
+    "EXPOSURE-ENV-LOCAL": _meta("CWE-538", "high", *_EXPOSED),
+    "EXPOSURE-ENV-PRODUCTION": _meta("CWE-538", "high", *_EXPOSED),
+    "EXPOSURE-WEB-CONFIG": _meta("CWE-538", "high", *_EXPOSED),
+    "EXPOSURE-DOCKER-COMPOSE": _meta("CWE-538", "high", *_EXPOSED),
+    "EXPOSURE-ID-RSA": _meta("CWE-538", "high", *_EXPOSED),
+    "EXPOSURE-DS-STORE": _meta("CWE-538", "high", *_EXPOSED),
+    "EXPOSURE-WP-CONFIG-BAK": _meta("CWE-530", "high", *_EXPOSED),
+    "EXPOSURE-CONFIG-PHP-BAK": _meta("CWE-530", "high", *_EXPOSED),
+    "EXPOSURE-BACKUP-ZIP": _meta("CWE-530", "high", *_EXPOSED),
+    "EXPOSURE-BACKUP-SQL": _meta("CWE-530", "high", *_EXPOSED),
+    "EXPOSURE-PHPINFO": _meta("CWE-497", "high", *_EXPOSED),
+    "EXPOSURE-SERVER-STATUS": _meta("CWE-497", "high", *_EXPOSED),
+    "EXPOSURE-SECURITY-TXT": _meta("", "high", "https://securitytxt.org/"),
     # other exposure checks
     "EXPOSURE-DIR-LISTING": _meta("CWE-548", "high", _TOP10_A05),
     "EXPOSURE-ROBOTS-HINTS": _meta("CWE-200", "low", _TOP10_A01),

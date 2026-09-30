@@ -233,15 +233,15 @@ Cách đọc: `- [ ] **ID** (Ưu tiên · Tier) Mô tả.` theo sau là `AC:` (a
 
 Mục tiêu: giảm false positive/negative – yếu tố quyết định khách có tiếp tục dùng và trả tiền hay không.
 
-- [ ] **FR-DET-01** (P0 · all) Xác thực **nội dung** khi kiểm tra path nhạy cảm, không chỉ HTTP 200.
+- [x] **FR-DET-01** (P0 · all) *(xong ở Sprint 4: chữ ký trong `rules/sensitive_paths.json`, SRS FR-EXP-04, AT-39)* Xác thực **nội dung** khi kiểm tra path nhạy cảm, không chỉ HTTP 200.
   AC: `.git/HEAD` phải chứa `ref:`; `.git/config` chứa `[core]`; `.env*` khớp mẫu `KEY=VALUE`; `*.sql`/`backup.sql` khớp dấu hiệu SQL dump; `id_rsa` chứa `BEGIN ... PRIVATE KEY`; `docker-compose.yml` chứa `services:`. Chữ ký khai báo dạng dữ liệu (rules/). Trang HTML chung (SPA/WAF) trả 200 → không tạo finding. Test bằng mock server trả 200 + HTML cho mọi path.
-- [ ] **FR-DET-02** (P0 · all) Nâng cấp phát hiện soft-404: so sánh vân tay nội dung (độ dài, hash, độ tương đồng) và xử lý cả redirect về trang login/home.
+- [x] **FR-DET-02** (P0 · all) *(xong ở Sprint 4: `soft404.py`, SRS FR-EXP-02, AT-40)* Nâng cấp phát hiện soft-404: so sánh vân tay nội dung (độ dài, hash, độ tương đồng) và xử lý cả redirect về trang login/home.
   AC: mock server trả 200 hoặc 302→/login cho mọi path → không có finding lộ file; hành vi FR-EXP-02/03 vẫn đúng.
-- [ ] **FR-DET-03** (P0 · Pro) Đánh dấu `confidence` (high/medium/low) cho mỗi finding; finding chỉ dựa trên tín hiệu gián tiếp (robots, banner) mặc định là low/medium.
+- [x] **FR-DET-03** (P0 · Pro) *(xong ở Sprint 4: SRS 6.1, AT-41)* Đánh dấu `confidence` (high/medium/low) cho mỗi finding; finding chỉ dựa trên tín hiệu gián tiếp (robots, banner) mặc định là low/medium.
   AC: trường `confidence` có trong JSON; finding có xác thực nội dung (FR-DET-01) là high.
 - [ ] **FR-DET-04** (P0 · all) TLS: **dò chủ động** các phiên bản (SSLv3, TLS1.0, 1.1, 1.2, 1.3) và cipher server hỗ trợ, không chỉ giao thức được thương lượng (sửa FR-TLS-04/05).
   AC: mock TLS server bật TLS1.0/1.1 → finding `TLS-WEAK-PROTOCOL` dù client thương lượng được 1.3. Nếu môi trường Python/OpenSSL không cho phép dò bản cũ, ghi rõ trong `errors` là "không kiểm tra được", không im lặng bỏ qua. `[REC]` đánh giá dùng thư viện chuyên dụng (sslyze) nếu license phù hợp.
-- [ ] **FR-DET-16** (P1 · all) `[REC]` **Phát hiện TLS bị chặn giữa đường** (phần mềm diệt virus, proxy TLS inspection): so issuer/chuỗi chứng chỉ thấy được với dấu hiệu đã biết, hoặc so với kết quả từ môi trường tham chiếu; khi phát hiện thì ghi cảnh báo vào `errors` và đánh dấu kết quả nhóm TLS là không đáng tin (hạ `confidence`). Phát hiện ngày 2026-09-30: Avast Web/Mail Shield ký lại cả TLS tới `127.0.0.1`.
+- [x] **FR-DET-16** (P1 · all) *(xong ở Sprint 4 theo danh sách issuer: `rules/tls_interceptors.json`, SRS FR-TLS-11, AT-41)* `[REC]` **Phát hiện TLS bị chặn giữa đường** (phần mềm diệt virus, proxy TLS inspection): so issuer/chuỗi chứng chỉ thấy được với dấu hiệu đã biết, hoặc so với kết quả từ môi trường tham chiếu; khi phát hiện thì ghi cảnh báo vào `errors` và đánh dấu kết quả nhóm TLS là không đáng tin (hạ `confidence`). Phát hiện ngày 2026-09-30: Avast Web/Mail Shield ký lại cả TLS tới `127.0.0.1`.
   AC: mock mô phỏng chứng chỉ bị ký lại → có cảnh báo, finding TLS có `confidence` thấp; không chặn → không cảnh báo.
 - [ ] **FR-DET-05** (P1 · Pro) TLS nâng cao: hostname mismatch, chuỗi chứng chỉ thiếu intermediate, self-signed, độ mạnh khóa/chữ ký (RSA < 2048, SHA-1), hỗ trợ forward secrecy, HTTP/2, OCSP stapling (info).
   AC: mỗi loại lỗi có finding riêng với id ổn định, evidence là giá trị quan sát được.
@@ -255,7 +255,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-DET-11** (P1 · Pro) Header bổ sung: `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`, `Cross-Origin-Embedder-Policy`, `Cache-Control`/`Pragma` cho trang có cookie phiên, `Clear-Site-Data` (info).
 - [ ] **FR-DET-12** (P1 · Pro) Mixed content và tài nguyên bên thứ ba: `http://` resource trong trang HTTPS; `<script>`/`<link>` bên ngoài thiếu Subresource Integrity (SRI).
 - [ ] **FR-DET-13** (P1 · Pro) Mở rộng danh sách path nhạy cảm (data-driven): file backup/dump, `.htpasswd`, `composer.json`, `package.json`, `.npmrc`, `.aws/credentials`, `WEB-INF/web.xml`, `actuator/*`, `swagger`/`openapi` công khai, admin panel phổ biến, `crossdomain.xml`. Mỗi path có chữ ký nội dung nếu có thể.
-  AC: thêm path chỉ cần sửa file rules, không sửa logic.
+  AC: thêm path chỉ cần sửa file rules, không sửa logic. *(Cơ chế đã có ở Sprint 4: `rules/sensitive_paths.json` + `rule_loader.py`; còn phần mở rộng danh sách.)*
 - [ ] **FR-DET-14** (P2 · Business) Phát hiện banner/thông báo lỗi chi tiết (stack trace, đường dẫn tệp, SQL error) trong response lỗi thông thường (404/500) mà không cố ý gây lỗi bằng payload.
 - [ ] **FR-DET-15** (P2 · Business) Email/DNS hygiene cho domain (SPF, DKIM gợi ý, DMARC, CAA, DNSSEC – chỉ đọc bản ghi công khai).
 
@@ -581,7 +581,7 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 2 | Thêm `CLAUDE.md`, đưa backlog + SRS vào `docs/`; SRS v1.2; sửa FIX-01/02/04/08 và README | FR-FIX-01/02/04/08 | Xong trên branch `docs/sprint-2-srs-v1.2`, chờ review |
 | 3 | Cấu hình `ruff` + `pyproject.toml`; `redact()` + mô hình finding (fingerprint, `schema_version`) + Web UI dùng chung đầu ra; CORS theo D3 | FR-QA-07 (phần cấu hình), FR-AUTH-02, FR-MODEL-01, FR-MODEL-02, FR-WEB-01, FR-FIX-07 | Xong (v1.2.0) trên branch `feat/sprint-3`, chờ review |
 | 3b | Scope khi theo redirect (D4); redirect check luôn chạy; header/HSTS xét trên response cuối; bỏ chữ "Passive" trong code | FR-FIX-09, FR-FIX-10, FR-FIX-11 (+ FR-AUTHZ-03 phần D4) | Xong (v1.3.0) trên branch `feat/sprint-3b`, chờ review |
-| 4 | Kiểm tra nội dung file nhạy cảm + confidence | FR-DET-01, FR-DET-02, FR-DET-03 | Chưa làm |
+| 4 | Kiểm tra nội dung file nhạy cảm + confidence | FR-DET-01, FR-DET-02, FR-DET-03 (+ FR-DET-16, FR-EXP-01 dạng rules, đọc body có giới hạn) | Xong (v1.4.0) trên branch `feat/sprint-4`, chờ review |
 | 5 | `--ca-bundle` (gỡ B1), `--fail-on`, SARIF, `--html`, template CI | FR-CI-10, FR-CI-01, FR-RPT-02, FR-RPT-09, FR-CI-03 | Chưa làm |
 | 6 | Lint (ruff) + CI cho repo | FR-QA-07 (+ FR-QA-01/02) | Chưa làm |
 
@@ -651,7 +651,7 @@ Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên l�
 | Epic | P0 xong | P1 xong | P2 xong | Ghi chú |
 |---|---|---|---|---|
 | E0 | ☑ | – | – | FIX-01…11 xong (Sprint 2–3b) |
-| E1 | ☐ | ☐ | ☐ | |
+| E1 | ☐ | ☐ | ☐ | DET-01, 02, 03 (P0) và DET-16 (P1) xong ở Sprint 4; còn DET-04 (P0) |
 | E2 | ☑ | ☐ | – | MODEL-01, 02 xong (Sprint 3) |
 | E3 | ☐ | ☐ | ☐ | |
 | E4 | ☐ | ☐ | – | |

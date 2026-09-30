@@ -13,107 +13,95 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin, urlparse
 
-from ..http_utils import safe_get
+from ..http_utils import decode_body, get_limited, safe_get
 from ..models import Finding, Severity
+from ..rule_loader import load_sensitive_paths
+from ..soft404 import Soft404Profile, build_profile
 
-# path -> (stable finding id, severity, short label)
-# The id is declared explicitly (not derived from the path string) so it
-# stays stable and collision-free regardless of how a path is spelled.
-_SENSITIVE_PATHS = {
-    ".git/HEAD": ("EXPOSURE-GIT-HEAD", Severity.CRITICAL, "Exposed .git repository metadata"),
-    ".git/config": ("EXPOSURE-GIT-CONFIG", Severity.CRITICAL, "Exposed .git repository config"),
-    ".env": ("EXPOSURE-ENV", Severity.CRITICAL, "Exposed .env file (often contains secrets)"),
-    ".env.local": ("EXPOSURE-ENV-LOCAL", Severity.CRITICAL, "Exposed .env.local file"),
-    ".env.production": ("EXPOSURE-ENV-PRODUCTION", Severity.CRITICAL, "Exposed .env.production file"),
-    "wp-config.php.bak": ("EXPOSURE-WP-CONFIG-BAK", Severity.CRITICAL, "Exposed WordPress config backup"),
-    "config.php.bak": ("EXPOSURE-CONFIG-PHP-BAK", Severity.CRITICAL, "Exposed config backup file"),
-    "web.config": ("EXPOSURE-WEB-CONFIG", Severity.MEDIUM, "Exposed IIS web.config"),
-    ".svn/entries": ("EXPOSURE-SVN-ENTRIES", Severity.HIGH, "Exposed Subversion metadata"),
-    ".DS_Store": ("EXPOSURE-DS-STORE", Severity.LOW, "Exposed macOS .DS_Store (can leak file listing)"),
-    "docker-compose.yml": ("EXPOSURE-DOCKER-COMPOSE", Severity.HIGH, "Exposed docker-compose.yml"),
-    "backup.zip": ("EXPOSURE-BACKUP-ZIP", Severity.HIGH, "Exposed backup archive"),
-    "backup.sql": ("EXPOSURE-BACKUP-SQL", Severity.CRITICAL, "Exposed SQL database dump"),
-    "phpinfo.php": ("EXPOSURE-PHPINFO", Severity.MEDIUM, "Exposed phpinfo() output"),
-    "server-status": ("EXPOSURE-SERVER-STATUS", Severity.MEDIUM, "Exposed Apache mod_status page"),
-    "id_rsa": ("EXPOSURE-ID-RSA", Severity.CRITICAL, "Exposed private SSH key"),
-    ".well-known/security.txt": (
-        "EXPOSURE-SECURITY-TXT",
-        Severity.INFO,
-        "security.txt present (informational, not a finding)",
-    ),
-}
+# The sensitive-path table (path, stable id, severity, title) lives in rules/sensitive_paths.json
+# (FR-EXP-01, NFR-MAINT-02); ids are declared there, never derived from the path string.
 
 _SENSITIVE_KEYWORDS = ("admin", "backup", "config", "internal", "private", "secret", "staging", "test")
 
 _LISTING_MARKERS = ("Index of /", "<title>Index of", "Directory Listing For")
 
 
-def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[Finding]:
+def check_sensitive_paths(
+    session, base_url: str, max_workers: int = 5, soft404_profile: Soft404Profile | None = None
+) -> list[Finding]:
     findings: list[Finding] = []
+    profile = soft404_profile if soft404_profile is not None else build_profile(session, base_url)
 
-    # Baseline: request a clearly-nonexistent path to detect "soft 404" behavior
-    # (custom error pages that return HTTP 200), so we don't report false positives.
-    probe_url = urljoin(base_url, "owasp-scanner-nonexistent-probe-4f8c2b/")
-    probe_resp, _ = safe_get(session, probe_url)
-    soft_404 = probe_resp is not None and probe_resp.status_code == 200
+    rules = {rule.path: rule for rule in load_sensitive_paths().paths}
 
     def fetch(path):
         url = urljoin(base_url, path)
-        resp, err = safe_get(session, url)
-        return path, url, resp, err
+        resp, body, err = get_limited(session, url)
+        return path, url, resp, body, err
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = [pool.submit(fetch, p) for p in _SENSITIVE_PATHS]
+        futures = [pool.submit(fetch, p) for p in rules]
         for fut in as_completed(futures):
-            path, url, resp, err = fut.result()
-            if err or resp is None:
+            path, url, resp, body, err = fut.result()
+            if err or resp is None or resp.status_code != 200:
                 continue
-            finding_id, severity, label = _SENSITIVE_PATHS[path]
-            if path == ".well-known/security.txt":
-                if resp.status_code == 200 and not soft_404:
-                    findings.append(
-                        Finding(
-                            id=finding_id,
-                            title=label,
-                            severity=Severity.INFO,
-                            owasp_category="A05:2021 - Security Misconfiguration",
-                            description="A security.txt disclosure policy was found (good practice).",
-                            url=url,
-                            instance_key=path,
-                        )
-                    )
+            rule = rules[path]
+            # FR-DET-01: HTTP 200 alone proves nothing (catch-all pages, WAF block pages);
+            # the content has to look like the file. That also covers FR-EXP-03 (soft-404).
+            if not rule.signature.matches(body):
                 continue
-
-            if resp.status_code == 200 and not soft_404:
+            # FR-DET-02: a generic page can still contain a signature; if it looks like this
+            # site's "missing" page (same content, or the same redirect target), it is not a file.
+            if profile.looks_missing(resp, body, path):
+                continue
+            evidence = f"HTTP {resp.status_code} for {url}; content matches {rule.signature.description}"
+            if rule.id == "EXPOSURE-SECURITY-TXT":
                 findings.append(
                     Finding(
-                        id=finding_id,
-                        title=label,
-                        severity=severity,
-                        owasp_category="A01:2021 - Broken Access Control",
-                        description=f"GET {path} returned HTTP 200, suggesting the file/path is publicly accessible.",
-                        evidence=f"HTTP {resp.status_code} for {url}",
-                        recommendation=(
-                            "Remove the file from the web root or block access at the web server/proxy layer."
-                        ),
+                        id=rule.id,
+                        title=rule.title,
+                        severity=Severity.INFO,
+                        owasp_category="A05:2021 - Security Misconfiguration",
+                        description="A security.txt disclosure policy was found (good practice).",
+                        evidence=evidence,
                         url=url,
                         instance_key=path,
                     )
                 )
+                continue
+            findings.append(
+                Finding(
+                    id=rule.id,
+                    title=rule.title,
+                    severity=rule.severity,
+                    owasp_category="A01:2021 - Broken Access Control",
+                    description=(
+                        f"GET {path} returned HTTP 200 and the content looks like {rule.signature.description}, "
+                        "so the file is publicly readable."
+                    ),
+                    evidence=evidence,  # never the file content itself: it may hold real secrets
+                    recommendation="Remove the file from the web root or block access at the web server/proxy layer.",
+                    url=url,
+                    instance_key=path,
+                )
+            )
 
     return findings
 
 
-def check_directory_listing(session, base_url: str, paths: list[str] | None = None) -> list[Finding]:
+def check_directory_listing(
+    session, base_url: str, paths: list[str] | None = None, soft404_profile: Soft404Profile | None = None
+) -> list[Finding]:
     findings: list[Finding] = []
+    profile = soft404_profile if soft404_profile is not None else build_profile(session, base_url)
     paths = paths or ["images/", "uploads/", "backup/", "files/", "assets/", "static/"]
 
     for path in paths:
         url = urljoin(base_url, path)
-        resp, err = safe_get(session, url)
-        if err or resp is None or resp.status_code != 200:
+        resp, raw, err = get_limited(session, url)
+        if err or resp is None or resp.status_code != 200 or profile.looks_missing(resp, raw, path):
             continue
-        body = resp.text[:2000] if resp.text else ""
+        body = decode_body(resp, raw)[:2000]
         if any(marker in body for marker in _LISTING_MARKERS):
             findings.append(
                 Finding(

@@ -65,7 +65,7 @@ def http_server():
         server.server_close()
 
 
-def make_self_signed_cert(tmp_path, not_before, not_after, name="cert"):
+def make_self_signed_cert(tmp_path, not_before, not_after, name="cert", common_name="owasp-scanner-test"):
     """Write a self-signed cert/key pair for 127.0.0.1 and return (certfile, keyfile).
 
     The OS trust store never knows it. It is marked as its own CA so a test can make
@@ -73,7 +73,7 @@ def make_self_signed_cert(tmp_path, not_before, not_after, name="cert"):
     a trust anchor.
     """
     key = ec.generate_private_key(ec.SECP256R1())
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "owasp-scanner-test")])
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -128,9 +128,9 @@ def https_server(tmp_path):
     """
     servers = []
 
-    def factory(handler_cls, cert="valid"):
+    def factory(handler_cls, cert="valid", common_name="owasp-scanner-test"):
         not_before, not_after = CERT_WINDOWS[cert]()
-        certfile, keyfile = make_self_signed_cert(tmp_path, not_before, not_after, name=cert)
+        certfile, keyfile = make_self_signed_cert(tmp_path, not_before, not_after, name=cert, common_name=common_name)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(certfile=str(certfile), keyfile=str(keyfile))
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler_cls)
