@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | OWASP-Aligned Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.6 |
-| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.5: 2026-09-30) |
+| **Phiên bản tài liệu** | 1.7 |
+| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.6: 2026-09-30) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.5.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 5). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `owasp_scanner` `v1.5.1` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 6). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -29,6 +29,7 @@
 | 1.4 | 2026-09-30 | Theo code v1.3.0 (Sprint 3b): phạm vi redirect D4 (NFR-SEC-05); redirect check luôn chạy và TLS theo redirect `http://` → HTTPS (FIX-09: FR-CLI-03/05, FR-REDIR-01/03); header xét trên response cuối, HSTS ở host gốc (FIX-10: FR-HDR-01/11), JSON `schema_version` 1.2 (`final_url`, `redirect_chain`); User-Agent có version thật, bỏ chữ "passive" (FIX-11: NFR-SEC-03); đính chính nguyên nhân B1 (Avast trên máy dev) và thêm rủi ro TLS bị phần mềm cục bộ chặn; AT-34…AT-37. |
 | 1.5 | 2026-09-30 | Theo code v1.4.0 (Sprint 4, độ chính xác): bảng path nhạy cảm chuyển sang `rules/sensitive_paths.json` (FR-EXP-01); đọc body tối đa 8 KiB (NFR-PERF-04); kiểm tra nội dung bằng chữ ký (FR-DET-01: FR-EXP-03/04/06, bảng 4.8.1); soft-404 theo vân tay nội dung và URL redirect (FR-DET-02: FR-EXP-02/07); confidence cho finding đã kiểm tra nội dung (FR-DET-03); cảnh báo TLS bị chặn giữa đường (FR-DET-16: FR-TLS-11); AT-38…AT-41. |
 | 1.6 | 2026-09-30 | Theo code v1.5.0 (Sprint 5, dùng trong CI): một kho chứng chỉ cho HTTP và TLS, mặc định là kho OS, `--ca-bundle` (FR-CI-10: FR-CLI-06, FR-TLS-08; B1 đã xử lý); `--fail-on` và exit code `3` (FR-CI-01: FR-CLI-04, mục 7.3, trường `gate`, `schema_version` 1.3; mục 13 không còn điểm chờ); `--sarif` (FR-RPT-02: FR-REPORT-06); `--html` (FR-RPT-09: FR-REPORT-07); template CI trong `examples/ci/` (FR-CI-03); AT-42…AT-46. |
+| 1.7 | 2026-09-30 | Theo code v1.5.1 (Sprint 6, chất lượng repo; không đổi hành vi tool): workflow CI của repo (FR-QA-07); golden file JSON/SARIF/HTML (FR-QA-02); mọi finding ID có test (FR-QA-01); NFR-PORT-01 ghi ma trận CI; mục 10 thêm rủi ro Python 3.9 hết hỗ trợ; AT-47…AT-49. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -376,7 +377,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | NFR-USA-01 | Khả dụng | Output CLI có phân cách rõ ràng, bảng tổng hợp theo severity ở đầu, rồi mới tới chi tiết. |
 | NFR-USA-02 | Khả dụng | Mọi finding PHẢI có khuyến nghị khắc phục khi khả thi. |
 | NFR-USA-03 | Khả dụng | Ngôn ngữ mặc định của mọi text sản phẩm (UI, báo cáo HTML, output CLI, thông báo lỗi API, nội dung finding) là **tiếng Anh**. Tài liệu dự án (SRS, backlog, README) có thể viết tiếng Việt. |
-| NFR-PORT-01 | Khả chuyển | Tool PHẢI chạy trên Python ≥ 3.9, Linux/macOS/Windows. *Đã chạy toàn bộ test trên Python 3.9, 3.12 và 3.14 (Windows) ngày 2026-09-30; Linux/macOS sẽ được kiểm chứng trong CI (FR-QA-07).* |
+| NFR-PORT-01 | Khả chuyển | Tool PHẢI chạy trên Python ≥ 3.9, Linux/macOS/Windows. *Đã chạy toàn bộ test trên Python 3.9, 3.12 và 3.14 (Windows) ngày 2026-09-30. CI của repo (FR-QA-07) chạy trên Ubuntu 24.04 (3.9, 3.14) và Windows (3.14); macOS chưa có trong CI.* |
 | NFR-MAINT-01 | Bảo trì | Mỗi nhóm check nằm trong module riêng, unit test được không cần mạng thật (dùng mock server cục bộ hoặc dữ liệu có sẵn). |
 | NFR-MAINT-02 | Bảo trì | Danh sách header bắt buộc (4.3) và path nhạy cảm (4.8.1) là cấu trúc dữ liệu khai báo ở đầu file. |
 | NFR-COMP-01 | Tuân thủ | README, UI và báo cáo PHẢI nêu rõ giới hạn phạm vi (không phải DAST toàn diện, không thay thế pentest). Không dùng ngôn ngữ đảm bảo tuyệt đối ("website an toàn", "phát hiện 100%"). |
@@ -615,6 +616,9 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-44 | Xuất SARIF (FR-RPT-02) | Quét mock; từng severity; cùng id với 2 severity; quét không kết nối được; target có secret; `--sarif PATH` | `version` 2.1.0 và `$schema`; mỗi result trỏ đúng rule và có `partialFingerprints` = fingerprint; ánh xạ `level`/`security-severity` đúng; rule lấy severity cao nhất; lỗi thành notification và `executionSuccessful: false`; không lộ secret; file được ghi; output ổn định | `test_top_level_structure`, `test_every_result_points_at_its_rule`, `test_severity_mapping`, `test_rule_severity_is_the_highest_seen_for_that_id`, `test_errors_become_notifications_and_incomplete_scans_are_unsuccessful`, `test_sarif_is_built_from_the_redacted_report`, `test_cli_writes_the_sarif_file`, `test_output_is_deterministic` |
 | AT-45 | `--html` dùng chung bộ render (FR-RPT-09) | `--json` + `--html` cùng lần quét; báo cáo Web UI tải về; target có secret; `--show-secrets`; `--json` + `--html` + `--sarif` cùng lúc | HTML của CLI = `render_html(JSON)`; HTML của Web UI = `render_html` của report Web UI trả về; không lộ secret, không có `<script`; có băng cảnh báo khi `--show-secrets`; 3 định dạng thống nhất số finding và gate | `test_cli_html_is_render_html_of_the_json_report`, `test_web_download_uses_the_same_renderer`, `test_cli_html_is_redacted_and_escaped`, `test_cli_html_with_show_secrets_carries_the_warning`, `test_all_outputs_in_one_run_agree` |
 | AT-46 | Template CI (FR-CI-03) | 4 file trong `examples/ci/` | Đủ 4 template; lệnh quét chỉ dùng tham số có trong `--help` (gồm `--yes`, `--fail-on`, `--json`, `--sarif`, `--html`); có lưu ý quyền quét và exit code `3`; cài đúng tag của bản phát hành; YAML không có tab. *Không chạy trên CI thật.* | `test_all_four_templates_exist`, `test_template_uses_only_real_cli_options`, `test_template_warns_about_authorization_and_exit_codes`, `test_template_installs_the_current_release`, `test_yaml_templates_have_no_tabs` |
+| AT-47 | CI của repo (FR-QA-07) | `.github/workflows/ci.yml`, `.gitleaks.toml` | Có 4 job `lint`/`test`/`audit`/`secrets`; chạy `ruff check`, `ruff format --check`, `pytest`; ma trận có Python thấp nhất theo `requires-python` và một bản mới hơn, có Windows; `pip-audit`; gitleaks quét toàn bộ lịch sử, kiểm checksum; chỉ quyền `contents: read`, không dùng secret; allowlist gitleaks chỉ gồm giá trị giả có trong `tests/test_redact.py`. *Kiểm tra nội dung file; workflow chạy thật trên GitHub sau khi push.* | `test_workflow_has_the_four_jobs`, `test_workflow_runs_lint_and_offline_tests`, `test_workflow_tests_oldest_supported_and_latest_python`, `test_workflow_audits_dependencies_and_scans_for_secrets`, `test_workflow_is_read_only_and_uses_no_repository_secrets`, `test_workflow_has_no_tabs`, `test_gitleaks_allowlist_only_covers_the_fake_redaction_values` |
+| AT-48 | Golden file báo cáo (FR-QA-02) | Một lần chạy CLI trên mock server với `--json`, `--sarif`, `--html` | Sau khi thay scan id, thời gian, cổng, version và fingerprint bằng placeholder, cả 3 báo cáo trùng khớp `tests/golden/`; không còn timestamp hay cổng thật; không báo cáo nào chứa giá trị cookie và `.env` giả của mock server | `test_report_matches_the_golden_file`, `test_report_has_no_run_specific_values_left`, `test_report_does_not_leak_the_mock_secrets` |
+| AT-49 | Mọi finding ID đều được test tạo ra (FR-QA-01) | 17 rule path nhạy cảm qua HTTP; header `X-AspNetMvc-Version`; chứng chỉ không parse được | Mỗi rule cho đúng 1 finding với id, severity, URL của rule; `HDR-INFO-X-ASPNETMVC-VERSION`; `TLS-CERT-PARSE-FAILED` (INFO) và trust check vẫn chạy. Đo ngày 2026-09-30: cả 47 id trong catalog đều được suite tạo ra (trước đó 33/47). | `test_every_rule_is_reported_end_to_end`, `test_headers_info_leak_one_finding_per_header`, `test_tls_unparsable_certificate_is_reported_and_trust_is_still_checked` |
 
 ---
 
@@ -630,6 +634,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 - **TLS mở 2 kết nối** (Bước A và B); chấp nhận được vì chỉ là bắt tay, không lặp.
 - **`TLS-CERT-NOT-TRUSTED` gộp nhiều nguyên nhân** (tự ký, thiếu intermediate, sai hostname, CA lạ) vào một mã (FR-DET-05).
 - **Web UI quét đồng bộ:** trình duyệt chờ tới khi quét xong, không có tiến độ hay nút huỷ (FR-WEB-03). Báo cáo chỉ nằm trong bộ nhớ.
+- **Python 3.9 đã hết hỗ trợ (EOL tháng 10/2025)** nhưng vẫn là mức tối thiểu ở NFR-PORT-01. Bản dựng 3.9 cho CI chỉ còn trên Ubuntu 22.04/24.04, không có cho Windows, và có thể bị gỡ trong tương lai. Việc nâng mức tối thiểu cần chủ sản phẩm quyết định.
 - **Trên Windows có Application Control**, lần đầu nạp DLL native của `cryptography` có thể bị chặn; cần IT allowlist nếu gặp trên máy CI.
 
 ---
@@ -656,4 +661,4 @@ Hiện không có điểm nào. Exit code `3` (Q1 cũ) đã được xác nhận
 
 ---
 
-*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.3.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với các test tự động của v1.5.0 ngày 2026-09-30 (các test cần bắt tay TLS được tin cậy tự skip trên máy có phần mềm chặn TLS). Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*
+*Tài liệu này mô tả hành vi của mã nguồn `owasp_scanner` `v1.5.1` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với các test tự động của v1.5.1 ngày 2026-09-30 (các test cần bắt tay TLS được tin cậy tự skip trên máy có phần mềm chặn TLS). Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*
