@@ -88,7 +88,7 @@ def to_sarif(report: dict) -> dict:
         "results": [_result(f, index[f["id"]], report.get("target", "")) for f in findings],
         "properties": {
             key: report[key]
-            for key in ("target", "final_url", "scan_id", "schema_version", "rules_version", "gate")
+            for key in ("target", "final_url", "scan_id", "schema_version", "rules_version", "scan_groups", "gate")
             if key in report
         },
     }

@@ -12,7 +12,7 @@ from . import __version__
 # report shape: minor for added fields, major for removed/renamed fields or changed meaning.
 # History: "1.0" = unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0;
 # 1.2 adds final_url and redirect_chain; 1.3 adds gate.
-SCHEMA_VERSION = "1.3"
+SCHEMA_VERSION = "1.4"
 
 
 class Severity(str, Enum):
@@ -52,6 +52,7 @@ class Finding:
     confidence: str = ""  # "high" | "medium" | "low"
     references: list[str] = field(default_factory=list)
     fingerprint: str = ""  # stable across scans, see catalog.fingerprint()
+    check: str = ""  # name of the check that produced it (a checks_run entry), set by run_scan()
     # Exact (raw, masked) substrings that output.build_report() replaces unless --show-secrets.
     # Internal only: never serialized, never shown (FR-AUTH-02).
     redactions: list[tuple[str, str]] = field(default_factory=list, repr=False)
@@ -71,6 +72,7 @@ class Finding:
             "references": list(self.references),
             "instance_key": self.instance_key,
             "fingerprint": self.fingerprint,
+            "check": self.check,
         }
 
 
@@ -86,6 +88,8 @@ class ScanResult:
     redirect_chain: list = field(default_factory=list)  # [{"url": str, "status": int}, ...]
     findings: list = field(default_factory=list)
     checks_run: list = field(default_factory=list)
+    # Check groups selected for this scan (catalog.GROUP_IDS order); groups not listed were not tested.
+    scan_groups: list = field(default_factory=lambda: _all_groups())
     errors: list = field(default_factory=list)
     scan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     scanner_version: str = __version__
@@ -114,6 +118,7 @@ class ScanResult:
             "redirect_chain": [dict(hop) for hop in self.redirect_chain],
             "started_at": self.started_at,
             "finished_at": self.finished_at,
+            "scan_groups": list(self.scan_groups),
             "checks_run": self.checks_run,
             "summary": self.summary_counts(),
             # Severity first (FR-REPORT-02); id and instance_key make the order deterministic,
@@ -123,6 +128,12 @@ class ScanResult:
             ],
             "errors": self.errors,
         }
+
+
+def _all_groups() -> list[str]:
+    from .catalog import GROUP_IDS  # catalog imports this module
+
+    return list(GROUP_IDS)
 
 
 def _rules_version() -> str:

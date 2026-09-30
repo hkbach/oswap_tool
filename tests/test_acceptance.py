@@ -206,6 +206,7 @@ def test_at12_json_report(http_server, tmp_path):
         "secrets_redacted",  # FR-AUTH-02
         "final_url", "redirect_chain",  # FR-FIX-10
         "gate",  # FR-CI-01
+        "scan_groups",  # SRS 4.11
     }  # fmt: skip
     assert set(data["summary"]) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
     assert set(data["findings"][0]) == {
@@ -223,6 +224,7 @@ def test_at12_json_report(http_server, tmp_path):
         "references",
         "instance_key",
         "fingerprint",
+        "check",  # SRS 4.11
     }
     ranks = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
     order = [ranks.index(f["severity"]) for f in data["findings"]]

@@ -358,6 +358,27 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | FR-UI-08 | Trang UI PHẢI gửi các header: `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. Dữ liệu quét trên trang chỉ được hiển thị bằng `textContent` (không `innerHTML`). | M |
 | FR-UI-09 | Trường `gate_failed` PHẢI bằng `gate.failed` của báo cáo, tính bằng cùng hàm `output.gate_failed()` và cùng ngưỡng `--fail-on` (khai báo khi khởi động server) như CLI. Ngoài các trường của mục 6.3 (`web.WEB_ONLY_FIELDS`) và các trường thay đổi theo lần quét (`scan_id`, thời gian), JSON của Web UI PHẢI giống hệt JSON `--json` của CLI cho cùng target và cùng ngưỡng. Lỗi của cả hai endpoint trả `application/json` dạng `{"error": "..."}`. Câu gate hiển thị trên UI (`gate_message`) và trong báo cáo HTML PHẢI do cùng hàm `output.gate_message()` tạo ra. | M |
 
+### 4.11 Nhóm mục tiêu kiểm thử (`catalog.CHECK_GROUPS`, từ v1.7.0)
+
+Các check được gom thành 8 nhóm mục tiêu kiểm thử, khai báo **một lần** trong `catalog.CHECK_GROUPS` (dữ liệu, không nằm trong logic). CLI, Web UI và báo cáo HTML đều dùng bảng này; thứ tự trong bảng là thứ tự hiển thị.
+
+| id | Tên hiển thị | Check (`checks_run`) |
+|---|---|---|
+| `headers` | Security headers | `security-headers`, `hsts-start-host` |
+| `cookies` | Cookies | `cookies` |
+| `tls` | TLS/SSL | `tls` |
+| `https-redirect` | HTTP to HTTPS redirect | `http-to-https-redirect` |
+| `cors` | CORS | `cors` |
+| `exposed-files` | Exposed files | `sensitive-paths` |
+| `directory-listing` | Directory listing | `directory-listing` |
+| `robots-sitemap` | robots.txt / sitemap.xml | `robots-sitemap` |
+
+| ID | Yêu cầu | Ưu tiên |
+|---|---|---|
+| FR-GRP-01 | `run_scan(..., groups=None)` PHẢI chạy mọi nhóm khi `groups` là `None`, và chỉ các nhóm được chọn khi có danh sách. GET baseline luôn chạy. Nhóm không được chọn KHÔNG được gửi request nào của riêng nó (2 probe soft-404 chỉ gửi khi chọn `exposed-files` hoặc `directory-listing`). | M |
+| FR-GRP-02 | Lựa chọn PHẢI được chuẩn hoá bởi `catalog.normalize_groups()`: không phân biệt hoa/thường, bỏ trùng, trả theo thứ tự bảng; id lạ hoặc danh sách rỗng → `ValueError` nêu các id hợp lệ. | M |
+| FR-GRP-03 | Báo cáo PHẢI ghi `scan_groups` (các nhóm đã chọn) và mỗi finding PHẢI có `check` (tên check tạo ra nó). Gate và exit code chỉ tính trên finding của các nhóm đã chạy; nhóm không được chọn phải được hiển thị là "not selected", không phải "no issues". | M |
+
 ---
 
 ## 5. Yêu cầu phi chức năng (Non-Functional Requirements)
@@ -439,12 +460,12 @@ class ScanResult:
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
 
-Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.3`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01). Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
+Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.4`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01); `1.4` (scanner 1.7.0) **thêm** `scan_groups` và `check` của mỗi finding (FR-GRP-03). Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
 
 ```json
 {
-  "schema_version": "1.3",
-  "scanner_version": "1.1.0",
+  "schema_version": "1.4",
+  "scanner_version": "1.7.0",
   "rules_version": "1.1.0",
   "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "secrets_redacted": true,
@@ -454,6 +475,7 @@ class ScanResult:
   "redirect_chain": [{ "url": "https://example.com/", "status": 301 }],
   "started_at": "2026-09-22T08:26:08.822920Z",
   "finished_at": "2026-09-22T08:26:09.273000Z",
+  "scan_groups": ["headers", "cookies", "tls", "https-redirect", "cors", "exposed-files", "directory-listing", "robots-sitemap"],
   "checks_run": ["security-headers", "cookies", "tls", "http-to-https-redirect", "cors", "sensitive-paths", "directory-listing", "robots-sitemap"],
   "summary": { "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0 },
   "findings": [
@@ -470,7 +492,8 @@ class ScanResult:
       "url": "https://example.com/.env",
       "references": ["https://owasp.org/Top10/A01_2021-Broken_Access_Control/", "https://cwe.mitre.org/data/definitions/538.html"],
       "instance_key": ".env",
-      "fingerprint": "<32 ký tự hex>"
+      "fingerprint": "<32 ký tự hex>",
+      "check": "sensitive-paths"
     }
   ],
   "errors": []
@@ -624,6 +647,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-49 | Mọi finding ID đều được test tạo ra (FR-QA-01) | 17 rule path nhạy cảm qua HTTP; header `X-AspNetMvc-Version`; chứng chỉ không parse được | Mỗi rule cho đúng 1 finding với id, severity, URL của rule; `HDR-INFO-X-ASPNETMVC-VERSION`; `TLS-CERT-PARSE-FAILED` (INFO) và trust check vẫn chạy. Đo ngày 2026-09-30: cả 47 id trong catalog đều được suite tạo ra (trước đó 33/47). | `test_every_rule_is_reported_end_to_end`, `test_headers_info_leak_one_finding_per_header`, `test_tls_unparsable_certificate_is_reported_and_trust_is_still_checked` |
 | AT-50 | Target IPv6 | Host `::1` cho TLS check và redirect check | URL trong finding và request probe có dấu ngoặc (`https://[::1]:<cổng>`, `http://[::1]/`); `instance_key` giữ nguyên dạng `host:port` để fingerprint không đổi | `test_ipv6_hosts_are_bracketed_in_urls` |
 | AT-51 | TLS cũ trên server thật (FR-TLS-01, FR-TLS-03) | Server local chỉ cho TLS 1.0, rồi chỉ TLS 1.1; server thường | Server cũ → đúng 1 `TLS-WEAK-PROTOCOL` (HIGH) ghi đúng phiên bản, không có `TLS-CONN-FAILED`; server thường vẫn thương lượng TLS 1.2/1.3 với cipher không yếu. Test tự skip nếu chính OpenSSL của máy chạy test không bắt tay được TLS 1.0/1.1 | `test_tls_weak_protocol_is_detected_on_a_real_legacy_server`, `test_tls_modern_server_still_negotiates_a_modern_protocol` |
+| AT-52 | Chọn nhóm kiểm thử (FR-GRP-01…03) | Bảng nhóm; quét mock mặc định; chỉ `headers`+`cookies`; chỉ `directory-listing`; chỉ `cookies`; lựa chọn rỗng/id lạ/trùng/hoa; target không kết nối được; chỉ `https-redirect` trên target http | Mỗi check thuộc đúng 1 nhóm, id nhóm cố định; mặc định `scan_groups` = cả 8 nhóm và mọi finding có `check`; chọn `headers`+`cookies` thì target chỉ nhận GET `/`; `directory-listing` vẫn gửi probe soft-404 nhưng không gửi path nhạy cảm/robots; gate chỉ tính nhóm đã chạy; lựa chọn sai → `ValueError`; trùng/hoa được chuẩn hoá | `test_every_check_belongs_to_exactly_one_group`, `test_group_ids_are_stable`, `test_default_scan_runs_every_group_and_tags_each_finding`, `test_only_the_selected_groups_run_and_send_requests`, `test_selected_groups_are_reported_in_table_order`, `test_directory_listing_alone_still_uses_the_soft404_probes`, `test_gate_counts_only_the_selected_groups`, `test_invalid_group_selection_is_rejected`, `test_group_selection_ignores_duplicates_and_case`, `test_unreachable_target_still_records_the_selection`, `test_https_redirect_group_alone_on_an_http_target` |
 
 ---
 
