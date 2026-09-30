@@ -22,7 +22,7 @@ File này là bản ghi review ngày 2026-09-23, giữ lại để truy vết. R
 | B3 | Đã làm ở Sprint 3b (FIX-09 + D4) | SRS FR-CLI-05, FR-REDIR-01, NFR-SEC-05 |
 | B4 | Đã làm ở Sprint 3b (FIX-10 + D5) | SRS FR-HDR-01, FR-HDR-11, mục 6.2 |
 | B5 | Đã giải quyết bằng D1 | SRS mục 3.3, 4.10 |
-| C (User-Agent `/1.0`) | Chuyển thành FR, chưa làm | Backlog FR-FIX-11 |
+| C (User-Agent `/1.0`) | Đã làm ở Sprint 3b | Backlog FR-FIX-11; SRS NFR-SEC-03 |
 | C (các mục còn lại) | Ghi nhận; `--json` không tự tạo thư mục cha đã ghi ở SRS mục 7.2 | — |
 
 ## A. Đã sửa trong mã để khớp SRS 1.1 — cần cập nhật câu chữ SRS

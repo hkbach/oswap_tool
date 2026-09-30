@@ -1,4 +1,4 @@
-"""OWASP-aligned passive web security scanner.
+"""OWASP-aligned non-intrusive web security scanner.
 
 A lightweight, non-destructive scanner that checks a website's HTTP
 responses against common OWASP guidance (Secure Headers Project,

@@ -18,8 +18,11 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from . import __version__
+
 DEFAULT_TIMEOUT = 10  # seconds
-USER_AGENT = "TECHVIFY-OWASP-Scanner/1.0 (+passive security header/config check)"
+# NFR-SEC-03: identify the scanner and its version so target logs/WAFs can attribute the traffic.
+USER_AGENT = f"TECHVIFY-OWASP-Scanner/{__version__} (+non-intrusive security configuration check)"
 MAX_REDIRECTS = 10
 
 

@@ -27,7 +27,7 @@ from .report import print_report, write_json
 
 CONSENT_BANNER = """
 ==========================================================================
- OWASP-Aligned Passive Web Security Scanner
+ OWASP-Aligned Non-intrusive Web Security Scanner
 ==========================================================================
  This tool sends ordinary, non-destructive HTTP GET requests to check
  security headers, TLS configuration, cookie flags, CORS behavior, and
@@ -166,7 +166,7 @@ def run_scan(base_url: str, timeout: int = 10, workers: int = 5) -> ScanResult:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="owasp-scanner",
-        description="OWASP-aligned passive web security scanner (headers, TLS, cookies, CORS, exposure).",
+        description="OWASP-aligned non-intrusive web security scanner (headers, TLS, cookies, CORS, exposure).",
     )
     parser.add_argument("target", help="Target URL or hostname, e.g. https://example.com")
     parser.add_argument("--json", metavar="PATH", help="Write full JSON report to PATH")

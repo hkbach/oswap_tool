@@ -226,7 +226,7 @@ Cách đọc: `- [ ] **ID** (Ưu tiên · Tier) Mô tả.` theo sau là `AC:` (a
 - [x] **FR-FIX-10** (P0 · all) *(xong ở Sprint 3b: SRS FR-HDR-01, FR-HDR-11, 6.2 `schema_version` 1.2, AT-36)* **HSTS và header xét theo URL nào** (B4, SRS mục 12). Check header chạy trên response cuối; HSTS chỉ xét khi response cuối là HTTPS. Cookie vẫn xét trên toàn chuỗi redirect (**D5**). Nếu redirect đổi host (ví dụ `example.com` → `www.example.com`), kiểm tra thêm HSTS ở host gốc qua HTTPS; thiếu thì tạo finding mức LOW. JSON thêm `final_url`, `redirect_chain`; nâng `schema_version`.
   AC: target `https://` redirect về `http://` → không đòi HSTS trên response HTTP; `example.com` → `www.example.com` có HSTS ở www nhưng thiếu ở gốc → 1 finding LOW; JSON có `final_url`, `redirect_chain` và `schema_version` mới; SRS sửa FR-HDR-01 và mục 6.2.
   Phụ thuộc: FR-MODEL-01, FR-MODEL-02, D4, D5.
-- [ ] **FR-FIX-11** (P1 · all) Bỏ chữ "Passive" khỏi text sản phẩm cho khớp FR-FIX-04: banner CLI (`cli.py`), tiêu đề và footer Web UI (`static/index.html`, footer còn trỏ tới `SRS.md` cũ), tiêu đề/footer báo cáo HTML (`html_report.py`), User-Agent (`http_utils.py`, đồng thời sửa `/1.0` thành phiên bản thật).
+- [x] **FR-FIX-11** (P1 · all) *(xong ở Sprint 3b: SRS NFR-SEC-03, AT-37)* Bỏ chữ "Passive" khỏi text sản phẩm cho khớp FR-FIX-04: banner CLI (`cli.py`), tiêu đề và footer Web UI (`static/index.html`, footer còn trỏ tới `SRS.md` cũ), tiêu đề/footer báo cáo HTML (`html_report.py`), User-Agent (`http_utils.py`, đồng thời sửa `/1.0` thành phiên bản thật).
   AC: `grep -i passive owasp_scanner/` chỉ còn trong comment/docstring; test UI và báo cáo HTML được cập nhật; text vẫn là tiếng Anh (NFR-USA-03).
 
 ### E1. Độ chính xác và chiều sâu của các check hiện có
