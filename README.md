@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.10.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.11.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.10.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.11.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -241,7 +241,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.10.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.11.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -546,6 +546,17 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 
 ## Changelog
 
+- **v1.11.0.** The company name has been removed from the source code entirely (product
+  owner, 2026-09-30); it must never appear here. What actually changed:
+  - **User-Agent sent to targets (NFR-SEC-03):** the company-name prefix is gone. The
+    full current value is `WebSec-Scanner/<version> (+non-intrusive security
+    configuration check)`. **If a target's WAF or log filter matches the previous
+    value, update it** — this is the second time the User-Agent has changed recently
+    (see v1.9.0 above); only this final value is meant to stay.
+  - Every other mention of the company name in documentation (README, SRS, backlog,
+    the 2026-09-23 review record) was reworded to keep the same technical meaning
+    without naming the company.
+  - No other behaviour, output field or exit code changed.
 - **v1.10.0**. Changes to note:
   - **JSON report has a `disclaimer` field** (schema_version 1.5, fields added only):
     the same scope & limitations text the console and HTML reports already end with
@@ -566,9 +577,10 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
     `websec-scanner`/`websec-scanner-web` (`python -m owasp_scanner` →
     `python -m websec_scanner`, same for `.web`).
   - **PyPI/pip distribution name:** `owasp-scanner` → `websec-scanner`.
-  - **User-Agent sent to targets (NFR-SEC-03):** `TECHVIFY-OWASP-Scanner/<version>` →
-    `TECHVIFY-WebSec-Scanner/<version>`. **If a target's WAF or log filter matches the
-    old string, it will no longer recognise this tool's traffic; update it.**
+  - **User-Agent sent to targets (NFR-SEC-03):** the product-name portion changed to
+    `WebSec-Scanner/<version>`; see v1.11.0 below for the full current value.
+    **If a target's WAF or log filter matches the old string, it will no longer
+    recognise this tool's traffic; update it.**
   - **SARIF `partialFingerprints` key:** `owaspScannerFingerprint/v1` →
     `websecScannerFingerprint/v1`. Existing GitHub code scanning alerts matched on the
     old key lose fingerprint continuity across this release.
@@ -686,9 +698,9 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
     HSTS is also checked on the start host (`HDR-HSTS-MISSING-ON-START-HOST`, LOW).
   - **JSON `schema_version` 1.2** (fields added only): `final_url`,
     `redirect_chain`; new check name `hsts-start-host`.
-  - **New User-Agent:** `TECHVIFY-OWASP-Scanner/<version> (+non-intrusive
-    security configuration check)`. Update log or WAF filters that rely on the
-    old string.
+  - **New User-Agent:** identifies the scanner and carries its real version
+    instead of a generic default (see NFR-SEC-03). Update log or WAF filters
+    that rely on the previous, generic User-Agent.
   - Product text says "Non-intrusive" instead of "Passive" (FIX-11).
   - Environment note: local software that intercepts TLS (for example Avast
     Web/Mail Shield) makes the TLS results unreliable; see SRS section 10.

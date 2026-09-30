@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.12 |
-| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.11: 2026-09-30) |
+| **Phiên bản tài liệu** | 1.13 |
+| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.12: 2026-09-30) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `websec_scanner` `v1.10.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 9, đổi tên package). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `websec_scanner` `v1.11.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 9, đổi tên package). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -35,6 +35,7 @@
 | 1.10 | 2026-09-30 | Theo code v1.8.0 (Sprint 9, đóng Phase A): Web UI bind ra ngoài bắt buộc `--allow-remote` + access token (FR-UI-01, mục 6.3, 7); `output.SCOPE_NOTE` dùng chung cho console và HTML (FR-RPT-08, NFR-COMP-01); kiểm kê license `THIRD_PARTY_LICENSES.md` (FR-SEC-10, NFR-LEGAL-01); image Docker chính thức và job CI `docker` (FR-CI-04), sửa Jenkinsfile dùng source archive; rà lại toàn bộ README (FR-DOC-01); AT-56…AT-60. |
 | 1.11 | 2026-09-30 | Theo code v1.9.0: **đổi tên package** `owasp_scanner`/`owasp-scanner` → `websec_scanner`/`websec-scanner` theo yêu cầu chủ sản phẩm (tool không còn giới hạn ở riêng OWASP). Đổi: import path, lệnh CLI, tên gói pip, User-Agent (NFR-SEC-03, breaking — WAF/log filter theo chuỗi cũ cần cập nhật), khoá `partialFingerprints` của SARIF (FR-REPORT-06, breaking — mất liên tục fingerprint trên GitHub code scanning), tên file báo cáo tải về, tiêu đề sản phẩm. Không đổi: `schema_version` (1.4), trường `owasp_category`/`owasp_groups`, hành vi CLI/Web UI, exit code. |
 | 1.12 | 2026-09-30 | Theo code v1.10.0: JSON thêm `disclaimer` (FR-RPT-08, `schema_version` 1.5, mục 6.2, AT-57); Docker image publish lên `ghcr.io/hkbach/websec-scanner` qua job `docker-publish` chỉ khi push tag `v*` (FR-CI-04, AT-59); tiêu đề trang Web UI (`<title>`/`<h1>`) đổi thành "WebSec Scanner" theo yêu cầu chủ sản phẩm (cosmetic, không có FR riêng, không đổi hành vi). |
+| 1.13 | 2026-09-30 | Theo code v1.11.0: bỏ tên công ty khỏi toàn bộ source code theo yêu cầu chủ sản phẩm (NFR-SEC-03: `User-Agent` không còn tiền tố tên công ty, chỉ còn `WebSec-Scanner/<version>`; các mục tài liệu khác nhắc tên công ty được viết lại theo nghĩa trung tính, không đổi ý; `docs/PRODUCT-BACKLOG.md`, `docs/srs-feedback.md`). Không đổi hành vi nào khác. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -394,7 +395,7 @@ Các check được gom thành 8 nhóm mục tiêu kiểm thử, khai báo **m�
 |---|---|---|
 | NFR-SEC-01 | Bảo mật/đạo đức | Tool TUYỆT ĐỐI KHÔNG gửi payload khai thác (SQLi, XSS thật, command injection, path traversal thật, brute-force). Mọi request tới target là GET tiêu chuẩn, không sửa dữ liệu phía target. |
 | NFR-SEC-02 | Bảo mật/đạo đức | Bước xác nhận quyền quét không tắt được bằng cấu hình mặc định: CLI chỉ bỏ qua bằng cờ `--yes`; Web UI luôn yêu cầu `authorized: true`. |
-| NFR-SEC-03 | Bảo mật/đạo đức | Mọi request PHẢI gửi `User-Agent` nhận diện rõ là scanner kèm phiên bản thật: `TECHVIFY-WebSec-Scanner/<version> (+non-intrusive security configuration check)`, không giả mạo trình duyệt. *(Trước v1.3.0 chuỗi là `TECHVIFY-OWASP-Scanner/1.0 (+passive security header/config check)`; từ v1.9.0 đổi từ `TECHVIFY-OWASP-Scanner/` thành `TECHVIFY-WebSec-Scanner/` theo đổi tên sản phẩm (đợt đổi tên 2026-09-30); bên nào lọc log/WAF theo chuỗi cũ cần cập nhật.)* |
+| NFR-SEC-03 | Bảo mật/đạo đức | Mọi request PHẢI gửi `User-Agent` nhận diện rõ là scanner kèm phiên bản thật: `WebSec-Scanner/<version> (+non-intrusive security configuration check)`, không giả mạo trình duyệt, **không chứa tên công ty hay thông tin thương mại khác** (yêu cầu chủ sản phẩm, đợt rà soát 2026-09-30). *(Chuỗi đã đổi hai lần trong lịch sử, đều không phải bên nào phải hành động lại nếu đã cập nhật sau lần gần nhất: trước v1.3.0 không mang tên sản phẩm; từ v1.3.0 đến trước bản rà soát này, chuỗi có mang tên sản phẩm và tên công ty; từ bản rà soát 2026-09-30, chỉ còn tên sản phẩm. Bên nào lọc log/WAF theo chuỗi cũ cần cập nhật theo giá trị hiện tại ở cột bên trái.)* |
 | NFR-SEC-04 | Bảo mật | Mọi đầu ra (console, `--json`, response Web UI, báo cáo HTML) PHẢI qua `output.build_report()`, nơi che (1) cặp `tên=giá trị` của cookie do check khai báo chính xác, và (2) giá trị của mọi tham số URL có tên chứa `token`, `key`, `session`, `sess`, `password`, `passwd`, `pwd`, `secret`, `sig`, `auth`, `jwt`, và (3) thông tin đăng nhập trong URL (`scheme://user:password@host`: che riêng user và password, từ v1.6.0) — trong `target`, `final_url`, `redirect_chain`, `errors`, và `title`/`description`/`evidence`/`url`/`instance_key` của finding. Dòng `Scanning <target>` của CLI cũng được che. Cờ `--show-secrets` **chỉ có ở CLI**: in cảnh báo ra stderr, JSON có `secrets_redacted: false`, báo cáo HTML có băng cảnh báo. Web UI luôn che, bỏ qua mọi trường yêu cầu tắt che. |
 | NFR-SEC-05 | Bảo mật/đạo đức | **Phạm vi khi theo redirect (D4):** mọi request của một lần quét chỉ được theo redirect tới cùng hostname với target, hoặc hostname chỉ khác một tiền tố `www.` (không phân biệt hoa thường; được đổi scheme và cổng; target là IP thì phải khớp chính xác). Redirect ra ngoài phạm vi thì **không gửi request tới host đó**: chuỗi redirect dừng ở response 3xx cuối cùng trong phạm vi, các check chạy tiếp trên response đó, và `errors` có đúng **một dòng** cho mỗi host bị chặn. Tối đa 10 bước redirect cho mỗi request. |
 | NFR-PERF-01 | Hiệu năng | Mỗi request PHẢI có timeout cấu hình được (mặc định 10 giây). |
@@ -713,4 +714,4 @@ Hiện không có điểm nào. Exit code `3` (Q1 cũ) đã được xác nhận
 
 ---
 
-*Tài liệu này mô tả hành vi của mã nguồn `websec_scanner` `v1.10.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với các test tự động của v1.10.0 ngày 2026-09-30 (các test cần bắt tay TLS được tin cậy tự skip trên máy có phần mềm chặn TLS). Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*
+*Tài liệu này mô tả hành vi của mã nguồn `websec_scanner` `v1.11.0` trong repo (CLI + Web UI cục bộ), đã đối chiếu với code và với các test tự động của v1.11.0 ngày 2026-09-30 (các test cần bắt tay TLS được tin cậy tự skip trên máy có phần mềm chặn TLS). Khi code thay đổi, cập nhật FR/NFR/AT tương ứng trong cùng thay đổi để tài liệu và mã nguồn không lệch nhau.*

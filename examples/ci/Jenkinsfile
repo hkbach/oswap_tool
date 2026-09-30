@@ -9,7 +9,7 @@ pipeline {
 
     environment {
         TARGET_URL  = 'https://staging.example.com'  // the approved target
-        SCANNER_REF = 'v1.10.0'                       // tag or commit of hkbach/oswap_tool to install
+        SCANNER_REF = 'v1.11.0'                       // tag or commit of hkbach/oswap_tool to install
     }
 
     stages {

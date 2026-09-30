@@ -12,7 +12,7 @@
 **Quy ước nhãn trong tài liệu (tách bạch sự thật, giả định, khuyến nghị):**
 
 - `[FACT]` – lấy từ SRS v1.2 (đã đối chiếu code) hoặc từ nguồn đã dẫn.
-- `[ASSUMPTION]` – giả định của TECHVIFY, chưa được khách hàng/thị trường xác nhận.
+- `[ASSUMPTION]` – giả định của đội ngũ phát triển, chưa được khách hàng/thị trường xác nhận.
 - `[REC]` – khuyến nghị kỹ thuật/sản phẩm, có thể đổi khi có bằng chứng.
 - `[CONFIRM]` – cần người có thẩm quyền xác nhận trước khi làm (pháp lý, thương mại, kiến trúc lớn).
 
