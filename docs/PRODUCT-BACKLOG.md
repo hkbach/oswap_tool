@@ -491,7 +491,7 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 - [ ] **FR-SEC-07** (P1 · Business) Không gửi dữ liệu khách hàng (finding, evidence, cấu hình) sang dịch vụ AI công cộng; nếu dùng AI để giải thích/tóm tắt finding thì chỉ khi có lựa chọn rõ ràng của khách, mô hình/đường truyền được phê duyệt, dữ liệu đã che, không dùng để huấn luyện `[CONFIRM]`.
 - [ ] **FR-SEC-08** (P1 · Enterprise) Chương trình tuân thủ của chính đơn vị vận hành: SOC 2 hoặc ISO 27001 (lộ trình), pentest độc lập định kỳ, chính sách công bố lỗ hổng (`security.txt` cho chính nền tảng), quy trình xử lý sự cố + thông báo khách hàng.
 - [ ] **FR-SEC-09** (P1 · Business) Chuỗi cung ứng: khóa phiên bản phụ thuộc, SBOM cho từng bản phát hành, ký image/gói phát hành.
-- [ ] **FR-SEC-10** (P0 · all) Rà **giấy phép** (license) của toàn bộ phụ thuộc và bộ luật/dữ liệu đi kèm trước khi thương mại hóa; lưu bản kiểm kê (`THIRD_PARTY_LICENSES`).
+- [x] **FR-SEC-10** (P0 · all) *(xong ở Sprint 9: `THIRD_PARTY_LICENSES.md`, không thêm công cụ quét license, `tests/test_licenses.py` đối chiếu với `pyproject.toml`; SRS AT-58. `certifi` là MPL-2.0, đã ghi `[CONFIRM]` cần rà lại trước khi thương mại hóa)* Rà **giấy phép** (license) của toàn bộ phụ thuộc và bộ luật/dữ liệu đi kèm trước khi thương mại hóa; lưu bản kiểm kê (`THIRD_PARTY_LICENSES`).
 
 ### E20. Quan sát và vận hành
 
