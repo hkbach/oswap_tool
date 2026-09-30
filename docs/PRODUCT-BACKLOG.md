@@ -235,7 +235,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 - [x] **FR-DET-01** (P0 · all) *(xong ở Sprint 4: chữ ký trong `rules/sensitive_paths.json`, SRS FR-EXP-04, AT-39)* Xác thực **nội dung** khi kiểm tra path nhạy cảm, không chỉ HTTP 200.
   AC: `.git/HEAD` phải chứa `ref:`; `.git/config` chứa `[core]`; `.env*` khớp mẫu `KEY=VALUE`; `*.sql`/`backup.sql` khớp dấu hiệu SQL dump; `id_rsa` chứa `BEGIN ... PRIVATE KEY`; `docker-compose.yml` chứa `services:`. Chữ ký khai báo dạng dữ liệu (rules/). Trang HTML chung (SPA/WAF) trả 200 → không tạo finding. Test bằng mock server trả 200 + HTML cho mọi path.
-- [ ] **FR-DET-02** (P0 · all) Nâng cấp phát hiện soft-404: so sánh vân tay nội dung (độ dài, hash, độ tương đồng) và xử lý cả redirect về trang login/home.
+- [x] **FR-DET-02** (P0 · all) *(xong ở Sprint 4: `soft404.py`, SRS FR-EXP-02, AT-40)* Nâng cấp phát hiện soft-404: so sánh vân tay nội dung (độ dài, hash, độ tương đồng) và xử lý cả redirect về trang login/home.
   AC: mock server trả 200 hoặc 302→/login cho mọi path → không có finding lộ file; hành vi FR-EXP-02/03 vẫn đúng.
 - [ ] **FR-DET-03** (P0 · Pro) Đánh dấu `confidence` (high/medium/low) cho mỗi finding; finding chỉ dựa trên tín hiệu gián tiếp (robots, banner) mặc định là low/medium.
   AC: trường `confidence` có trong JSON; finding có xác thực nội dung (FR-DET-01) là high.

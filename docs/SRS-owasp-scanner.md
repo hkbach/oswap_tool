@@ -71,7 +71,7 @@ Tool nhận một URL hoặc hostname, gửi các request HTTP **GET thông thư
 | TLS (mục 4.5) | 2 lần bắt tay TLS, không gửi HTTP |
 | Redirect HTTP → HTTPS (mục 4.6) | Nhập `https://`: 1 GET tới `http://<hostname>/` (thêm 1 GET cho mỗi bước redirect HTTP). Nhập `http://`: không gửi thêm, dùng chuỗi redirect của baseline |
 | CORS (mục 4.7) | 1 GET có header `Origin` giả lập |
-| Path nhạy cảm (mục 4.8) | 1 probe soft-404 + 17 path |
+| Path nhạy cảm (mục 4.8) | 2 probe soft-404 (dùng chung với directory listing) + 17 path, mỗi response đọc tối đa 8 KiB |
 | Directory listing | 6 thư mục |
 | robots.txt, sitemap.xml | 2 GET |
 
@@ -152,6 +152,7 @@ owasp_scanner/
 ├── redact.py          # redact(): che giá trị cookie và tham số URL nhạy cảm (D2)
 ├── rule_loader.py     # Nạp + kiểm tra rules/*.json; rules_version
 ├── rules/             # Bảng khai báo dạng JSON: sensitive_paths.json (bảng 4.8.1)
+├── soft404.py         # Hồ sơ soft-404: 2 probe ngẫu nhiên, so vân tay nội dung/URL cuối
 ├── http_utils.py      # HTTP session dùng chung: timeout, User-Agent, retry có kiểm soát, phạm vi redirect (ScopedSession)
 ├── models.py          # Kiểu dữ liệu: Severity, Finding, ScanResult
 ├── report.py          # In báo cáo CLI (màu ANSI) + ghi file JSON
@@ -292,12 +293,12 @@ Chỉ gửi 1 GET với header `Origin` giả lập, rõ ràng là request kiể
 | ID | Yêu cầu | Priority |
 |---|---|---|
 | FR-EXP-01 | Tool PHẢI duy trì danh sách path nhạy cảm kèm `Finding.id` và severity (bảng 4.8.1) trong file dữ liệu **`owasp_scanner/rules/sensitive_paths.json`**, được kiểm tra khi nạp (thiếu trường, severity lạ, id hoặc path trùng, path tuyệt đối → lỗi rõ ràng). Thêm path chỉ cần sửa file này, không sửa code. Trường `version` của file là `rules_version` trong báo cáo. | M |
-| FR-EXP-02 | *(Thay bằng chữ ký nội dung, FR-EXP-04; probe soft-404 cố định đã bỏ ở Sprint 4. Phát hiện soft-404 theo vân tay nội dung là FR-DET-02 trong backlog.)* | — |
-| FR-EXP-03 | Tool KHÔNG được tạo finding lộ file chỉ dựa trên mã 200. Trang chung trả 200 cho mọi path (SPA, trang lỗi tuỳ biến, trang chặn của WAF) không tạo finding vì không khớp chữ ký nội dung (FR-EXP-04); nhờ vậy một file thật bị lộ trên site như vậy vẫn được phát hiện. | M |
+| FR-EXP-02 | **Soft-404 theo vân tay nội dung (FR-DET-02).** Mỗi lần quét, tool PHẢI gửi 2 probe tới path ngẫu nhiên chắc chắn không tồn tại (một dạng file `owasp-scanner-probe-<hex>.txt`, một dạng thư mục `owasp-scanner-probe-<hex>/`; phần hex mới cho mỗi lần quét) và ghi lại các probe trả 200. Một response 200 của path nhạy cảm hoặc thư mục bị coi là "không tồn tại" nếu (a) nó đi qua redirect và dừng ở **cùng URL cuối** với một probe cũng bị redirect (ví dụ mọi path về `/login`), hoặc (b) nội dung giống một probe từ **90%** trở lên (so 4 KiB đầu, sau khi bỏ chuỗi path mà trang in lại và gộp khoảng trắng). Một profile dùng chung cho check path nhạy cảm và directory listing. | M |
+| FR-EXP-03 | Tool KHÔNG được tạo finding lộ file chỉ dựa trên mã 200. Trang chung trả 200 cho mọi path (SPA, trang lỗi tuỳ biến, trang chặn của WAF) không tạo finding: phần lớn vì không khớp chữ ký nội dung (FR-EXP-04), phần còn lại vì bị nhận là soft-404 (FR-EXP-02) dù vô tình khớp chữ ký. Một file thật bị lộ trên site như vậy vẫn được phát hiện. | M |
 | FR-EXP-04 | Nếu path trả HTTP 200 **và nội dung (tối đa 8 KiB đầu, NFR-PERF-04) khớp chữ ký của path** (cột "Chữ ký nội dung" bảng 4.8.1, khai báo trong `rules/sensitive_paths.json`), PHẢI tạo finding với id và severity đã khai báo, category `A01:2021 - Broken Access Control`. Chữ ký là regex trên text đã giải mã và/hoặc magic bytes ở đầu file; body là trang HTML (`<!doctype html`/`<html`) thì không khớp, trừ path được đánh dấu `allow_html`. Evidence gồm mã trạng thái, URL và mô tả chữ ký đã khớp; **KHÔNG BAO GIỜ chứa nội dung file** (có thể là secret thật). | M |
 | FR-EXP-05 | Các request kiểm tra path PHẢI chạy song song có giới hạn (thread pool), số luồng tối đa lấy từ `--workers` (mặc định 5). | M |
 | FR-EXP-06 | `.well-known/security.txt` được xử lý riêng: nếu trả 200 và nội dung có trường `Contact:` (RFC 9116), tạo finding INFO `EXPOSURE-SECURITY-TXT` mang tính tích cực, không phải lỗ hổng. | S |
-| FR-EXP-07 | Tool PHẢI kiểm tra directory listing tại `images/`, `uploads/`, `backup/`, `files/`, `assets/`, `static/`. Nếu response 200 và 2000 ký tự đầu chứa `Index of /`, `<title>Index of` hoặc `Directory Listing For`, PHẢI tạo finding `EXPOSURE-DIR-LISTING` mức MEDIUM, category A05:2021. | M |
+| FR-EXP-07 | Tool PHẢI kiểm tra directory listing tại `images/`, `uploads/`, `backup/`, `files/`, `assets/`, `static/`. Nếu response 200, không bị nhận là soft-404 (FR-EXP-02), và 2000 ký tự đầu chứa `Index of /`, `<title>Index of` hoặc `Directory Listing For`, PHẢI tạo finding `EXPOSURE-DIR-LISTING` mức MEDIUM, category A05:2021. | M |
 | FR-EXP-08a | Tool PHẢI tải `robots.txt` (nếu có), trích các dòng `Disallow:`, lọc path chứa từ khoá nhạy cảm (`admin`, `backup`, `config`, `internal`, `private`, `secret`, `staging`, `test`; không phân biệt hoa/thường). Có ít nhất 1 path khớp → finding `EXPOSURE-ROBOTS-HINTS` mức LOW, A01:2021, evidence là tối đa 10 path đầu. | S |
 | FR-EXP-08b | Tool PHẢI tải `sitemap.xml` (nếu có), trích nội dung thẻ `<loc>…</loc>`, lấy phần path của từng URL và so với cùng danh sách từ khoá. Có ít nhất 1 URL khớp → finding `EXPOSURE-SITEMAP-HINTS` mức LOW, A01:2021, evidence là tối đa 10 URL đầu. | S |
 
@@ -593,6 +594,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-37 | Text sản phẩm không còn "passive" (FIX-11) | Banner CLI, `--help` của CLI và Web UI, file tĩnh của UI, báo cáo HTML, User-Agent | Không chứa "passive"; User-Agent đúng mẫu NFR-SEC-03 với `__version__`; footer UI trỏ tới `docs/SRS-owasp-scanner.md` | `test_product_text_does_not_say_passive`, `test_cli_help_does_not_say_passive`, `test_user_agent_identifies_the_scanner_and_its_version`, `test_ui_footer_points_at_the_current_srs` |
 | AT-38 | Rules dạng dữ liệu và đọc có giới hạn | Bảng path từ `rules/sensitive_paths.json`; file rules sai định dạng; thêm path chỉ bằng file rules; server trả body 20 MB cho mọi path | Bảng khớp 4.8.1; `rules_version` = version của file; lỗi nạp nêu rõ nguyên nhân; path mới được quét; mỗi response chỉ đọc ≤ 8 KiB, check xong trong vài giây | `test_sensitive_paths_come_from_the_rules_file`, `test_report_carries_the_rules_version`, `test_invalid_rules_are_rejected_with_a_clear_message`, `test_a_new_path_needs_only_a_rules_change`, `test_get_limited_reads_at_most_the_cap`, `test_sensitive_path_check_does_not_download_huge_files` |
 | AT-39 | Kiểm tra nội dung file nhạy cảm (FR-DET-01) | Mỗi path: nội dung thật; trang HTML chung, rỗng, text, JSON; site trả 200 cho mọi path có và không có `.env` thật; path 200 sai nội dung | Nội dung thật khớp chữ ký; response chung không khớp; site catch-all không có finding nhưng `.env` thật vẫn được báo; 200 sai nội dung không báo; evidence không chứa nội dung file; rules thiếu/sai chữ ký bị từ chối | `test_signature_matches_real_content`, `test_signature_rejects_generic_responses`, `test_catch_all_html_site_has_no_exposure_findings`, `test_real_file_on_a_catch_all_site_is_still_found`, `test_200_with_the_wrong_content_is_not_reported`, `test_evidence_never_contains_the_file_content`, `test_invalid_signatures_are_rejected` |
+| AT-40 | Soft-404 theo vân tay (FR-DET-02) | Site trả cùng một trang (có `Contact:` và `Index of /`) cho mọi path; trang in lại path được hỏi; mọi path redirect về `/login`; `.env` và `/images/` thật trên các site đó; site 404 bình thường | Không có finding từ trang chung; file và listing thật vẫn được báo; site 404 có profile rỗng; path probe ngẫu nhiên mỗi lần; `run_scan` chỉ gửi 2 probe | `test_catch_all_page_that_happens_to_match_a_signature_is_ignored`, `test_catch_all_page_echoing_the_path_is_recognised`, `test_redirect_to_login_is_recognised`, `test_real_files_are_still_found_on_soft_404_sites`, `test_real_file_behind_login_redirects_is_still_found`, `test_normal_404_site_has_an_empty_profile`, `test_probe_paths_are_random_per_scan`, `test_run_scan_builds_the_profile_once` |
 
 ---
 

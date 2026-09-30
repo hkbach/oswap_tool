@@ -16,6 +16,7 @@ from urllib.parse import urljoin, urlparse
 from ..http_utils import decode_body, get_limited, safe_get
 from ..models import Finding, Severity
 from ..rule_loader import load_sensitive_paths
+from ..soft404 import Soft404Profile, build_profile
 
 # The sensitive-path table (path, stable id, severity, title) lives in rules/sensitive_paths.json
 # (FR-EXP-01, NFR-MAINT-02); ids are declared there, never derived from the path string.
@@ -25,8 +26,11 @@ _SENSITIVE_KEYWORDS = ("admin", "backup", "config", "internal", "private", "secr
 _LISTING_MARKERS = ("Index of /", "<title>Index of", "Directory Listing For")
 
 
-def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[Finding]:
+def check_sensitive_paths(
+    session, base_url: str, max_workers: int = 5, soft404_profile: Soft404Profile | None = None
+) -> list[Finding]:
     findings: list[Finding] = []
+    profile = soft404_profile if soft404_profile is not None else build_profile(session, base_url)
 
     rules = {rule.path: rule for rule in load_sensitive_paths().paths}
 
@@ -45,6 +49,10 @@ def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[
             # FR-DET-01: HTTP 200 alone proves nothing (catch-all pages, WAF block pages);
             # the content has to look like the file. That also covers FR-EXP-03 (soft-404).
             if not rule.signature.matches(body):
+                continue
+            # FR-DET-02: a generic page can still contain a signature; if it looks like this
+            # site's "missing" page (same content, or the same redirect target), it is not a file.
+            if profile.looks_missing(resp, body, path):
                 continue
             evidence = f"HTTP {resp.status_code} for {url}; content matches {rule.signature.description}"
             if rule.id == "EXPOSURE-SECURITY-TXT":
@@ -81,14 +89,17 @@ def check_sensitive_paths(session, base_url: str, max_workers: int = 5) -> list[
     return findings
 
 
-def check_directory_listing(session, base_url: str, paths: list[str] | None = None) -> list[Finding]:
+def check_directory_listing(
+    session, base_url: str, paths: list[str] | None = None, soft404_profile: Soft404Profile | None = None
+) -> list[Finding]:
     findings: list[Finding] = []
+    profile = soft404_profile if soft404_profile is not None else build_profile(session, base_url)
     paths = paths or ["images/", "uploads/", "backup/", "files/", "assets/", "static/"]
 
     for path in paths:
         url = urljoin(base_url, path)
         resp, raw, err = get_limited(session, url)
-        if err or resp is None or resp.status_code != 200:
+        if err or resp is None or resp.status_code != 200 or profile.looks_missing(resp, raw, path):
             continue
         body = decode_body(resp, raw)[:2000]
         if any(marker in body for marker in _LISTING_MARKERS):
