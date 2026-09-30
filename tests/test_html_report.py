@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from mock_server import Handler as MockHandler
 
-from owasp_scanner import cli
+from owasp_scanner import cli, output
 from owasp_scanner.html_report import render_html
 
 
@@ -38,6 +38,7 @@ def _report(**overrides):
             },
         ],
         "errors": [],
+        "gate": {"fail_on": "high", "failed": False, "incomplete": False},
     }
     report.update(overrides)
     return report
@@ -74,6 +75,7 @@ def test_values_from_target_are_escaped():
             }
         ],
         summary={"CRITICAL": 0, "HIGH": 1, "MEDIUM": 0, "LOW": 0, "INFO": 0},
+        gate={"fail_on": "high", "failed": True, "incomplete": False},
     )
     html = render_html(report)
     assert "<script" not in html and "<img" not in html
@@ -92,6 +94,7 @@ def test_errors_and_empty_findings():
             findings=[],
             errors=["Could not fetch https://t.example/: boom"],
             summary={s: 0 for s in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")},
+            gate={"fail_on": "high", "failed": False, "incomplete": True},
         )
     )
     assert "Non-fatal errors during scan" in html and "No findings." in html
@@ -99,7 +102,7 @@ def test_errors_and_empty_findings():
 
 
 def test_renders_a_real_scan(http_server):
-    report = cli.run_scan(http_server(MockHandler)).to_dict()
+    report = output.build_report(cli.run_scan(http_server(MockHandler)))
     html = render_html(report)
     for finding in report["findings"]:
         assert finding["id"] in html

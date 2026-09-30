@@ -30,7 +30,7 @@ from urllib.parse import urlsplit
 
 from .cli import _ca_bundle, _normalize_target, run_scan
 from .html_report import render_html
-from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report
+from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, gate_message
 from .redact import redact
 
 _STATIC_DIR = Path(__file__).with_name("static")
@@ -42,6 +42,9 @@ _STATIC_FILES = {
 _MAX_BODY_BYTES = 4096
 _MAX_DRAIN_BYTES = 65536  # how much of an oversized body we read before replying 413
 _MAX_STORED_REPORTS = 20
+# Fields the Web UI adds to the report dict of output.build_report() (SRS 6.3); everything else
+# is the same JSON as the CLI's --json.
+WEB_ONLY_FIELDS = ("gate_failed", "gate_status", "gate_message", "report_id", "report_url")
 _REPORT_PATH = re.compile(r"^/api/report/([A-Za-z0-9_-]{16,64})\.html$")
 _SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
@@ -179,6 +182,7 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         report_id = self._store_report(report)
         data = dict(report, report_id=report_id, report_url=f"/api/report/{report_id}.html")
         data["gate_failed"] = report["gate"]["failed"]
+        data["gate_status"], data["gate_message"] = gate_message(report["gate"])  # same text as the HTML report
         self._json(200, data)
 
     # --- stored reports ----------------------------------------------------------

@@ -150,7 +150,7 @@ owasp_scanner/
 ├── static/            # index.html, app.js, app.css của Web UI
 ├── html_report.py     # render_html(): báo cáo HTML độc lập từ JSON mục 6.2
 ├── catalog.py         # Bảng cwe/confidence/references theo finding id; enrich() + fingerprint
-├── output.py          # build_report() + gate_failed() + exit_code(): một bộ xử lý đầu ra cho CLI và Web UI
+├── output.py          # build_report() + gate_failed() + gate_message() + exit_code(): một bộ xử lý đầu ra cho CLI và Web UI
 ├── sarif.py           # to_sarif(): SARIF 2.1.0 từ báo cáo (FR-REPORT-06)
 ├── redact.py          # redact(): che giá trị cookie và tham số URL nhạy cảm (D2)
 ├── rule_loader.py     # Nạp + kiểm tra rules/*.json; rules_version
@@ -191,7 +191,7 @@ Mỗi module trong `checks/` là **hàm gần như thuần**: nhận session/URL
 - Trình duyệt tải 3 file tĩnh trong `owasp_scanner/static/`: `index.html`, `app.js`, `app.css`. Trang không tải gì từ internet.
 - Người dùng nhập URL/hostname, tick ô xác nhận quyền quét rồi bấm **Scan**. `app.js` gửi `POST /api/scan` với body JSON `{"target": "...", "authorized": true}`.
 - Server kiểm tra request theo FR-UI-02…04, chuẩn hoá target như CLI, rồi gọi `run_scan(target, timeout, workers)` **ngay trong thread xử lý request** (đồng bộ). Mỗi lúc chỉ chạy một lần quét.
-- Kết quả trả về là JSON đúng mục 6.2, kèm 3 trường riêng của Web UI: `gate_failed`, `report_id`, `report_url` (mục 6.3).
+- Kết quả trả về là JSON đúng mục 6.2, kèm các trường riêng của Web UI: `gate_failed`, `gate_status`, `gate_message`, `report_id`, `report_url` (mục 6.3).
 - Kết quả hiện ngay dưới ô nhập: bảng tổng hợp theo severity, trạng thái gate, lỗi non-fatal, danh sách finding có lọc theo severity. Nút **Download JSON** tải JSON cùng định dạng với `--json` của CLI.
 - Link **Download Test result** nằm ngay dưới ô nhập URL, chỉ hiện khi có kết quả, và bị ẩn trong lúc đang quét lần mới. Link trỏ tới `GET /api/report/<id>.html`: server tạo báo cáo HTML bằng `render_html()` từ báo cáo đang giữ trong bộ nhớ và trả về dạng file tải xuống. Server giữ báo cáo của 20 lần quét gần nhất; tắt server là mất.
 - Mọi chữ trên UI và trong báo cáo HTML là tiếng Anh (NFR-USA-03).
@@ -355,7 +355,7 @@ Tiền tố `FR-UI` mô tả hành vi đã có. Các cải tiến dự kiến n�
 | FR-UI-06 | Sau mỗi lần quét, server PHẢI lưu báo cáo trong bộ nhớ dưới một id ngẫu nhiên không đoán được (`secrets.token_urlsafe(16)`), giữ tối đa 20 báo cáo gần nhất. `GET /api/report/<id>.html` PHẢI trả báo cáo HTML dạng tệp đính kèm (`Content-Disposition: attachment`, tên `owasp-scan-<host>-<thời điểm>.html`); id không tồn tại → 404. | M |
 | FR-UI-07 | Báo cáo HTML (`render_html()`) PHẢI là một tệp độc lập: CSS nhúng, không có script, không tải tài nguyên ngoài; mọi giá trị lấy từ target PHẢI được HTML-escape. Nội dung gồm thời gian, check đã chạy, trạng thái gate, bảng tổng hợp, lỗi non-fatal, danh sách finding, và phần giới hạn phạm vi. | M |
 | FR-UI-08 | Trang UI PHẢI gửi các header: `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. Dữ liệu quét trên trang chỉ được hiển thị bằng `textContent` (không `innerHTML`). | M |
-| FR-UI-09 | Trường `gate_failed` PHẢI bằng `gate.failed` của báo cáo, tính bằng cùng hàm `output.gate_failed()` và cùng ngưỡng `--fail-on` (khai báo khi khởi động server) như CLI. Ngoài `gate_failed`, `report_id`, `report_url` và các trường thay đổi theo lần quét (`scan_id`, thời gian), JSON của Web UI PHẢI giống hệt JSON `--json` của CLI cho cùng target và cùng ngưỡng. Lỗi của cả hai endpoint trả `application/json` dạng `{"error": "..."}`. | M |
+| FR-UI-09 | Trường `gate_failed` PHẢI bằng `gate.failed` của báo cáo, tính bằng cùng hàm `output.gate_failed()` và cùng ngưỡng `--fail-on` (khai báo khi khởi động server) như CLI. Ngoài các trường của mục 6.3 (`web.WEB_ONLY_FIELDS`) và các trường thay đổi theo lần quét (`scan_id`, thời gian), JSON của Web UI PHẢI giống hệt JSON `--json` của CLI cho cùng target và cùng ngưỡng. Lỗi của cả hai endpoint trả `application/json` dạng `{"error": "..."}`. Câu gate hiển thị trên UI (`gate_message`) và trong báo cáo HTML PHẢI do cùng hàm `output.gate_message()` tạo ra. | M |
 
 ---
 
@@ -485,6 +485,8 @@ AT-12 kiểm tra đúng tập khoá ở cấp gốc, trong `summary` và trong m
 | Trường | Kiểu | Ý nghĩa |
 |---|---|---|
 | `gate_failed` | bool | `true` nếu có ít nhất 1 finding CRITICAL/HIGH (FR-UI-09) |
+| `gate_status` | string | `fail`, `warn` (quét không hoàn tất) hoặc `pass`, từ `output.gate_message()` (từ v1.6.0) |
+| `gate_message` | string | Câu mô tả gate và exit code của CLI; **cùng câu** với báo cáo HTML (từ v1.6.0) |
 | `report_id` | string | id ngẫu nhiên của báo cáo lưu trong bộ nhớ (FR-UI-06) |
 | `report_url` | string | `/api/report/<report_id>.html` |
 
