@@ -28,6 +28,8 @@ def _workflow_required_checks() -> set[str]:
     jobs_section = workflow[workflow.index("\njobs:\n") :]  # "on:"/"push:" also match at 2 spaces
     jobs = set(re.findall(r"^  ([a-z-]+):$", jobs_section, flags=re.MULTILINE))
     jobs.discard("test")  # fans out into one check per matrix entry, not its own check
+    jobs.discard("docker-publish")  # tag-push only (if:); would never run on a PR, so must
+    # not be a required check -- a required check that never runs blocks merging forever.
     matrix = re.findall(r'\{ os: ([\w.-]+), python: "([\d.]+)" \}', workflow)
     assert matrix, "could not find the test job's matrix entries"
     return jobs | {f"test ({os}, {python})" for os, python in matrix}

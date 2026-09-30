@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/hkbach/oswap_tool/docs/report.schema.json",
-  "title": "OWASP-Aligned Non-intrusive Web Security Scanner report",
+  "title": "Non-intrusive Web Security Scanner report",
   "description": "JSON report written by `--json` (SRS section 6.2). The Web UI returns the same object plus the fields of SRS section 6.3 (web.WEB_ONLY_FIELDS).",
   "type": "object",
   "additionalProperties": false,
@@ -11,6 +11,7 @@
     "rules_version",
     "scan_id",
     "secrets_redacted",
+    "disclaimer",
     "gate",
     "target",
     "final_url",
@@ -24,7 +25,7 @@
     "errors"
   ],
   "properties": {
-    "schema_version": { "const": "1.4" },
+    "schema_version": { "const": "1.5" },
     "scanner_version": { "type": "string", "minLength": 1 },
     "rules_version": { "type": "string", "minLength": 1 },
     "scan_id": {
@@ -34,6 +35,11 @@
     "secrets_redacted": {
       "description": "false only when the CLI ran with --show-secrets (SRS D2 / FR-AUTH-02)",
       "type": "boolean"
+    },
+    "disclaimer": {
+      "description": "Scope & limitations note (FR-RPT-08, NFR-COMP-01): non-intrusive configuration check, not a full DAST assessment; a clean report is not a safety guarantee. Same text as the console and HTML reports (output.SCOPE_NOTE).",
+      "type": "string",
+      "minLength": 1
     },
     "gate": {
       "description": "CI gate (FR-CI-01): threshold used, whether it failed, whether the scan was incomplete",

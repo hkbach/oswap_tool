@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.9.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.10.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.9.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.10.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -137,21 +137,32 @@ Installing the package adds two commands: `websec-scanner` (same as
 ### Docker
 
 An official `Dockerfile` (FR-CI-04) builds a minimal image that runs the CLI as a
-non-root user; it is not published to a registry yet (build it yourself until
-that is decided):
+non-root user. Published to GHCR on every release tag (`v*`) by the
+`docker-publish` job in `.github/workflows/ci.yml`, after the `docker` job has
+built and smoke-tested it:
 
 ```bash
-docker build -t websec-scanner .
-docker run --rm websec-scanner https://example.com --yes --no-color
+docker pull ghcr.io/hkbach/websec-scanner:v1.10.0   # or :latest
+docker run --rm ghcr.io/hkbach/websec-scanner:v1.10.0 https://example.com --yes --no-color
 
 # Write reports to the host: mount a directory and give it as the output path.
-docker run --rm -v "$PWD":/data -w /data websec-scanner \
+docker run --rm -v "$PWD":/data -w /data ghcr.io/hkbach/websec-scanner:v1.10.0 \
   https://example.com --yes --json report.json --html report.html
+
+# Or build it yourself from a checkout:
+docker build -t websec-scanner .
 ```
 
 The image has no shell tools beyond Python; it only runs
 `python -m websec_scanner`. There is no `websec-scanner-web` equivalent yet —
 the web UI is meant for a trusted local machine, not a container.
+
+**One-time setup for a repository admin:** the first `docker-publish` run
+creates the GHCR package; by default a package under a personal account is
+**private**. To let `docker pull` work for others, open the package at
+`github.com/users/hkbach/packages/container/package/websec-scanner`, go to
+**Package settings**, and change visibility to public (or link it to this
+repository so its access follows the repo's own visibility).
 
 ## Usage
 
@@ -230,7 +241,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.9.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.10.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -396,7 +407,8 @@ git diff tests/golden/
 ### Repository CI
 
 [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) runs on pushes to
-`main` and `feat/**` and on pull requests to `main`:
+`main` and `feat/**`, on pull requests to `main`, and (`docker-publish` only)
+on version tags (`v*`):
 
 | Job | Status check name(s) | What it does |
 |---|---|---|
@@ -405,11 +417,15 @@ git diff tests/golden/
 | `min-deps` | `min-deps` | Offline `pytest` on Python 3.12 with the lowest dependency versions `pyproject.toml` allows |
 | `audit` | `audit` | `pip-audit` of the runtime dependencies declared in `pyproject.toml` |
 | `docker` | `docker` | Builds the official image, checks it runs as a non-root user, and scans `tests/mock_server.py` from inside the container over `--network host` |
+| `docker-publish` | *(tag pushes only; not a required check — see below)* | Only on a `v*` tag, after `docker` passes: pushes the same image to `ghcr.io/hkbach/websec-scanner` as `:<tag>` and `:latest`. |
 | `secrets` | `secrets` | gitleaks over the whole git history, binary checksum verified. The allowlist in `.gitleaks.toml` covers only two fake values used by the redaction tests. |
 
-The workflow has only `contents: read` permission and uses no repository
-secrets. The `audit` and `secrets` jobs need network access on the runner; the
-test suite does not.
+The workflow has only `contents: read` permission by default; `docker-publish`
+is the one job granted `packages: write`, scoped to that job only, and it is
+the only place the workflow uses a secret — `secrets.GITHUB_TOKEN`, the run's
+own short-lived token, not one anyone has to create or store. No other job
+uses any secret. The `audit`, `secrets` and `docker-publish` jobs need network
+access on the runner; the test suite does not.
 
 ## Branch protection for `main`
 
@@ -530,6 +546,17 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 
 ## Changelog
 
+- **v1.10.0**. Changes to note:
+  - **JSON report has a `disclaimer` field** (schema_version 1.5, fields added only):
+    the same scope & limitations text the console and HTML reports already end with
+    (`output.SCOPE_NOTE`).
+  - **Docker image published to GHCR:** every `v*` release tag builds, smoke-tests and
+    pushes `ghcr.io/hkbach/websec-scanner:<tag>` and `:latest` (see "Docker" and
+    "Repository CI"). A repository admin still has to set the package's visibility to
+    public once.
+  - **Web UI title:** the browser tab and page heading now say "WebSec Scanner"
+    (matching the CLI banner and User-Agent), not the longer descriptive name used in
+    this README/SRS.
 - **v1.9.0** (package rename, breaking). The package, PyPI/pip distribution name, CLI
   commands and product identity strings changed from `owasp_scanner`/`owasp-scanner` to
   `websec_scanner`/`websec-scanner`, because the tool is no longer scoped to only OWASP

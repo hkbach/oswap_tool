@@ -45,6 +45,14 @@ def test_dockerfile_final_stage_does_not_copy_the_source_tree():
     assert "COPY --from=build" in final_stage
 
 
+def test_dockerfile_has_oci_source_label_but_no_unverified_license_claim():
+    # GHCR links a published package to its repo via this label; the project has no
+    # declared license yet, so the image must not claim one (see docs/PRODUCT-BACKLOG.md).
+    text = _dockerfile()
+    assert 'org.opencontainers.image.source="https://github.com/hkbach/oswap_tool"' in text
+    assert "LABEL org.opencontainers.image.licenses" not in text
+
+
 def test_dockerignore_excludes_the_venv_and_test_suite():
     text = (ROOT / ".dockerignore").read_text(encoding="utf-8")
     for entry in (".venv", ".git", "tests", "docs"):

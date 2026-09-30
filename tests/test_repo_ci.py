@@ -20,13 +20,21 @@ def workflow() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_workflow_has_the_six_jobs(workflow):
+def test_workflow_has_the_seven_jobs(workflow):
     jobs = set(re.findall(r"^  ([a-z-]+):$", workflow, flags=re.MULTILINE))
-    assert {"lint", "test", "min-deps", "docker", "audit", "secrets"} <= jobs
+    assert {"lint", "test", "min-deps", "docker", "docker-publish", "audit", "secrets"} <= jobs
+
+
+def test_docker_publish_job_only_runs_on_a_release_tag_after_the_smoke_test(workflow):
+    job = workflow[workflow.index("  docker-publish:") : workflow.index("  secrets:")]
+    assert "needs: docker" in job
+    assert "startsWith(github.ref, 'refs/tags/v')" in job
+    assert "ghcr.io/hkbach/websec-scanner" in job
+    assert "github.ref_name" in job and ":latest" in job
 
 
 def test_docker_job_builds_runs_non_root_and_smoke_tests_a_scan(workflow):
-    job = workflow[workflow.index("  docker:") : workflow.index("  secrets:")]
+    job = workflow[workflow.index("  docker:") : workflow.index("  docker-publish:")]
     assert "docker build -t websec-scanner:ci ." in job
     assert "--help" in job and "--list-checks" in job
     assert "--entrypoint id" in job and 'uid" -ne 0' in job  # must not run as root
@@ -69,9 +77,16 @@ def test_workflow_audits_dependencies_and_scans_for_secrets(workflow):
 
 
 def test_workflow_is_read_only_and_uses_no_repository_secrets(workflow):
+    # Workflow-level default stays read-only; only the docker-publish job (tag pushes only)
+    # is granted packages: write, scoped to that one job, to push the image to ghcr.io.
     assert re.search(r"^permissions:\n  contents: read$", workflow, flags=re.MULTILINE)
-    assert "write" not in workflow
-    assert "secrets." not in workflow
+    publish_job = workflow[workflow.index("  docker-publish:") : workflow.index("  secrets:")]
+    assert "packages: write" in publish_job
+    assert "write" not in workflow.replace(publish_job, "")
+    # secrets.GITHUB_TOKEN is this run's own ephemeral token (no repository secret to
+    # configure); no other secrets.* reference is allowed anywhere in the workflow.
+    for match in re.findall(r"secrets\.[A-Za-z0-9_]+", workflow):
+        assert match == "secrets.GITHUB_TOKEN", f"unexpected repository secret referenced: {match}"
 
 
 def test_workflow_has_no_tabs(workflow):

@@ -73,3 +73,8 @@ def _captured_console(report: dict) -> str:
     with redirect_stdout(buffer):
         print_report(report, use_color=False)
     return buffer.getvalue()
+
+
+def test_json_report_has_a_disclaimer_field():
+    report = output.build_report(cli.run_scan("http://127.0.0.1:1", timeout=1))
+    assert report["disclaimer"] == output.SCOPE_NOTE

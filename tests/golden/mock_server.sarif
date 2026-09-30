@@ -624,7 +624,7 @@
         "target": "http://127.0.0.1:<PORT>/",
         "final_url": "http://127.0.0.1:<PORT>/",
         "scan_id": "<SCAN_ID>",
-        "schema_version": "1.4",
+        "schema_version": "1.5",
         "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1",
         "scan_groups": [
           "headers",

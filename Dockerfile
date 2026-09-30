@@ -11,6 +11,11 @@ COPY websec_scanner ./websec_scanner
 RUN pip install --no-cache-dir --prefix=/install .
 
 FROM python:3.12-slim
+# Standard OCI labels: lets GHCR link this image to its source repo automatically.
+# No org.opencontainers.image.licenses label: the project has no declared license yet
+# (commercial tool, pre-release; see docs/PRODUCT-BACKLOG.md) -- do not claim one here.
+LABEL org.opencontainers.image.source="https://github.com/hkbach/oswap_tool"
+LABEL org.opencontainers.image.description="Non-intrusive web security configuration scanner (CLI)"
 COPY --from=build /install /usr/local
 
 # Never run as root (FR-CI-04 AC). --create-home gives a writable CWD for relative
