@@ -390,6 +390,8 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
   AC: finding ghi rõ **phiên bản quan sát được là suy đoán** (banner có thể bị che/giả); confidence tương ứng; không khẳng định "bị khai thác được".
 - [ ] **FR-CVE-03** (P2 · Business) Ưu tiên hóa bằng **EPSS**/KEV, gợi ý bản vá tối thiểu.
 - [ ] **FR-CVE-04** (P2 · Business) Phát hiện JS library lỗi thời (ví dụ jQuery/Angular phiên bản cũ) từ file tĩnh với `retire`-style signatures.
+- [ ] **FR-CVE-05** (P2 · Business) *(thêm 2026-09-30, theo yêu cầu chủ sản phẩm; roadmap Phase B Sprint 17)* **Quét lỗ hổng riêng của CMS phổ biến** (WordPress, Joomla, Drupal): nhận diện CMS và phiên bản plugin/theme qua đường dẫn tĩnh/README/changelog công khai, đối chiếu CSDL lỗ hổng công khai của từng CMS (ví dụ WPScan Vulnerability Database). Quy tắc dạng dữ liệu như `rules/sensitive_paths.json`; `[CONFIRM]` điều khoản sử dụng CSDL lỗ hổng CMS trước khi tích hợp.
+  AC: là một **test target chọn được** trong `catalog.CHECK_GROUPS`, xuất hiện ở CLI (`--checks`, `--list-checks`) và Web UI (danh sách nhóm kiểm thử trước khi quét, kết quả nhóm theo test target) giống 8 nhóm hiện có (Sprint 8); không chọn thì không gửi request nào của nhóm này; finding ghi rõ **phiên bản quan sát được là suy đoán**, không khẳng định "bị khai thác được", confidence tương ứng.
 
 ### E11. Khám phá tài sản (asset discovery)
 
@@ -591,6 +593,8 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
 
 ### 9.2 Các phase
+
+Thứ tự sprint chi tiết của Phase B (Sprint 9 trở đi): `docs/PHASE-B-ROADMAP.md`.
 
 > Ước lượng công sức/thời gian và giá bán thuộc quyết định thương mại, cần người có thẩm quyền xác nhận sau khi có thông tin về đội ngũ và thị trường.
 
