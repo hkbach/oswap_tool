@@ -15,8 +15,10 @@ pipeline {
     stages {
         stage('Install the scanner') {
             steps {
-                sh 'apt-get update && apt-get install -y --no-install-recommends git'
-                sh 'pip install "git+https://github.com/hkbach/oswap_tool@${SCANNER_REF}"'
+                // No apt-get/git: Jenkins' Docker Pipeline plugin runs this container as a
+                // non-root user by default, so installing git with apt-get used to fail here.
+                // pip installs straight from the tagged source archive over plain HTTPS instead.
+                sh 'pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/${SCANNER_REF}.tar.gz"'
             }
         }
         stage('Scan') {

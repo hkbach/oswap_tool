@@ -132,6 +132,25 @@ Installing the package adds two commands: `owasp-scanner` (same as
 `python -m owasp_scanner`) and `owasp-scanner-web` (same as
 `python -m owasp_scanner.web`).
 
+### Docker
+
+An official `Dockerfile` (FR-CI-04) builds a minimal image that runs the CLI as a
+non-root user; it is not published to a registry yet (build it yourself until
+that is decided):
+
+```bash
+docker build -t owasp-scanner .
+docker run --rm owasp-scanner https://example.com --yes --no-color
+
+# Write reports to the host: mount a directory and give it as the output path.
+docker run --rm -v "$PWD":/data -w /data owasp-scanner \
+  https://example.com --yes --json report.json --html report.html
+```
+
+The image has no shell tools beyond Python; it only runs
+`python -m owasp_scanner`. There is no `owasp-scanner-web` equivalent yet —
+the web UI is meant for a trusted local machine, not a container.
+
 ## Usage
 
 ```bash
@@ -277,10 +296,11 @@ Tips:
 
 - The declarative pipeline runs in a `python:3.12-slim` Docker agent (needs the
   Docker Pipeline plugin) and archives `owasp-report.*`.
-- The template installs `git` with `apt-get`. Jenkins often runs the agent
-  container as a non-root user, and then `apt-get` fails. In that case install
-  the scanner from the source archive URL in [Installation](#installation),
-  which needs no `git`, or use an image that already has `git`.
+- The template installs from the tag's source archive over plain HTTPS (see
+  [Installation](#installation)), not with `git+https`: Jenkins' Docker
+  Pipeline plugin runs the agent container as a non-root user by default, and
+  `apt-get install git` (needed for a `git+https` install, like the other
+  three templates use) fails there.
 
 **Other CI systems:** install the package from the tag and run the scan
 command above. Treat exit codes `1`, `2` and `3` as failures and keep the
@@ -499,6 +519,7 @@ owasp_scanner/
 examples/ci/        # CI templates for GitHub Actions, GitLab CI, Azure Pipelines, Jenkins
 tests/              # offline test suite, mock servers, golden files
 docs/               # SRS, backlog, JSON Schema of the report
+Dockerfile           # official CLI image, non-root, not published to a registry yet
 ```
 
 ## Changelog

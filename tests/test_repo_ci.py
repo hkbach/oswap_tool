@@ -20,9 +20,18 @@ def workflow() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_workflow_has_the_five_jobs(workflow):
+def test_workflow_has_the_six_jobs(workflow):
     jobs = set(re.findall(r"^  ([a-z-]+):$", workflow, flags=re.MULTILINE))
-    assert {"lint", "test", "min-deps", "audit", "secrets"} <= jobs
+    assert {"lint", "test", "min-deps", "docker", "audit", "secrets"} <= jobs
+
+
+def test_docker_job_builds_runs_non_root_and_smoke_tests_a_scan(workflow):
+    job = workflow[workflow.index("  docker:") : workflow.index("  secrets:")]
+    assert "docker build -t owasp-scanner:ci ." in job
+    assert "--help" in job and "--list-checks" in job
+    assert "--entrypoint id" in job and 'uid" -ne 0' in job  # must not run as root
+    assert "tests/mock_server.py" in job and "--network host" in job
+    assert "ubuntu-24.04" in job  # Linux only: needs a Docker daemon
 
 
 def test_min_deps_job_pins_the_floors_declared_in_pyproject(workflow):
