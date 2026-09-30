@@ -58,12 +58,16 @@ class ScopedSession(requests.Session):
         target = urljoin(resp.url, location)
         if in_scope(target, self.scope_host):
             return location
+        self.note_blocked(target, resp.url)
+        return None
+
+    def note_blocked(self, target: str, from_url: str) -> None:
+        """Record one error line per out-of-scope host (also used by checks that follow hops themselves)."""
         host = (urlsplit(target).hostname or target).lower()
         self.blocked_redirects.setdefault(
             host,
-            f"Redirect to {host} not followed: outside the scan scope ({self.scope_host}); first seen at {resp.url}",
+            f"Redirect to {host} not followed: outside the scan scope ({self.scope_host}); first seen at {from_url}",
         )
-        return None
 
 
 def build_session(timeout: int = DEFAULT_TIMEOUT, scope_host: str | None = None) -> ScopedSession:

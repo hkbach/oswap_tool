@@ -66,7 +66,12 @@ def http_server():
 
 
 def make_self_signed_cert(tmp_path, not_before, not_after, name="cert"):
-    """Write a self-signed cert/key pair for 127.0.0.1 and return (certfile, keyfile)."""
+    """Write a self-signed cert/key pair for 127.0.0.1 and return (certfile, keyfile).
+
+    The OS trust store never knows it. It is marked as its own CA so a test can make
+    requests trust it (REQUESTS_CA_BUNDLE); OpenSSL refuses a leaf without CA:TRUE as
+    a trust anchor.
+    """
     key = ec.generate_private_key(ec.SECP256R1())
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "owasp-scanner-test")])
     cert = (
@@ -81,6 +86,8 @@ def make_self_signed_cert(tmp_path, not_before, not_after, name="cert"):
             x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]),
             critical=False,
         )
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
         .sign(key, hashes.SHA256())
     )
     certfile = tmp_path / f"{name}.pem"
@@ -137,6 +144,28 @@ def https_server(tmp_path):
     for server in servers:
         server.shutdown()
         server.server_close()
+
+
+def skip_if_tls_is_intercepted(port: int, certfile) -> None:
+    """Skip when local software (e.g. an antivirus "web shield") re-signs loopback TLS.
+
+    Such software replaces the server certificate, so no CA file can make the
+    client trust it. Tests that need a trusted handshake cannot run there.
+    """
+    import socket
+
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+        with ctx.wrap_socket(sock, server_hostname="127.0.0.1") as tls:
+            seen = x509.load_der_x509_certificate(tls.getpeercert(binary_form=True))
+    served = x509.load_pem_x509_certificate(certfile.read_bytes())
+    if seen != served:
+        pytest.skip(
+            "TLS to 127.0.0.1 is intercepted on this machine (certificate issued by "
+            f"{seen.issuer.rfc4514_string()!r}); run in an environment without TLS inspection"
+        )
 
 
 @pytest.fixture

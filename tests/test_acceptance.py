@@ -232,8 +232,12 @@ def test_at13_exit_code_1_on_critical(http_server):
     assert cli.main([http_server(MockHandler), "--yes", "--no-color"]) == 1
 
 
-def test_exit_code_0_without_critical_or_high(http_server):
-    # SoftNotFoundHandler over plain HTTP yields only MEDIUM/LOW/INFO header findings.
+def test_exit_code_0_without_critical_or_high(http_server, monkeypatch):
+    # Since FIX-09 any plain-HTTP target gets TLS-NO-HTTPS-REDIRECT (HIGH), and a trusted
+    # HTTPS target cannot be built offline everywhere, so pretend the redirect is fine:
+    # what this test checks is the exit-code rule, not the redirect check.
+    monkeypatch.setattr(cli.redirect_check, "evaluate_redirect_chain", lambda start, chain: [])
+    # SoftNotFoundHandler then yields only MEDIUM/LOW/INFO header findings.
     assert cli.main([http_server(SoftNotFoundHandler), "--yes", "--no-color"]) == 0
 
 

@@ -68,13 +68,13 @@ Tool nhận một URL hoặc hostname, gửi các request HTTP **GET thông thư
 |---|---|
 | Baseline (trang chủ) | 1 GET |
 | TLS (mục 4.5) | 2 lần bắt tay TLS, không gửi HTTP |
-| Redirect HTTP → HTTPS (mục 4.6) | 1 GET tới `http://<hostname>/` |
+| Redirect HTTP → HTTPS (mục 4.6) | Nhập `https://`: 1 GET tới `http://<hostname>/` (thêm 1 GET cho mỗi bước redirect HTTP). Nhập `http://`: không gửi thêm, dùng chuỗi redirect của baseline |
 | CORS (mục 4.7) | 1 GET có header `Origin` giả lập |
 | Path nhạy cảm (mục 4.8) | 1 probe soft-404 + 17 path |
 | Directory listing | 6 thư mục |
 | robots.txt, sitemap.xml | 2 GET |
 
-Với target `http://` không có nhóm TLS và redirect (27 GET). Mỗi redirect mà target trả về cũng là một request, và mỗi lỗi kết nối được thử lại tối đa 1 lần (NFR-PERF-03). Tool không gửi payload khai thác và không thay đổi dữ liệu phía target.
+Với target `http://` không chuyển sang HTTPS: không có nhóm TLS, còn 27 GET. Nếu target `http://` chuyển sang HTTPS, nhóm TLS chạy trên URL HTTPS đó (FR-CLI-05). Mỗi redirect trong phạm vi (NFR-SEC-05) cũng là một request, và mỗi lỗi kết nối được thử lại tối đa 1 lần (NFR-PERF-03). Tool không gửi payload khai thác và không thay đổi dữ liệu phía target.
 
 ### 1.3 Đối tượng đọc
 
@@ -172,9 +172,9 @@ Mỗi module trong `checks/` là **hàm gần như thuần**: nhận session/URL
 2. Tool in **consent banner** và hỏi xác nhận quyền quét (bỏ qua nếu có `--yes`). Từ chối → thoát với exit code `2`, không gửi request nào.
 3. Chuẩn hoá target (FR-CLI-01).
 4. Gửi GET baseline tới trang chủ target. Nếu thất bại, ghi lỗi vào `errors`, rồi:
-   - nếu lỗi xảy ra ở tầng TLS (ví dụ chứng chỉ hết hạn hoặc không được tin cậy), vẫn chạy nhóm check TLS (mục 4.5) để giải thích nguyên nhân, rồi dừng;
+   - nếu lỗi xảy ra ở tầng TLS (ví dụ chứng chỉ hết hạn hoặc không được tin cậy), vẫn chạy nhóm check TLS (mục 4.5) trên **đúng URL HTTPS bị lỗi** (có thể là bước redirect từ `http://`), rồi dừng; nếu target nhập `http://` và lỗi xảy ra sau khi đã chuyển sang HTTPS thì redirect check coi như đạt (FR-FIX-09);
    - các lỗi khác (DNS, timeout, connection refused) thì dừng ngay, báo cáo có 0 finding.
-5. Nếu baseline thành công, chạy lần lượt các check theo thứ tự cố định: security-headers → cookies → tls → http-to-https-redirect (hai check này chỉ khi target là `https://`) → cors → sensitive-paths → directory-listing → robots-sitemap. Mỗi check trả về `list[Finding]`, gộp vào `ScanResult`. Check nào ném exception thì lỗi được ghi vào `errors` và các check sau vẫn chạy (FR-REPORT-05).
+5. Nếu baseline thành công, chạy lần lượt các check theo thứ tự cố định: security-headers → cookies → tls (nếu chuỗi redirect của baseline có URL HTTPS) → http-to-https-redirect → cors → sensitive-paths → directory-listing → robots-sitemap. Mỗi check trả về `list[Finding]`, gộp vào `ScanResult`. Check nào ném exception thì lỗi được ghi vào `errors` và các check sau vẫn chạy (FR-REPORT-05).
 6. In báo cáo ra terminal (sắp xếp theo severity); nếu có `--json PATH`, ghi thêm file JSON.
 7. Thoát với exit code theo FR-CLI-04.
 
@@ -201,9 +201,9 @@ Quy ước mã: `FR-<NHÓM>-<SỐ>`. Priority: **M**ust / **S**hould / **C**ould
 |---|---|---|
 | FR-CLI-01 | Tool PHẢI nhận một tham số bắt buộc `target` (URL hoặc hostname). Nếu chuỗi nhập không chứa `://`, tool PHẢI thêm `https://` (kể cả dạng `host:port`, ví dụ `example.com:8443` → `https://example.com:8443/`). Tool PHẢI thêm `/` vào cuối **phần path** nếu chưa có, giữ nguyên query string (ví dụ `https://a.example/app?q=1` → `https://a.example/app/?q=1`). | M |
 | FR-CLI-02 | Tool PHẢI hỗ trợ các tham số tuỳ chọn: `--json PATH`, `--timeout N` (giây, mặc định 10), `--workers N` (số luồng cho check path nhạy cảm, mặc định 5), `--no-color`, `--yes`/`--i-have-authorization`. | M |
-| FR-CLI-03 | Nếu GET baseline thất bại (lỗi kết nối/DNS/timeout/TLS), tool PHẢI ghi lỗi vào `errors`, KHÔNG được crash, và vẫn in được báo cáo. **Ngoại lệ:** nếu lỗi xảy ra ở tầng TLS (`requests.exceptions.SSLError`), tool PHẢI vẫn chạy nhóm check TLS (mục 4.5) trước khi dừng, để báo cáo nêu được nguyên nhân (ví dụ `TLS-CERT-EXPIRED`). Lỗi kết nối thông thường không chạy nhóm TLS và báo cáo có 0 finding. | M |
+| FR-CLI-03 | Nếu GET baseline thất bại (lỗi kết nối/DNS/timeout/TLS), tool PHẢI ghi lỗi vào `errors`, KHÔNG được crash, và vẫn in được báo cáo. **Ngoại lệ:** nếu lỗi xảy ra ở tầng TLS (`requests.exceptions.SSLError`), tool PHẢI vẫn chạy nhóm check TLS (mục 4.5) trên **host:cổng của URL HTTPS bị lỗi** (lấy từ request gây lỗi; sau redirect `http://` → `https://` đó là bước HTTPS, không phải URL nhập vào) trước khi dừng. Lỗi kết nối thông thường không chạy nhóm TLS và báo cáo có 0 finding. | M |
 | FR-CLI-04 | Exit code: `0` nếu không có finding CRITICAL/HIGH; `1` nếu có ít nhất 1 finding CRITICAL hoặc HIGH; `2` nếu người dùng không xác nhận quyền quét. *(Đề xuất thêm exit code `3` đang chờ xác nhận — mục 13.)* | M |
-| FR-CLI-05 | Nếu target dùng scheme `http://`, tool KHÔNG được chạy nhóm check TLS (mục 4.5) và redirect (mục 4.6). *(Sẽ đổi theo FIX-09, mục 12.)* | M |
+| FR-CLI-05 | Nhóm check TLS (mục 4.5) chạy trên **URL HTTPS đầu tiên trong chuỗi redirect của baseline**: chính target nếu nhập `https://`, hoặc URL mà target `http://` chuyển tới. Nếu chuỗi redirect không có URL HTTPS nào, KHÔNG chạy nhóm TLS. *(Trước FIX-09: không bao giờ chạy TLS cho target `http://`.)* | M |
 
 ### 4.2 Nhóm xác nhận quyền quét (Consent Gate)
 
@@ -244,7 +244,7 @@ Cơ sở: OWASP Secure Headers Project. Tên header so khớp không phân biệ
 
 ### 4.5 Nhóm kiểm tra TLS/Chứng chỉ (`checks/tls_check.py`)
 
-Chỉ chạy khi target dùng `https://` (FR-CLI-05), hoặc khi baseline thất bại ở tầng TLS (FR-CLI-03).
+Chạy theo FR-CLI-05 (URL HTTPS đầu tiên trong chuỗi redirect của baseline), hoặc khi baseline thất bại ở tầng TLS (FR-CLI-03).
 
 Kiểm tra gồm **2 bước kết nối độc lập**, vì một context xác thực mặc định (`ssl.create_default_context()`) ném `SSLCertVerificationError` ngay khi bắt tay nếu chứng chỉ hết hạn, nên không bao giờ đọc được `notAfter`:
 
@@ -268,9 +268,9 @@ Kiểm tra gồm **2 bước kết nối độc lập**, vì một context xác 
 
 | ID | Yêu cầu | Severity | OWASP | Priority |
 |---|---|---|---|---|
-| FR-REDIR-01 | Chỉ chạy khi target nhập vào dùng `https://` và baseline thành công. Tool PHẢI gửi GET tới `http://<hostname>/` với `allow_redirects=True`. *(Sẽ đổi theo FIX-09, mục 12. Hiện code không chờ kết quả nhóm TLS.)* | — | — | M |
+| FR-REDIR-01 | Redirect check **luôn chạy** khi baseline thành công (FR-FIX-09). **Target nhập `https://`:** tool PHẢI probe `http://<hostname>/` (cổng 80) và tự theo từng bước redirect (tối đa 10, trong phạm vi NFR-SEC-05) mà **không tải trang HTTPS nào**: gặp `Location` trỏ tới `https://` là đạt, nên lỗi chứng chỉ không làm redirect check kết luận sai. **Target nhập `http://`:** tool PHẢI kết luận từ chuỗi redirect của chính baseline, không gửi thêm request; nếu baseline dừng ở một redirect bị chặn vì ngoài phạm vi thì không kết luận. | — | — | M |
 | FR-REDIR-02 | Nếu request HTTP không có phản hồi (cổng 80 đóng theo thiết kế), KHÔNG coi là finding. | — | — | M |
-| FR-REDIR-03 | Nếu có phản hồi nhưng URL cuối sau redirect không bắt đầu bằng `https://`, PHẢI tạo finding `TLS-NO-HTTPS-REDIRECT`. | HIGH | A02:2021 | M |
+| FR-REDIR-03 | Nếu chuỗi redirect kết thúc ở một response HTTP (không redirect tiếp) mà chưa gặp URL `https://` nào, PHẢI tạo finding `TLS-NO-HTTPS-REDIRECT`, mô tả nêu URL bắt đầu và URL cuối. Với target nhập `http://`, finding này làm exit code thành `1` (HIGH). | HIGH | A02:2021 | M |
 
 ### 4.7 Nhóm kiểm tra CORS (`checks/cors_check.py`)
 
@@ -579,6 +579,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-32 | Không lộ secret | Mock đặt cookie `session=<giá trị mẫu>`; target có `?access_token=<giá trị mẫu>` | Console, `--json`, JSON và báo cáo HTML của Web UI không chứa hai giá trị mẫu; `secrets_redacted: true`; `--show-secrets` in cảnh báo stderr và cho `secrets_redacted: false`; Web UI vẫn che khi client gửi `show_secrets` | `test_cli_console_and_json_are_redacted`, `test_show_secrets_is_explicit_and_warns`, `test_web_ui_always_redacts_even_if_asked_not_to`, `test_html_report_warns_when_secrets_are_shown`, `test_errors_are_redacted`, `test_sensitive_url_parameters_are_masked` |
 | AT-33 | Severity CORS theo D3 | Server trả 4 tổ hợp: `*` + credentials; phản xạ + credentials; phản xạ không credentials; `*` đơn lẻ | Lần lượt MEDIUM, HIGH, MEDIUM, INFO; mô tả mỗi finding giải thích lý do mức độ; mọi finding có khuyến nghị | `test_cors`, `test_cors_findings_explain_their_severity_and_how_to_fix` |
 | AT-34 | Không theo redirect ra ngoài phạm vi | Target redirect trang chủ, hoặc mọi path, sang host khác (`localhost` so với `127.0.0.1`) | Host kia không nhận request nào; `errors` có đúng 1 dòng; quét vẫn chạy; redirect tới cùng host (khác path/cổng) vẫn được theo | `test_baseline_redirect_to_other_host_is_not_followed`, `test_path_redirects_to_other_host_are_blocked_and_reported_once`, `test_in_scope`, `test_in_scope_redirects_are_followed`, `test_redirect_to_another_port_on_the_same_host_is_followed` |
+| AT-35 | Redirect check luôn chạy (FIX-09) | `http://` không redirect; `http://` → HTTPS cert tự ký/hết hạn/được tin; `https://` với probe redirect sang `https://` không tồn tại, sang HTTP cùng host, sang host lạ | Lần lượt: `TLS-NO-HTTPS-REDIRECT`; `TLS-CERT-NOT-TRUSTED`/`TLS-CERT-EXPIRED` trên đúng cổng HTTPS và không có finding redirect; TLS chạy trên URL cuối; không finding; có finding; không finding + 1 lỗi phạm vi | `test_http_target_without_redirect_is_reported`, `test_http_target_redirected_to_https_with_bad_cert_reports_the_cert_not_the_redirect`, `test_http_target_redirected_to_expired_https_reports_expiry`, `test_http_target_redirected_to_trusted_https_scans_the_https_page` (skip khi TLS bị chặn), `test_probe_counts_a_redirect_to_https_without_loading_it`, `test_probe_follows_http_hops_in_scope`, `test_probe_stops_at_out_of_scope_redirect` |
 
 ---
 
@@ -588,7 +589,8 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 - **Chỉ quét trang chủ** cho phần lớn check; không crawl, có thể bỏ sót cấu hình khác nhau giữa các route.
 - **False positive:** robots.txt/sitemap.xml (path "nghe nhạy cảm" chưa chắc tồn tại hay lộ); path nhạy cảm chỉ dựa trên HTTP 200, không kiểm tra nội dung (FR-DET-01 trong backlog).
 - **False negative:** target dùng CDN/WAF có thể chặn hoặc trả response khác cho User-Agent của scanner. TLS chỉ xét giao thức/cipher **được thương lượng**, không dò các phiên bản cũ server còn bật (FR-DET-04).
-- **Hai kho chứng chỉ khác nhau (B1):** request HTTP (`requests`) tin kho `certifi`, còn nhóm TLS (`ssl.create_default_context()`) tin kho chứng chỉ của hệ điều hành. Trên mạng có TLS inspection (đã xác minh trên mạng TECHVIFY ngày 2026-09-23), `requests` từ chối **mọi** site HTTPS: baseline thất bại ở tầng TLS, nhóm TLS chạy nhưng không báo lỗi vì kho OS tin CA của proxy, nên báo cáo chỉ có 1 dòng lỗi "Could not fetch", 0 finding, exit code `0`. Sẽ xử lý ở FR-CI-10 (`--ca-bundle` dùng chung).
+- **Hai kho chứng chỉ khác nhau (B1):** request HTTP (`requests`) tin kho `certifi`, còn nhóm TLS (`ssl.create_default_context()`) tin kho chứng chỉ của hệ điều hành. Nếu có thành phần chặn và ký lại TLS mà CA của nó chỉ nằm trong kho hệ điều hành, `requests` từ chối **mọi** site HTTPS: baseline thất bại ở tầng TLS, nhóm TLS chạy nhưng không báo lỗi, nên báo cáo chỉ có 1 dòng lỗi "Could not fetch", 0 finding, exit code `0`. *Đính chính 2026-09-30:* trên máy dev đã quan sát (2026-09-23), thành phần đó là **phần mềm diệt virus Avast Web/Mail Shield chạy trên chính máy**, không phải proxy mạng như ghi ở bản trước. Sẽ xử lý ở FR-CI-10 (`--ca-bundle` dùng chung).
+- **TLS bị phần mềm cục bộ chặn giữa đường:** trên máy có phần mềm ký lại TLS (ví dụ Avast Web/Mail Shield, kể cả với `127.0.0.1`), nhóm TLS đo **kết nối tới phần mềm đó** chứ không phải tới server: giao thức và cipher là do phần mềm chọn (có thể bỏ sót `TLS-WEAK-PROTOCOL`/`TLS-WEAK-CIPHER`), chứng chỉ là bản do nó ký lại. Kết quả TLS trên các máy như vậy không đáng tin; nên quét từ máy hoặc CI không có TLS inspection. Phát hiện và cảnh báo tự động là FR-DET-16 trong backlog. Test cần bắt tay TLS được tin cậy sẽ tự skip khi phát hiện việc chặn này.
 - **Che secret dựa trên quy tắc:** chỉ che giá trị cookie và tham số URL có tên thuộc danh sách ở NFR-SEC-04. Secret nằm ở chỗ khác (ví dụ trong nội dung CSP hay header `Server`) sẽ không bị che. Báo cáo vẫn chứa URL, header và cấu hình của target nên chỉ chia sẻ trong phạm vi được phép.
 - **TLS mở 2 kết nối** (Bước A và B); chấp nhận được vì chỉ là bắt tay, không lặp.
 - **`TLS-CERT-NOT-TRUSTED` gộp nhiều nguyên nhân** (tự ký, thiếu intermediate, sai hostname, CA lạ) vào một mã (FR-DET-05).
@@ -605,13 +607,12 @@ Lộ trình chi tiết, độ ưu tiên và thứ tự sprint nằm ở `docs/PR
 
 ## 12. Quyết định đã chốt, chưa triển khai
 
-Các quyết định dưới đây đã được chủ sản phẩm chốt ngày 2026-09-30. Code hiện chưa làm, trừ D1 (mục 3.3), D2 (Sprint 3: FR-COOKIE-04, NFR-SEC-04), D3 (Sprint 3: FR-CORS-02…04) và D4 (Sprint 3b: NFR-SEC-05). Khi code xong: cập nhật các FR tương ứng ở mục 4, thêm AT ở mục 9, rồi xoá dòng khỏi bảng.
+Các quyết định dưới đây đã được chủ sản phẩm chốt ngày 2026-09-30. Code hiện chưa làm, trừ D1 (mục 3.3), D2 (Sprint 3: FR-COOKIE-04, NFR-SEC-04), D3 (Sprint 3: FR-CORS-02…04) D4 (Sprint 3b: NFR-SEC-05) và FIX-09 (Sprint 3b: FR-CLI-05, FR-REDIR-01, FR-REDIR-03). Khi code xong: cập nhật các FR tương ứng ở mục 4, thêm AT ở mục 9, rồi xoá dòng khỏi bảng.
 
 | ID | Quyết định | FR sẽ thay đổi | Phụ thuộc | Backlog |
 |---|---|---|---|---|
 | D1 | Web UI là công cụ cục bộ chạy chung tiến trình, gọi thẳng `run_scan()`; không có server/service riêng. **Đã triển khai** (mục 3.3, 4.10). | — | — | 1.4 |
 | D5 | **Cookie xét trên toàn chuỗi redirect**, header xét trên response cuối. Giữ hành vi A3 của FR-COOKIE-01. | FR-COOKIE-01 (giữ), FR-HDR-* | — | FR-FIX-10 |
-| FIX-09 | **Điều kiện chạy redirect check.** Luôn chạy redirect check cho hostname của target, kể cả khi người dùng nhập `http://`. Nếu `http://` được chuyển sang `https://` trong phạm vi (D4), tool chạy nhóm TLS trên URL cuối. Nếu không được chuyển, tool báo `TLS-NO-HTTPS-REDIRECT`. Lỗi chứng chỉ không chặn redirect check; hai loại lỗi được báo riêng. Hệ quả: target `http://` có thể sinh thêm finding TLS mức CRITICAL/HIGH, làm exit code thay đổi — phải ghi changelog. | FR-CLI-05, FR-REDIR-01, FR-CLI-04 (hệ quả) | D4 | FR-FIX-09 |
 | FIX-10 | **HSTS xét theo URL nào.** Check header chạy trên response cuối cùng (trang người dùng thật sự nhận); HSTS chỉ xét khi response cuối là HTTPS (gộp FIX-05). Nếu redirect đổi host (ví dụ `example.com` → `www.example.com`), tool kiểm tra thêm HSTS ở host gốc qua HTTPS; thiếu thì tạo finding mức LOW, vì HSTS ở host gốc cần có để `includeSubDomains` và `preload` có tác dụng. JSON thêm `final_url` và `redirect_chain`. | FR-HDR-01, mục 6.2 | FR-MODEL-01, FR-MODEL-02 (nâng `schema_version`), D4, D5 | FR-FIX-10 |
 
 ---

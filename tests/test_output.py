@@ -36,7 +36,11 @@ def _cli_json(target: str, tmp_path) -> tuple[dict, int]:
 
 
 @pytest.mark.parametrize("handler, gate", [(MockHandler, True), (SoftNotFoundHandler, False)])
-def test_cli_and_web_ui_produce_the_same_report(ui, http_server, tmp_path, handler, gate):
+def test_cli_and_web_ui_produce_the_same_report(ui, http_server, tmp_path, monkeypatch, handler, gate):
+    if not gate:
+        # A plain-HTTP target always fails the gate since FIX-09; pretend the redirect is
+        # fine so both a failing and a passing gate are compared.
+        monkeypatch.setattr(cli.redirect_check, "evaluate_redirect_chain", lambda start, chain: [])
     target = http_server(handler)
     cli_report, exit_code = _cli_json(target, tmp_path)
     web_report = requests.post(f"{ui}/api/scan", json={"target": target, "authorized": True}, timeout=60).json()
