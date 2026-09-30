@@ -60,9 +60,18 @@ def test_headers_x_xss_protection(value, flagged):
 
 
 def test_headers_info_leak_one_finding_per_header():
-    hdrs = dict(SECURE_HEADERS, Server="nginx/1.18", **{"X-Powered-By": "Express", "X-AspNet-Version": "4.0"})
+    hdrs = dict(
+        SECURE_HEADERS,
+        Server="nginx/1.18",
+        **{"X-Powered-By": "Express", "X-AspNet-Version": "4.0", "X-AspNetMvc-Version": "5.2"},
+    )
     found = headers.check_security_headers("https://t/", hdrs)
-    assert ids(found) == ["HDR-INFO-SERVER", "HDR-INFO-X-ASPNET-VERSION", "HDR-INFO-X-POWERED-BY"]
+    assert ids(found) == [
+        "HDR-INFO-SERVER",
+        "HDR-INFO-X-ASPNET-VERSION",
+        "HDR-INFO-X-ASPNETMVC-VERSION",
+        "HDR-INFO-X-POWERED-BY",
+    ]
     assert all(f.severity.value == "INFO" and f.evidence for f in found)
 
 
@@ -117,6 +126,19 @@ def test_tls_expiring_soon(https_server):
     _, port = https_server(_Ok, cert="expiring")
     found = tls_check.check_tls("127.0.0.1", port, timeout=5)
     assert ids(found) == ["TLS-CERT-EXPIRING-SOON", "TLS-CERT-NOT-TRUSTED"]
+
+
+def test_tls_unparsable_certificate_is_reported_and_trust_is_still_checked(https_server, monkeypatch):
+    _, port = https_server(_Ok, cert="valid")
+
+    def broken(der):
+        raise ValueError("malformed certificate")
+
+    monkeypatch.setattr(tls_check.x509, "load_der_x509_certificate", broken)
+    found = tls_check.check_tls("127.0.0.1", port, timeout=5)
+    assert ids(found) == ["TLS-CERT-NOT-TRUSTED", "TLS-CERT-PARSE-FAILED"]
+    parse_failed = next(f for f in found if f.id == "TLS-CERT-PARSE-FAILED")
+    assert parse_failed.severity.value == "INFO" and "malformed certificate" in parse_failed.description
 
 
 def test_tls_connection_failure_stops_tls_checks(closed_port):
