@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import socket
+import ssl
+
 import pytest
 import requests
 from conftest import CERT_WINDOWS, QuietHandler, make_self_signed_cert
@@ -191,8 +194,44 @@ def test_tls_connection_failure_stops_tls_checks(closed_port):
     assert ids(tls_check.check_tls("127.0.0.1", closed_port, timeout=2)) == ["TLS-CONN-FAILED"]
 
 
+def _client_can_negotiate(port: int) -> bool:
+    """Independent of the scanner: can this OpenSSL reach the legacy server at all?"""
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
+    ctx.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+    ctx.set_ciphers("ALL:@SECLEVEL=0")
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as sock, ctx.wrap_socket(sock):
+            return True
+    except (ssl.SSLError, OSError):
+        return False
+
+
+@pytest.mark.parametrize("version", ["TLSv1", "TLSv1_1"])
+def test_tls_weak_protocol_is_detected_on_a_real_legacy_server(https_server, version):
+    # Python's default client context refuses anything below TLS 1.2; the measuring
+    # connection must still reach such a server, or the finding could never fire.
+    _, port = https_server(_Ok, cert="valid", only_version=ssl.TLSVersion[version])
+    if not _client_can_negotiate(port):
+        pytest.skip(f"this OpenSSL ({ssl.OPENSSL_VERSION}) cannot negotiate {version} as a client")
+    found = tls_check.check_tls("127.0.0.1", port, timeout=5)
+    weak = [f for f in found if f.id == "TLS-WEAK-PROTOCOL"]
+    assert len(weak) == 1 and weak[0].severity.value == "HIGH", ids(found)
+    assert version.replace("_", ".") in weak[0].title
+    # Step 2 keeps strict defaults, cannot connect below TLS 1.2 and so gives no trust verdict;
+    # the weak protocol is the finding.
+    assert ids(found) == ["TLS-WEAK-PROTOCOL"]
+
+
+def test_tls_modern_server_still_negotiates_a_modern_protocol(https_server):
+    _, port = https_server(_Ok, cert="valid")
+    _, protocol, cipher, err = tls_check._fetch_raw_cert_and_connection_info("127.0.0.1", port, 5)
+    assert err is None and protocol in ("TLSv1.2", "TLSv1.3")
+    assert not any(weak in cipher[0] for weak in ("RC4", "3DES", "MD5", "NULL", "EXPORT"))
+
+
 def test_tls_weak_protocol_and_cipher(monkeypatch, tmp_path):
-    # Modern OpenSSL refuses to negotiate these, so feed step A's result directly.
+    # OpenSSL 3 ships without RC4/EXPORT suites, so feed step A's result directly.
     certfile, _ = make_self_signed_cert(tmp_path, *CERT_WINDOWS["valid"]())
     from cryptography import x509
     from cryptography.hazmat.primitives.serialization import Encoding

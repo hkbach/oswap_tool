@@ -55,6 +55,12 @@ def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int):
     insecure_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     insecure_ctx.check_hostname = False
     insecure_ctx.verify_mode = ssl.CERT_NONE
+    # This connection measures what the server accepts, so it must also reach servers that
+    # only speak TLS 1.0/1.1 or legacy ciphers: Python's defaults (TLS 1.2+, SECLEVEL 2)
+    # would turn TLS-WEAK-PROTOCOL into TLS-CONN-FAILED. DEFAULT stays first, so a modern
+    # server negotiates what it negotiates with any client. Step 2 keeps strict defaults.
+    insecure_ctx.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+    insecure_ctx.set_ciphers("DEFAULT:ALL:@SECLEVEL=0")
 
     try:
         with socket.create_connection((hostname, port), timeout=timeout) as sock:
