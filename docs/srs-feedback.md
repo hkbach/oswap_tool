@@ -29,6 +29,8 @@ Bộ test chạy trên Python 3.12 và 3.14 (Windows), toàn bộ trên `127.0.0
 | B3 | FR-REDIR-01 ghi "chỉ chạy khi đã xác nhận TLS hoạt động", nhưng mã luôn chạy redirect check cho target `https://`. | Nhỏ: có thể báo `TLS-NO-HTTPS-REDIRECT` cho site mà TLS đang hỏng. | Chọn một trong hai: bỏ điều kiện trong SRS, hoặc thêm điều kiện vào mã. |
 | B4 | FR-HDR-01 xét `https` theo URL gốc, không theo URL cuối sau redirect. | Nhỏ: target `https://` bị redirect về `http://` vẫn bị yêu cầu HSTS trên response HTTP. | Làm rõ "baseline request" là URL gốc hay URL cuối. |
 
+| B5 | **Giao diện web local** (branch `feat/web-ui`, 2026-09-30) được thêm theo yêu cầu, trong khi SRS mục 2.4 xếp "Giao diện web/GUI" vào phần ngoài phạm vi. | Tài liệu và mã lệch nhau. Chưa có FR/AT cho UI. | Cập nhật mục 2.4 và mục 11. Thêm nhóm FR-UI: chỉ bind loopback theo mặc định; phải tick xác nhận quyền quét (tương đương FR-CONSENT); chặn Host/Origin lạ; mỗi lúc 1 lần quét; kết quả dùng cùng JSON schema mục 6.2. |
+
 ## C. Ghi nhận nhỏ, không chặn
 
 - `USER_AGENT` vẫn ghi `TECHVIFY-OWASP-Scanner/1.0` trong khi phiên bản là 1.1.0.

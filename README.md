@@ -78,6 +78,26 @@ python -m owasp_scanner https://example.com --timeout 15 --workers 8
 Exit code: `0` nếu không có finding mức CRITICAL/HIGH, `1` nếu có, `2` nếu
 người dùng không xác nhận quyền quét.
 
+## Giao diện web (chạy trên máy local)
+
+```bash
+python -m owasp_scanner.web        # mở http://127.0.0.1:8765/
+python -m owasp_scanner.web --port 9000 --timeout 15 --workers 8
+```
+
+Nhập URL, tick ô xác nhận quyền quét, bấm **Scan**. Kết quả hiện bên dưới ô
+nhập: bảng tổng hợp theo severity, trạng thái gate (tương đương exit code của
+CLI), lỗi không nghiêm trọng, và danh sách finding có lọc theo mức độ. Nút
+**Tải JSON** tải báo cáo cùng định dạng với `--json` của CLI.
+
+- Giao diện gọi đúng `run_scan()` của CLI nên kết quả giống hệt nhau.
+- Server chỉ lắng nghe `127.0.0.1` theo mặc định và từ chối request có
+  `Host`/`Origin` lạ (chống DNS rebinding và request chéo site). Mỗi lúc chỉ
+  chạy 1 lần quét. Không dùng `--host 0.0.0.0` trừ khi thật sự cần — khi đó
+  bất kỳ ai truy cập được cổng này đều có thể ra lệnh quét từ máy của bạn.
+- Không cần thêm thư viện: server dùng `http.server` của Python, giao diện là
+  HTML/CSS/JS tĩnh trong `owasp_scanner/static/`, không tải gì từ internet.
+
 ## Cấu trúc project
 
 ```
@@ -86,6 +106,8 @@ owasp_scanner/
   http_utils.py      # HTTP session dùng chung (timeout, User-Agent, không retry-storm)
   models.py           # Finding / ScanResult / Severity
   report.py           # In CLI + xuất JSON
+  web.py              # Giao diện web local (python -m owasp_scanner.web)
+  static/             # index.html, app.js, app.css của giao diện web
   checks/
     headers.py        # Security headers
     cookies.py         # Cookie flags
