@@ -322,7 +322,7 @@ Chỉ gửi 1 GET với header `Origin` giả lập, rõ ràng là request kiể
 | ID | Yêu cầu | Priority |
 |---|---|---|
 | FR-REPORT-01 | CLI PHẢI in: target, thời điểm bắt đầu/kết thúc (UTC, ISO 8601, hậu tố `Z`), danh sách check đã chạy, bảng tổng hợp theo severity, và chi tiết từng finding (severity, title, OWASP category, description, evidence nếu có, recommendation nếu có, URL). | M |
-| FR-REPORT-02 | Finding trong output CLI, JSON và HTML PHẢI sắp xếp theo severity giảm dần: CRITICAL → HIGH → MEDIUM → LOW → INFO. | M |
+| FR-REPORT-02 | Finding trong output CLI, JSON và HTML PHẢI sắp xếp theo severity giảm dần: CRITICAL → HIGH → MEDIUM → LOW → INFO; cùng severity thì theo `id`, rồi `instance_key`, để hai lần quét cùng một target cho cùng thứ tự. | M |
 | FR-REPORT-03 | Với `--no-color`, output CLI KHÔNG được chứa mã ANSI. | M |
 | FR-REPORT-04 | Với `--json PATH`, tool PHẢI ghi file JSON hợp lệ theo mục 6.2, UTF-8, `ensure_ascii=False`. | M |
 | FR-REPORT-05 | Nếu một check gặp lỗi non-fatal (timeout, lỗi parse, exception bất kỳ), tool PHẢI hoàn tất các check còn lại và ghi lỗi vào `errors` dạng `Check '<tên check>' failed: <mô tả exception>`. Tên check vẫn có trong `checks_run`. | M |

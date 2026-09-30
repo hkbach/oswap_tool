@@ -99,3 +99,33 @@ def test_report_endpoint_contract(ui, http_server):
     missing = requests.get(f"{ui}/api/report/{'x' * 22}.html", timeout=5)
     assert missing.status_code == 404
     assert missing.headers["Content-Type"] == "application/json; charset=utf-8"
+
+
+def test_finding_order_is_deterministic():
+    # Sensitive-path findings arrive in completion order of parallel requests; the
+    # report order must not depend on it (severity, then id, then instance_key).
+    from owasp_scanner.models import Finding, ScanResult, Severity
+
+    def finding(fid, sev, key):
+        return Finding(id=fid, title="t", severity=sev, owasp_category="c", description="d", instance_key=key)
+
+    items = [
+        finding("EXPOSURE-GIT-HEAD", Severity.CRITICAL, ".git/HEAD"),
+        finding("HDR-X", Severity.LOW, "x"),
+        finding("EXPOSURE-ENV", Severity.CRITICAL, ".env"),
+        finding("COOKIE-FLAGS-MISSING", Severity.MEDIUM, "b"),
+        finding("COOKIE-FLAGS-MISSING", Severity.MEDIUM, "a"),
+    ]
+    orders = set()
+    for items_in in (items, items[::-1]):
+        result = ScanResult(target="https://t/", started_at="2026-01-01T00:00:00Z", findings=list(items_in))
+        orders.add(tuple((f["id"], f["instance_key"]) for f in output.build_report(result)["findings"]))
+    assert orders == {
+        (
+            ("EXPOSURE-ENV", ".env"),
+            ("EXPOSURE-GIT-HEAD", ".git/HEAD"),
+            ("COOKIE-FLAGS-MISSING", "a"),
+            ("COOKIE-FLAGS-MISSING", "b"),
+            ("HDR-X", "x"),
+        )
+    }

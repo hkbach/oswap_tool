@@ -107,6 +107,10 @@ class ScanResult:
             "finished_at": self.finished_at,
             "checks_run": self.checks_run,
             "summary": self.summary_counts(),
-            "findings": [f.to_dict() for f in sorted(self.findings, key=lambda x: x.severity.rank)],
+            # Severity first (FR-REPORT-02); id and instance_key make the order deterministic,
+            # since some checks collect findings from parallel requests.
+            "findings": [
+                f.to_dict() for f in sorted(self.findings, key=lambda x: (x.severity.rank, x.id, x.instance_key))
+            ],
             "errors": self.errors,
         }
