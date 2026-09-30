@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import requests
 from conftest import CERT_WINDOWS, QuietHandler, make_self_signed_cert
 
 from owasp_scanner.checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
@@ -165,6 +166,25 @@ def test_tls_unparsable_certificate_is_reported_and_trust_is_still_checked(https
     assert ids(found) == ["TLS-CERT-NOT-TRUSTED", "TLS-CERT-PARSE-FAILED"]
     parse_failed = next(f for f in found if f.id == "TLS-CERT-PARSE-FAILED")
     assert parse_failed.severity.value == "INFO" and "malformed certificate" in parse_failed.description
+
+
+def test_ipv6_hosts_are_bracketed_in_urls(closed_port):
+    (finding,) = tls_check.check_tls("::1", closed_port, timeout=2)
+    assert finding.id == "TLS-CONN-FAILED" and finding.url == f"https://[::1]:{closed_port}"
+
+    class RecordingSession:
+        scope_host = "::1"
+
+        def __init__(self):
+            self.urls = []
+
+        def get(self, url, **kwargs):
+            self.urls.append(url)
+            raise requests.exceptions.ConnectionError("no plain HTTP")
+
+    session = RecordingSession()
+    assert redirect_check.check_http_to_https_redirect(session, "::1") == []
+    assert session.urls == ["http://[::1]/"]
 
 
 def test_tls_connection_failure_stops_tls_checks(closed_port):

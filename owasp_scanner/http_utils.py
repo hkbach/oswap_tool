@@ -12,6 +12,7 @@ Design goals:
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import ssl
 from urllib.parse import urljoin, urlsplit
@@ -36,6 +37,17 @@ HINT_FILE_MAX_BYTES = 512 * 1024
 def _canonical_host(host: str | None) -> str:
     host = (host or "").lower().rstrip(".")
     return host[4:] if host.startswith("www.") else host
+
+
+def url_host(host: str) -> str:
+    """The host as it appears in a URL: an IPv6 address needs brackets (``[::1]``).
+
+    Anything else (a name, an IPv4 address, ``host:port``) is returned unchanged.
+    """
+    try:
+        return f"[{host}]" if ipaddress.ip_address(host).version == 6 else host
+    except ValueError:
+        return host
 
 
 def in_scope(url: str, scope_host: str) -> bool:

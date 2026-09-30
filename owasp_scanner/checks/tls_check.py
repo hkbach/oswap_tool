@@ -28,6 +28,7 @@ from dataclasses import replace
 
 from cryptography import x509
 
+from ..http_utils import url_host
 from ..models import Finding, Severity
 from ..rule_loader import is_interceptor_issuer
 
@@ -91,7 +92,7 @@ def check_tls(
 ) -> list[Finding]:
     """TLS checks; ``warnings`` receives a note when the handshake looks intercepted (FR-DET-16)."""
     findings: list[Finding] = []
-    url = f"https://{hostname}:{port}"
+    url = f"https://{url_host(hostname)}:{port}"
 
     der_cert, protocol, cipher, conn_err = _fetch_raw_cert_and_connection_info(hostname, port, timeout)
     if conn_err is not None:
