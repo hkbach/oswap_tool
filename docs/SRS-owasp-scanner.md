@@ -246,7 +246,7 @@ Cơ sở: OWASP Secure Headers Project. Tên header so khớp không phân biệ
 
 | ID | Yêu cầu | Severity | OWASP | Priority |
 |---|---|---|---|---|
-| FR-COOKIE-01 | Với mỗi header `Set-Cookie` của response baseline **và của mọi response redirect trung gian** trước nó, tool PHẢI parse tên cookie và kiểm tra 3 thuộc tính `Secure`, `HttpOnly`, `SameSite`. Mỗi cookie thiếu thuộc tính tạo 1 finding `COOKIE-FLAGS-MISSING`. | — (xem FR-COOKIE-02) | A05:2021 | M |
+| FR-COOKIE-01 | Với mỗi header `Set-Cookie` của response baseline **và của mọi response redirect trung gian** trước nó, tool PHẢI parse tên cookie và kiểm tra 3 thuộc tính `Secure`, `HttpOnly`, `SameSite`. Mỗi cookie thiếu thuộc tính tạo 1 finding `COOKIE-FLAGS-MISSING`. Header được đọc như trình duyệt (RFC 6265, từ v1.6.0): cặp `tên=giá trị` đầu tiên là cookie, phần sau là thuộc tính (tên thuộc tính không phân biệt hoa/thường, thuộc tính lặp lại thì lấy giá trị sau cùng); thuộc tính không kiểm tra (`Priority`, `Partitioned`, …) bị bỏ qua thay vì bị hiểu thành cookie; header không có tên cookie hợp lệ bị bỏ qua. | — (xem FR-COOKIE-02) | A05:2021 | M |
 | FR-COOKIE-02 | Thiếu `Secure` hoặc `HttpOnly` → MEDIUM. Chỉ thiếu `SameSite` (đã có Secure + HttpOnly) → LOW. | — | — | M |
 | FR-COOKIE-03 | Nếu `SameSite` có giá trị không thuộc {`Lax`,`Strict`,`None`} (không phân biệt hoa/thường), PHẢI coi là thiếu và liệt kê giá trị sai trong finding. | — | — | S |
 | FR-COOKIE-04 | Evidence PHẢI chứa header `Set-Cookie` gốc với **giá trị cookie được che**: giữ tên cookie và mọi thuộc tính, giá trị thay bằng `<redacted len=N>` (ví dụ `session=<redacted len=6>; Path=/`). Chỉ CLI với `--show-secrets` mới in nguyên văn (NFR-SEC-04). | — | — | S |
@@ -573,7 +573,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-01 | Từ chối quét khi chưa xác nhận | Trả lời `no`/rỗng/EOF ở prompt | Không có request nào; exit code `2` | `test_at01_*` |
 | AT-02 | Bỏ qua consent bằng `--yes` | `--yes` | Không hỏi; banner vẫn in; quét chạy bình thường | `test_at02_yes_flag_skips_prompt` |
 | AT-03 | Thiếu toàn bộ security headers | Response không có header nào (https) | Đủ 6 finding FR-HDR-01…04, 06, 07, đúng severity | `test_at03_all_security_headers_missing` |
-| AT-04 | Cookie thiếu cờ | `Set-Cookie: session=abc123; Path=/` | Finding MEDIUM liệt kê thiếu Secure, HttpOnly, SameSite; evidence trong output là `session=<redacted len=6>; Path=/` | `test_at04_cookie_missing_flags` |
+| AT-04 | Cookie thiếu cờ | `Set-Cookie: session=abc123; Path=/` | Finding MEDIUM liệt kê thiếu Secure, HttpOnly, SameSite; evidence trong output là `session=<redacted len=6>; Path=/`; `Priority=High`/`Partitioned` không tạo finding cho cookie tên `Priority` và không che mất cookie thật | `test_at04_cookie_missing_flags`, `test_cookie_attributes_are_parsed_like_a_browser`, `test_unchecked_attributes_do_not_hide_missing_flags`, `test_set_cookie_without_a_valid_name_is_skipped` |
 | AT-05 | Lộ `.env` và `.git/HEAD` | Mock trả 200 cho 2 path này | Đúng 2 finding CRITICAL, A01:2021 | `test_at05_exposed_env_and_git_head` |
 | AT-06 | Soft-404 | Mock trả 200 cho mọi path | Không có finding A01 nào | `test_at06_soft_404_suppresses_exposure_findings` |
 | AT-07 | Directory listing | `/images/` chứa `Index of /images/` | Finding MEDIUM `EXPOSURE-DIR-LISTING` | `test_at07_directory_listing` |

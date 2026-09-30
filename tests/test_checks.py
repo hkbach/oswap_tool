@@ -99,6 +99,32 @@ def test_cookie_flags(raw, severity, missing):
     assert found[0].evidence == raw  # FR-COOKIE-04: verbatim Set-Cookie
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        # Attributes the scanner does not check must not become cookies or hide the real one.
+        "sid=1; Secure; HttpOnly; SameSite=Lax; Priority=High",
+        "sid=1; Secure; HttpOnly; SameSite=Lax; Partitioned",
+        "sid=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Max-Age=60; Domain=t; Path=/; Secure; HttpOnly; SameSite=Strict",
+        # Attribute names are case-insensitive and may have spaces around "=".
+        "sid=1; secure; HTTPONLY; samesite = lax",
+    ],
+)
+def test_cookie_attributes_are_parsed_like_a_browser(raw):
+    assert cookies.check_cookies("https://t/", [raw]) == []
+
+
+def test_unchecked_attributes_do_not_hide_missing_flags():
+    (finding,) = cookies.check_cookies("https://t/", ["sid=1; Partitioned; Priority=High"])
+    assert finding.instance_key == "sid"
+    assert "Secure, HttpOnly, SameSite" in finding.description
+
+
+@pytest.mark.parametrize("raw", ["novalue; Secure", "=1; HttpOnly", "a b=1; Secure", ""])
+def test_set_cookie_without_a_valid_name_is_skipped(raw):
+    assert cookies.check_cookies("https://t/", [raw]) == []
+
+
 # --- TLS (real handshakes against local servers) ---------------------------------
 
 
