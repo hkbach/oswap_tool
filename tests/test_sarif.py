@@ -112,3 +112,60 @@ def test_cli_writes_the_sarif_file(http_server, tmp_path):
 
 def test_output_is_deterministic(report):
     assert json.dumps(sarif.to_sarif(report)) == json.dumps(sarif.to_sarif(report))
+
+
+def test_baseline_state_and_suppressions_use_the_native_sarif_fields(tmp_path):
+    # FR-CI-02 / FR-MODEL-06: SARIF has its own properties for both (2.1.0 sections 3.27.23-24).
+    import datetime
+
+    from websec_scanner import catalog
+    from websec_scanner.baseline import load_baseline
+    from websec_scanner.models import Finding, ScanResult, Severity
+    from websec_scanner.output import build_report
+    from websec_scanner.suppressions import load_suppressions
+
+    def finding(fid, key):
+        from dataclasses import replace
+
+        f = Finding(id=fid, title="t", severity=Severity.HIGH, owasp_category="c", description="d",
+                    url="https://t.example/", instance_key=key)  # fmt: skip
+        return replace(catalog.enrich(f, "https://t.example/"), check="security-headers")
+
+    def result(*findings):
+        r = ScanResult(target="https://t.example/", started_at="2026-10-01T00:00:00Z")
+        r.baseline_fetched = True
+        r.checks_run = ["security-headers"]
+        for f in findings:
+            r.add(f)
+        return r
+
+    old, new, accepted = finding("HDR-A-MISSING", "a"), finding("HDR-B-MISSING", "b"), finding("HDR-C-MISSING", "c")
+    base = tmp_path / "b.json"
+    base.write_text(json.dumps(build_report(result(old))), encoding="utf-8")
+    ignore = tmp_path / "i.toml"
+    ignore.write_text(
+        '[[suppress]]\nid = "HDR-C-MISSING"\nreason = "accepted"\nexpires = 2026-12-31\n', encoding="utf-8"
+    )
+
+    report = build_report(
+        result(old, new, accepted),
+        baseline=load_baseline(str(base)),
+        suppressions=load_suppressions(str(ignore), today=datetime.date(2026, 10, 1)),
+    )
+    by_rule = {r["ruleId"]: r for r in sarif.to_sarif(report)["runs"][0]["results"]}
+    assert by_rule["HDR-A-MISSING"]["baselineState"] == "unchanged"
+    assert by_rule["HDR-B-MISSING"]["baselineState"] == "new"
+    assert "suppressions" not in by_rule["HDR-B-MISSING"]
+    (suppression,) = by_rule["HDR-C-MISSING"]["suppressions"]
+    assert suppression["kind"] == "external" and suppression["status"] == "accepted"
+    assert "accepted" in suppression["justification"] and "2026-12-31" in suppression["justification"]
+
+
+def test_without_a_baseline_results_carry_no_baseline_state(http_server):
+    from mock_server import Handler as MockHandler
+
+    from websec_scanner import cli
+    from websec_scanner.output import build_report
+
+    results = sarif.to_sarif(build_report(cli.run_scan(http_server(MockHandler))))["runs"][0]["results"]
+    assert results and not any("baselineState" in r or "suppressions" in r for r in results)

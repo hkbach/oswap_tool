@@ -29,7 +29,7 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
 - [`docs/PRODUCT-BACKLOG.md`](./docs/PRODUCT-BACKLOG.md) — backlog, decisions, sprint order.
 - [`CLAUDE.md`](./CLAUDE.md) — working rules for this repository.
 - [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema of the `--json`
-  report (`schema_version` 1.7).
+  report (`schema_version` 1.8).
 - [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md) — license of every
   runtime and dev dependency, direct and transitive.
 
@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.14.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.15.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.14.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.15.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -241,7 +241,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.14.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.15.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -268,14 +268,58 @@ Tips:
   (`if: always()`, `when: always`, `condition: always()`, `post { always }`).
 - **Roll out gradually.** Start with `--fail-on none` or `--fail-on critical`
   to see what the scan reports, fix or accept the existing findings, then
-  tighten to `high`. A `--baseline` option that fails only on new findings is
-  planned (backlog FR-CI-02) but not available yet.
+  tighten to `high`. Or keep the threshold and use `--baseline`: save one
+  run's `--json` report, then pass it on the next runs so only **new**
+  findings fail the job (see "Baseline and accepted findings" below).
 - **Private CA.** If the target uses an internal CA, add
   `--ca-bundle path/to/ca.pem`.
 - **Secrets.** Reports redact cookie values and sensitive URL parameters by
   default. Do not add `--show-secrets` in CI.
 - **Scheduling.** The GitHub and Azure templates run weekly (Monday 02:00 UTC)
   and on manual trigger; adjust the schedule to your needs.
+
+### Baseline and accepted findings
+
+Two CLI options let a pipeline fail only on what is new, without ignoring the
+findings you already know about. Neither exists in the local web UI.
+
+**`--baseline FILE`**: the `--json` report of an earlier run. Findings already
+in it are marked `unchanged` and no longer fail the gate; only `new` ones do.
+The report also lists what was **fixed** since then. A finding that is missing
+now is only called fixed when its check ran again and the scan finished;
+otherwise (you left its group out with `--checks`, or a `--max-*` limit stopped
+the scan) it is listed as **not rechecked** instead.
+
+```bash
+# once, on main: record where things stand
+websec-scanner https://staging.example.com --yes --json baseline.json --fail-on none
+# on every run afterwards: fail only on regressions
+websec-scanner https://staging.example.com --yes --baseline baseline.json --junit scan.xml
+```
+
+**`--suppressions FILE`**: a TOML file of findings you have accepted on purpose.
+Every entry needs a `reason` and an `expires` date; after that date it stops
+applying and the report says so. An entry matches when every field it gives
+matches: `id`, `fingerprint` (from a report), or `path` (a glob on the URL path).
+A suppressed finding still appears in the report, marked, and in the summary
+counts; it just does not fail the gate.
+
+```toml
+# .scannerignore.toml
+[[suppress]]
+id = "HDR-STRICT-TRANSPORT-SECURITY-MISSING"
+reason = "HSTS is added by the CDN in front of this origin; SEC-123"
+expires = 2026-12-31
+```
+
+The loader is strict: an unknown key, a missing reason or date, or an entry with
+nothing to match on (which would accept every finding) rejects the whole file
+before the scan starts.
+
+**`--csv PATH`** and **`--junit PATH`** write the findings for spreadsheets and
+for CI test dashboards. In the JUnit file, a finding that fails the gate is a
+failed test and every other finding is a skipped test with the reason, so the
+dashboard shows failures exactly when the command exits non-zero.
 
 ### Platform notes
 
@@ -379,7 +423,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-66 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-71 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -545,6 +589,29 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog
+
+- **v1.15.0** (CI with existing findings). New options, all CLI only:
+  - **`--baseline FILE`** fails the gate only on findings that are new since an
+    earlier `--json` report, and reports what was fixed. See "Baseline and accepted
+    findings" above.
+  - **`--suppressions FILE`**: accept known findings in a TOML file, each with a
+    mandatory reason and expiry date. (The backlog had planned YAML; TOML is read by
+    Python's standard library, so no new dependency, and it allows comments.)
+  - **`--csv PATH`** and **`--junit PATH`** exports. CSV cells that would run as a
+    spreadsheet formula are defused.
+  - **JSON `schema_version` 1.8** (fields added only): a `baseline` block, and on each
+    finding `baseline_state` and `suppression` (both `null` when the options are not
+    used). `gate` gains `counted` (what the gate actually counted), `basis`, and
+    `incomplete_reason`. **`summary` still counts every finding**, as before.
+  - **SARIF** uses the standard `baselineState` and `suppressions` properties.
+  - **Fingerprint fix (FR-MODEL-07)**: CORS and HTTP-redirect findings used the whole
+    start URL, query included, so the same issue got a different fingerprint when the
+    scan started on another page or the query carried a rotating token. They now use
+    the site root. **Scans that start at the site root keep their fingerprints.** For
+    scans that start elsewhere, GitHub code scanning sees these findings as new alerts
+    once. A baseline written by an older version triggers a warning to regenerate it.
+  - **Fixed:** when a `--max-requests`/`--max-duration` limit stopped a scan, the gate
+    message wrongly said the home page could not be fetched (since v1.14.0).
 
 - **v1.14.0** (scan safety controls). Everything here is **off unless you turn it on**, so
   an upgrade changes nothing you have not asked for:

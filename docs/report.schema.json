@@ -23,10 +23,11 @@
     "limits",
     "summary",
     "findings",
-    "errors"
+    "errors",
+    "baseline"
   ],
   "properties": {
-    "schema_version": { "const": "1.7" },
+    "schema_version": { "const": "1.8" },
     "scanner_version": { "type": "string", "minLength": 1 },
     "rules_version": { "type": "string", "minLength": 1 },
     "scan_id": {
@@ -46,11 +47,20 @@
       "description": "CI gate (FR-CI-01): threshold used, whether it failed, whether the scan was incomplete",
       "type": "object",
       "additionalProperties": false,
-      "required": ["fail_on", "failed", "incomplete"],
+      "required": ["fail_on", "failed", "incomplete", "incomplete_reason", "basis", "counted"],
       "properties": {
         "fail_on": { "enum": ["critical", "high", "medium", "low", "none"] },
         "failed": { "type": "boolean" },
-        "incomplete": { "type": "boolean" }
+        "incomplete": { "type": "boolean" },
+        "incomplete_reason": {
+          "description": "Why the scan is incomplete: the home page could not be fetched, or a limit stopped it (FR-AUTHZ-05)",
+          "enum": ["home-page", "max-requests", "max-duration", null]
+        },
+        "basis": {
+          "description": "all: every finding counts; new: only findings absent from --baseline (FR-CI-02). Suppressed findings never count",
+          "enum": ["all", "new"]
+        },
+        "counted": { "$ref": "#/$defs/severity_counts" }
       }
     },
     "target": { "type": "string", "pattern": "^https?://" },
@@ -83,6 +93,39 @@
       "items": { "enum": ["headers", "cookies", "tls", "https-redirect", "cors", "exposed-files", "directory-listing", "robots-sitemap"] }
     },
     "limits": { "$ref": "#/$defs/limits" },
+    "baseline": {
+      "description": "Comparison with the previous scan given by --baseline (FR-CI-02, FR-RPT-06); null without one",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "scan_id", "started_at", "fixed", "not_rechecked", "counts"],
+          "properties": {
+            "source": { "type": "string" },
+            "scan_id": { "type": ["string", "null"] },
+            "started_at": { "type": ["string", "null"] },
+            "fixed": { "type": "array", "items": { "$ref": "#/$defs/baseline_finding" } },
+            "not_rechecked": {
+              "description": "Absent now, but its check did not run or the scan did not finish, so it is not called fixed",
+              "type": "array",
+              "items": { "$ref": "#/$defs/baseline_finding" }
+            },
+            "counts": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["new", "unchanged", "fixed", "not_rechecked"],
+              "properties": {
+                "new": { "$ref": "#/$defs/count" },
+                "unchanged": { "$ref": "#/$defs/count" },
+                "fixed": { "$ref": "#/$defs/count" },
+                "not_rechecked": { "$ref": "#/$defs/count" }
+              }
+            }
+          }
+        }
+      ]
+    },
     "checks_run": {
       "type": "array",
       "items": {
@@ -115,6 +158,33 @@
     "errors": { "type": "array", "items": { "type": "string" } }
   },
   "$defs": {
+    "severity_counts": {
+      "description": "Findings per severity that count toward the gate; summary still counts every finding",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+      "properties": {
+        "CRITICAL": { "$ref": "#/$defs/count" },
+        "HIGH": { "$ref": "#/$defs/count" },
+        "MEDIUM": { "$ref": "#/$defs/count" },
+        "LOW": { "$ref": "#/$defs/count" },
+        "INFO": { "$ref": "#/$defs/count" }
+      }
+    },
+    "baseline_finding": {
+      "description": "A finding of the baseline report, as the comparison shows it",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "severity", "url", "fingerprint", "check"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "severity": { "type": "string" },
+        "url": { "type": "string" },
+        "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "check": { "type": "string" }
+      }
+    },
     "timestamp": {
       "description": "ISO 8601, UTC, with a Z suffix",
       "type": "string",
@@ -154,7 +224,9 @@
         "cvss_score",
         "instance_key",
         "fingerprint",
-        "check"
+        "check",
+        "baseline_state",
+        "suppression"
       ],
       "properties": {
         "id": { "type": "string", "pattern": "^[A-Z0-9]+(-[A-Z0-9]+)+$" },
@@ -187,6 +259,25 @@
           "maximum": 10
         },
         "instance_key": { "type": "string", "minLength": 1 },
+        "baseline_state": {
+          "description": "Compared with --baseline: new or unchanged; null without a baseline (FR-CI-02)",
+          "enum": ["new", "unchanged", null]
+        },
+        "suppression": {
+          "description": "Set when an entry of --suppressions accepts this finding; it then does not count toward the gate (FR-MODEL-06)",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reason", "expires"],
+              "properties": {
+                "reason": { "type": "string", "minLength": 1 },
+                "expires": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+              }
+            }
+          ]
+        },
         "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
         "check": {
           "description": "The check that produced the finding (a checks_run entry); its group is in SRS 4.11",

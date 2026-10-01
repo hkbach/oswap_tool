@@ -624,7 +624,7 @@
         "target": "http://127.0.0.1:<PORT>/",
         "final_url": "http://127.0.0.1:<PORT>/",
         "scan_id": "<SCAN_ID>",
-        "schema_version": "1.7",
+        "schema_version": "1.8",
         "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1;exclusions=2026.10.01.1",
         "scan_groups": [
           "headers",
@@ -639,7 +639,16 @@
         "gate": {
           "fail_on": "high",
           "failed": true,
-          "incomplete": false
+          "incomplete": false,
+          "incomplete_reason": null,
+          "basis": "all",
+          "counted": {
+            "CRITICAL": 2,
+            "HIGH": 1,
+            "MEDIUM": 4,
+            "LOW": 2,
+            "INFO": 3
+          }
         }
       }
     }

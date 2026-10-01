@@ -52,6 +52,24 @@ def url_host(host: str) -> str:
         return host
 
 
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def site_root(url: str) -> str:
+    """``scheme://host[:port]/`` of ``url``: no path, query, fragment or credentials.
+
+    The location key for findings that describe the whole site rather than one page, so
+    their fingerprint survives a different start page or a rotating query token (FR-MODEL-07).
+    A default port is left out, so ``https://x:443/a`` and ``https://x/`` give the same key.
+    """
+    parts = urlsplit(url)
+    scheme = (parts.scheme or "https").lower()
+    host = url_host((parts.hostname or "").lower())
+    port = parts.port
+    netloc = host if port in (None, _DEFAULT_PORTS.get(scheme)) else f"{host}:{port}"
+    return f"{scheme}://{netloc}/"
+
+
 def in_scope(url: str, scope_host: str, allowed_hosts: Iterable[str] = ()) -> bool:
     """D4: same host as the target, or differing only by a leading ``www.``.
 

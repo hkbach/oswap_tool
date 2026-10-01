@@ -41,6 +41,11 @@ def print_report(report: dict, use_color: bool = True) -> None:
     print(f" Checks run: {', '.join(report['checks_run'])}")
     print("=" * 72)
     print(" Summary: " + " | ".join(f"{sev}: {counts[sev]}" for sev in _SEVERITIES))
+    gate = report["gate"]
+    if gate.get("basis") == "new" or any(f.get("suppression") for f in report["findings"]):
+        # summary counts every finding; say which of them the gate actually counted.
+        counted = gate["counted"]
+        print(" Counted toward the gate: " + " | ".join(f"{sev}: {counted[sev]}" for sev in _SEVERITIES))
     print("-" * 72)
 
     if not report["findings"]:
@@ -48,7 +53,7 @@ def print_report(report: dict, use_color: bool = True) -> None:
     else:
         for f in report["findings"]:  # already sorted by build_report()
             tag = _colorize(f"[{f['severity']}]", f["severity"], use_color)
-            print(f" {tag} {f['title']}")
+            print(f" {tag} {f['title']}{_state_tag(f)}")
             confidence = f"confidence: {f['confidence']}" if f["confidence"] else ""
             cvss_text = f"CVSS 3.1 base: {f['cvss_score']} (estimated)" if f.get("cvss_vector") else ""
             classification = " | ".join(filter(None, (f["cwe"], confidence, cvss_text)))
@@ -62,6 +67,9 @@ def print_report(report: dict, use_color: bool = True) -> None:
                 print(f"     URL: {f['url']}")
             print()
 
+    if report.get("baseline"):
+        _print_comparison(report["baseline"])
+
     if report["errors"]:
         print("-" * 72)
         print(" Non-fatal errors during scan:")
@@ -73,6 +81,39 @@ def print_report(report: dict, use_color: bool = True) -> None:
         print(textwrap.fill(CVSS_NOTE, width=72, initial_indent=" ", subsequent_indent=" "))
         print()
     print(textwrap.fill(SCOPE_NOTE, width=72, initial_indent=" ", subsequent_indent=" "))
+
+
+def _state_tag(finding: dict) -> str:
+    """Where this finding stands against --baseline and --suppressions (FR-CI-02, FR-MODEL-06)."""
+    tags = []
+    if finding.get("baseline_state") == "new":
+        tags.append("[NEW]")
+    elif finding.get("baseline_state") == "unchanged":
+        tags.append("[UNCHANGED]")
+    if finding.get("suppression"):
+        s = finding["suppression"]
+        tags.append(f"[SUPPRESSED until {s['expires']}: {s['reason']}]")
+    return (" " + " ".join(tags)) if tags else ""
+
+
+def _print_comparison(baseline: dict) -> None:
+    """FR-RPT-06: new / fixed / still present since the baseline."""
+    counts = baseline["counts"]
+    print("-" * 72)
+    since = baseline.get("started_at") or "unknown time"
+    print(f" Compared with baseline from {since} ({baseline['source']}):")
+    print(
+        f"   new: {counts['new']} | unchanged: {counts['unchanged']} | fixed: {counts['fixed']}"
+        f" | not rechecked: {counts['not_rechecked']}"
+    )
+    if baseline["fixed"]:
+        print(" Fixed since the baseline:")
+        for f in baseline["fixed"]:
+            print(f"  - [{f['severity']}] {f['title']}")
+    if baseline["not_rechecked"]:
+        print(" Not rechecked (its check did not run, or the scan did not finish), so not counted as fixed:")
+        for f in baseline["not_rechecked"]:
+            print(f"  - [{f['severity']}] {f['title']}")
 
 
 def write_json(report: dict, path: str) -> None:

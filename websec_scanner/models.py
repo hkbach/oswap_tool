@@ -12,7 +12,7 @@ from . import __version__
 # report shape: minor for added fields, major for removed/renamed fields or changed meaning.
 # History: "1.0" = unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0;
 # 1.2 adds final_url and redirect_chain; 1.3 adds gate.
-SCHEMA_VERSION = "1.7"
+SCHEMA_VERSION = "1.8"
 
 
 class Severity(str, Enum):
