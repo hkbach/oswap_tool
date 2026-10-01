@@ -379,7 +379,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-61 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-62 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -568,6 +568,13 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
     (key used past its expiry) rather than the client-side CWE-298.
   - Reports that carry scores now explain, in the console and HTML footer, that CVSS and the
     report's own severity are two different scales.
+  - **Weak cipher detection was incomplete and is now a declarative table** (FR-DET-17).
+    The old markers were spelled like IANA names but matched against OpenSSL suite names, so
+    several suites were never reported: **3DES** (OpenSSL calls it `DES-CBC3-SHA`, which does
+    not contain the string `3DES`, so SWEET32 went undetected in practice), single DES
+    (`DES-CBC-SHA`), and anonymous suites that authenticate neither side (`ADH-`, `AECDH-`).
+    RC2 and IDEA are detected too, and each finding now says *why* the suite is weak. Expect
+    new `TLS-WEAK-CIPHER` findings on servers that still offer these.
 - **v1.12.0.** Changes to note:
   - **Every finding carries an estimated CVSS v3.1 score** (`cvss_vector`/`cvss_score`,
     schema_version 1.6, fields added only): a generic, per-finding-type estimate (not an
