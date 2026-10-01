@@ -238,3 +238,13 @@ def test_json_unaffected_by_quiet(reflecting, tmp_path, capsys):
     out = tmp_path / "r.json"
     _run([reflecting, "--yes", "--no-color", "--quiet", "--json", str(out)], capsys)
     assert json.loads(out.read_text(encoding="utf-8"))["findings"]
+
+
+def test_quiet_still_says_why_a_scan_could_not_complete(closed_port, capsys):
+    # Exit 3 with no reason is useless in a CI log: the errors go to stderr, stdout stays one line.
+    code, out, err = _run(
+        [f"http://127.0.0.1:{closed_port}/", "--yes", "--no-color", "--quiet", "--timeout", "2"], capsys
+    )
+    assert code == 3
+    assert len([line for line in out.splitlines() if line.strip()]) == 1
+    assert "Could not fetch" in err

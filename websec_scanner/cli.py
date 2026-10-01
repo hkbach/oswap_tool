@@ -767,6 +767,10 @@ def main(argv=None) -> int:
         code = exit_code(report)
         if args.quiet:
             print(_quiet_line(target, report, code))
+            # Still say *why* a scan is incomplete or a check failed: an exit code with no
+            # reason is useless in a CI log. stderr, so stdout stays one line per target.
+            for error in report["errors"]:
+                print(f"{target}: {error}", file=sys.stderr)
         else:
             print_report(report, use_color=not args.no_color)
             print()
