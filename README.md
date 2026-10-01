@@ -557,6 +557,8 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
     executive summary, and a "Reproduce" line on every finding (re-run with
     `--checks <group>`). Also fixes a leftover "OWASP scan report" page `<title>` from the
     v1.9.0 package rename.
+  - **Web UI**: each finding now shows the same estimated CVSS score as the console and
+    HTML reports.
 - **v1.11.0.** The company name has been removed from the source code entirely (product
   owner, 2026-09-30); it must never appear here. What actually changed:
   - **User-Agent sent to targets (NFR-SEC-03):** the company-name prefix is gone. The

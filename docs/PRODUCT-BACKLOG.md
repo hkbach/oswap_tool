@@ -283,6 +283,9 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [x] **FR-RPT-02** (P0 · Pro) *(xong ở Sprint 5: `sarif.py`, `--sarif`, SRS FR-REPORT-06, AT-44; test kiểm tra cấu trúc bắt buộc, chưa validate bằng schema chính thức của OASIS — cần xác nhận license trước khi vendor file schema)* Xuất **SARIF 2.1.0** để hiển thị trong GitHub/GitLab code scanning.
   AC: file hợp lệ theo schema SARIF; rule id = `Finding.id`; `partialFingerprints` lấy từ `fingerprint` (FR-MODEL-01); tham số CLI `--sarif PATH`.
   Phụ thuộc: FR-MODEL-01, FR-AUTH-02.
+- [ ] **FR-RPT-10** (P1 · Pro) SARIF `properties.security-severity` lấy từ `cvss_score` (FR-MODEL-03) thay vì suy ra từ `Severity` nội bộ như hiện nay (SRS FR-REPORT-06). Tách riêng khỏi Sprint 10 vì đây là **đổi hành vi** của một định dạng CI đang dùng (GitHub code scanning sẽ đổi mức cảnh báo của các finding cũ).
+  AC: `security-severity` = `cvss_score` khi có; finding trong `NOT_A_WEAKNESS` giữ cách tính cũ hoặc bỏ trường; changelog ghi rõ mức cảnh báo trên GitHub sẽ thay đổi; cập nhật SRS FR-REPORT-06 và AT-44.
+  Phụ thuộc: **chỉ làm sau khi `[CONFIRM]` của FR-MODEL-03 được đội bảo mật duyệt** — nếu vector còn đổi thì mức cảnh báo CI sẽ đổi theo lần nữa.
 - [ ] **FR-RPT-03** (P1 · Pro) Xuất **CSV** và **JUnit XML** (cho CI).
 - [ ] **FR-RPT-04** (P1 · Business) Xuất **PDF** (từ HTML) với trang bìa, mục lục, logo tùy biến (white-label).
 - [ ] **FR-RPT-05** (P1 · Business) Hai mẫu báo cáo: **Executive summary** (không kỹ thuật) và **Technical report** (cho developer).
@@ -587,7 +590,7 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 7 | README tiếng Anh + hướng dẫn CI/CD và branch protection; Python ≥ 3.12; sửa lỗi từ code review (redact, TLS cũ, cookie, giới hạn đọc, Web UI 500, IPv6); refactor gate/severity | FR-DOC-01 (một phần), NFR-PORT-01, NFR-SEC-04, FR-TLS-01, FR-COOKIE-01, NFR-PERF-04, FR-UI-05 | Xong (v1.6.0) trên branch `feat/sprint-7`, chờ review; CI xanh trên GitHub |
 | 8 | Nhóm mục tiêu kiểm thử: chọn nhóm khi quét (CLI `--checks`, Web UI), kết quả và báo cáo HTML nhóm theo test target / OWASP Top 10 | SRS 4.11 (FR-GRP-01…03), FR-UI-07, FR-UI-10, FR-UI-11 (yêu cầu của chủ sản phẩm ngày 2026-09-30) | Xong (v1.7.0) trên branch `feat/sprint-8`, chờ review |
 | 9 | Đóng Phase A: Web UI bắt buộc token khi bind ra ngoài, phạm vi & giới hạn trong mọi báo cáo, kiểm kê license, image Docker chính thức, rà lại README | FR-WEB-02, FR-RPT-08, FR-SEC-10, FR-CI-04, FR-DOC-01 | Xong (v1.8.0) trên branch `feat/sprint-9`, chờ review |
-| 10 | Điểm số CVSS v3.1 ước tính theo loại finding; báo cáo HTML đầy đủ (top issues, điểm rủi ro, cách tái hiện) | FR-MODEL-03, FR-RPT-01 | Xong (v1.12.0) trên branch `feat/sprint-10`, chờ review |
+| 10 | Điểm số CVSS v3.1 ước tính theo loại finding; báo cáo HTML đầy đủ (top issues, điểm rủi ro, cách tái hiện); Web UI hiện cùng điểm đó | FR-MODEL-03, FR-RPT-01, SRS FR-UI-12 | Xong (v1.12.0) trên branch `feat/sprint-10`, chờ review |
 
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
 
