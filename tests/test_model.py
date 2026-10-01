@@ -84,9 +84,13 @@ def test_catalog_entries_are_complete(finding_id):
     assert meta.references and all(ref.startswith("https://") for ref in meta.references)
     if finding_id in catalog.NOT_A_WEAKNESS:
         assert meta.cwe == ""
-        assert meta.cvss_vector == "" and meta.cvss_score is None
     else:
         assert re.fullmatch(r"CWE-\d+", meta.cwe)
+    # NO_CVSS is wider than NOT_A_WEAKNESS: it also covers early warnings, hints and every
+    # INFO finding, which have a CWE but no score (FR-MODEL-03, review of 2026-10-01).
+    if finding_id in catalog.NO_CVSS:
+        assert meta.cvss_vector == "" and meta.cvss_score is None
+    else:
         assert meta.cvss_vector, finding_id
         assert cvss.base_score(meta.cvss_vector) == meta.cvss_score
         assert 0.0 <= meta.cvss_score <= 10.0
@@ -101,7 +105,7 @@ def test_every_finding_of_a_real_scan_is_enriched(http_server):
         assert f.confidence in ("high", "medium", "low"), f.id
         assert f.references, f.id
         assert f.cwe or f.id in catalog.NOT_A_WEAKNESS, f.id
-        if f.id in catalog.NOT_A_WEAKNESS:
+        if f.id in catalog.NO_CVSS:
             assert f.cvss_vector == "" and f.cvss_score is None, f.id
         else:
             assert f.cvss_vector and f.cvss_score is not None, f.id

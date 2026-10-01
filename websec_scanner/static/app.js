@@ -166,7 +166,7 @@ function findingItem(f, context) {
   item.append(head);
   // "estimated": the score is generic for this type of finding, not an assessment of this
   // target (FR-MODEL-03), the same wording the console and HTML reports use.
-  const cvss = f.cvss_score == null ? "" : `CVSS 3.1: ${f.cvss_score} (estimated)`;
+  const cvss = f.cvss_score == null ? "" : `CVSS 3.1 base: ${f.cvss_score} (estimated)`;
   const classification = [context, f.cwe, f.confidence ? `confidence ${f.confidence}` : "", cvss, f.id];
   item.append(el("p", "finding-owasp", classification.filter(Boolean).join(" · ")));
   item.append(el("p", "finding-desc", f.description));

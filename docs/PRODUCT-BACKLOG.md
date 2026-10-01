@@ -267,7 +267,8 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [x] **FR-MODEL-02** (P0 · all) *(xong ở Sprint 3: `schema_version` 1.1, `docs/report.schema.json`, AT-30)* Thêm `schema_version`, `scanner_version`, `scan_id` (UUID), `rules_version` vào JSON; giữ tương thích ngược hoặc nâng version có changelog.
   AC: test schema (jsonschema) cho JSON output; AT-12 vẫn đạt.
 - [x] **FR-MODEL-03** (P1 · Pro) *(xong ở Sprint 10: CVSS v3.1 thật — quyết định chủ sản phẩm ngày 2026-10-01, không phải bảng severity thay thế. `websec_scanner/cvss.py` cài công thức base score chính thức, test đối chiếu ví dụ đã công bố (AT-61). `catalog._CVSS_VECTORS` gán 1 vector/loại cho 44/47 id (3 id trong `NOT_A_WEAKNESS` không có điểm). `schema_version` 1.6, SRS mục 6.1/6.2. Mọi nơi hiển thị ghi "(estimated)")* Điểm số: `cvss_vector`/`cvss_score` ước tính theo loại finding (ghi rõ "estimated") hoặc bảng severity có lý do; báo cáo giải thích cách tính.
-  `[CONFIRM]` Vector gán theo *loại* finding (không phải theo từng target/lần quét cụ thể) là suy luận hợp lý theo cách cộng đồng bảo mật thường chấm loại lỗi đó, cố tình tách biệt khỏi `Severity` nội bộ của tool (vốn còn tính thêm khả năng khai thác theo ngữ cảnh, ví dụ D3 cho CORS) nên hai thang có thể không khớp nhau. Cần đội bảo mật rà lại từng vector trước khi dùng làm số chính thức với khách hàng trả tiền.
+  **Review ngày 2026-10-01 đã thực hiện** trên bảng vector; kết quả áp dụng trong cùng Sprint 10: sửa kịch bản của HSTS/redirect/chứng chỉ/clickjacking/cookie, thêm `catalog.NO_CVSS`, cho check ghi đè vector theo instance, đổi CWE chứng chỉ sang CWE-324. Hai quyết định đã chốt: **C1** không gán CVSS cho finding severity INFO; **C2** giữ CWE-298 cho `TLS-CERT-NOT-YET-VALID`.
+  `[CONFIRM]` Còn lại: vector vẫn gán theo *loại* finding (không theo từng target), và vẫn là thang **tách biệt** khỏi `Severity` nội bộ nên hai thang có thể không khớp. Cần **người làm bảo mật** rà lại lần cuối trước khi giao số cho khách hàng trả tiền (review 2026-10-01 do chủ sản phẩm cung cấp, chưa phải security review nội bộ).
 - [ ] **FR-MODEL-04** (P1 · Business) Ánh xạ tuân thủ dạng dữ liệu: OWASP Top 10:2021, OWASP API Top 10 (2023), OWASP ASVS, PCI DSS, ISO 27001 Annex A, SOC 2 (CC), NIST 800-53 (tùy chọn).
   AC: mapping ở file rules, báo cáo có mục "Compliance coverage"; nêu rõ đây là ánh xạ tham khảo, không phải chứng nhận tuân thủ.
 - [ ] **FR-MODEL-05** (P1 · Pro) Trạng thái finding trong model (`open`, `fixed`, `accepted_risk`, `false_positive`) dùng cho baseline/suppression (E13, E14).
@@ -283,9 +284,8 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [x] **FR-RPT-02** (P0 · Pro) *(xong ở Sprint 5: `sarif.py`, `--sarif`, SRS FR-REPORT-06, AT-44; test kiểm tra cấu trúc bắt buộc, chưa validate bằng schema chính thức của OASIS — cần xác nhận license trước khi vendor file schema)* Xuất **SARIF 2.1.0** để hiển thị trong GitHub/GitLab code scanning.
   AC: file hợp lệ theo schema SARIF; rule id = `Finding.id`; `partialFingerprints` lấy từ `fingerprint` (FR-MODEL-01); tham số CLI `--sarif PATH`.
   Phụ thuộc: FR-MODEL-01, FR-AUTH-02.
-- [ ] **FR-RPT-10** (P1 · Pro) SARIF `properties.security-severity` lấy từ `cvss_score` (FR-MODEL-03) thay vì suy ra từ `Severity` nội bộ như hiện nay (SRS FR-REPORT-06). Tách riêng khỏi Sprint 10 vì đây là **đổi hành vi** của một định dạng CI đang dùng (GitHub code scanning sẽ đổi mức cảnh báo của các finding cũ).
-  AC: `security-severity` = `cvss_score` khi có; finding trong `NOT_A_WEAKNESS` giữ cách tính cũ hoặc bỏ trường; changelog ghi rõ mức cảnh báo trên GitHub sẽ thay đổi; cập nhật SRS FR-REPORT-06 và AT-44.
-  Phụ thuộc: **chỉ làm sau khi `[CONFIRM]` của FR-MODEL-03 được đội bảo mật duyệt** — nếu vector còn đổi thì mức cảnh báo CI sẽ đổi theo lần nữa.
+- [x] **FR-RPT-10** (P1 · Pro) *(xong ở Sprint 10 cùng đợt sửa bảng vector: `sarif._security_severity()`, SRS FR-REPORT-06 và AT-44. Điều kiện chờ đã thỏa — bảng vector được review ngày 2026-10-01 trước khi làm. Đã ghi changelog: GitHub code scanning sẽ xếp lại mức cảnh báo của finding cũ ở lần upload đầu tiên)* SARIF `properties.security-severity` lấy từ `cvss_score` (FR-MODEL-03) thay vì suy ra từ `Severity` nội bộ.
+  AC: `security-severity` = `cvss_score` khi có; finding trong `catalog.NO_CVSS` quay về bảng theo severity; changelog ghi rõ mức cảnh báo trên GitHub sẽ thay đổi; cập nhật SRS FR-REPORT-06 và AT-44.
 - [ ] **FR-RPT-03** (P1 · Pro) Xuất **CSV** và **JUnit XML** (cho CI).
 - [ ] **FR-RPT-04** (P1 · Business) Xuất **PDF** (từ HTML) với trang bìa, mục lục, logo tùy biến (white-label).
 - [ ] **FR-RPT-05** (P1 · Business) Hai mẫu báo cáo: **Executive summary** (không kỹ thuật) và **Technical report** (cho developer).
@@ -590,7 +590,7 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 7 | README tiếng Anh + hướng dẫn CI/CD và branch protection; Python ≥ 3.12; sửa lỗi từ code review (redact, TLS cũ, cookie, giới hạn đọc, Web UI 500, IPv6); refactor gate/severity | FR-DOC-01 (một phần), NFR-PORT-01, NFR-SEC-04, FR-TLS-01, FR-COOKIE-01, NFR-PERF-04, FR-UI-05 | Xong (v1.6.0) trên branch `feat/sprint-7`, chờ review; CI xanh trên GitHub |
 | 8 | Nhóm mục tiêu kiểm thử: chọn nhóm khi quét (CLI `--checks`, Web UI), kết quả và báo cáo HTML nhóm theo test target / OWASP Top 10 | SRS 4.11 (FR-GRP-01…03), FR-UI-07, FR-UI-10, FR-UI-11 (yêu cầu của chủ sản phẩm ngày 2026-09-30) | Xong (v1.7.0) trên branch `feat/sprint-8`, chờ review |
 | 9 | Đóng Phase A: Web UI bắt buộc token khi bind ra ngoài, phạm vi & giới hạn trong mọi báo cáo, kiểm kê license, image Docker chính thức, rà lại README | FR-WEB-02, FR-RPT-08, FR-SEC-10, FR-CI-04, FR-DOC-01 | Xong (v1.8.0) trên branch `feat/sprint-9`, chờ review |
-| 10 | Điểm số CVSS v3.1 ước tính theo loại finding; báo cáo HTML đầy đủ (top issues, điểm rủi ro, cách tái hiện); Web UI hiện cùng điểm đó | FR-MODEL-03, FR-RPT-01, SRS FR-UI-12 | Xong (v1.12.0) trên branch `feat/sprint-10`, chờ review |
+| 10 | Điểm số CVSS v3.1 ước tính theo loại finding; báo cáo HTML đầy đủ (top issues, điểm rủi ro, cách tái hiện); Web UI hiện cùng điểm đó; sửa bảng vector theo review ngày 2026-10-01 và đưa điểm vào SARIF | FR-MODEL-03, FR-RPT-01, FR-RPT-10, SRS FR-UI-12 | Xong (v1.13.0) trên branch `feat/sprint-10`, chờ review |
 
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
 
@@ -660,7 +660,7 @@ Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên l�
 | E0 | ☑ | – | – | FIX-01…11 xong (Sprint 2–3b) |
 | E1 | ☐ | ☐ | ☐ | DET-01, 02, 03 (P0) và DET-16 (P1) xong ở Sprint 4; còn DET-04 (P0) |
 | E2 | ☑ | ☐ | – | MODEL-01, 02 xong (Sprint 3); MODEL-03 (P1) xong (Sprint 10) |
-| E3 | ☑ | ☐ | ☐ | RPT-02, RPT-09 xong (Sprint 5); RPT-08 xong (Sprint 9); RPT-01 xong (Sprint 10) |
+| E3 | ☑ | ☐ | ☐ | RPT-02, RPT-09 xong (Sprint 5); RPT-08 xong (Sprint 9); RPT-01, RPT-10 xong (Sprint 10) |
 | E4 | ☐ | ☐ | – | CI-01, CI-03, CI-10 xong (Sprint 5); CI-04 xong (Sprint 9); còn CI-02 |
 | E5 | ☐ | ☐ | – | AUTHZ-03 phần D4 xong (Sprint 3b) |
 | E6 | ☐ | ☐ | ☐ | |

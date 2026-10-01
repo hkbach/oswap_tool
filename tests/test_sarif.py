@@ -71,6 +71,21 @@ def test_rule_severity_is_the_highest_seen_for_that_id():
     assert [r["level"] for r in run["results"]] == ["error", "warning"]
 
 
+def test_security_severity_is_the_estimated_cvss_score_when_the_finding_has_one():
+    # FR-RPT-10: GitHub code scanning ranks by security-severity, so it should read the CVSS
+    # base score (FR-MODEL-03) rather than a number derived from our own severity bucket.
+    base = {"title": "t", "owasp_category": "c", "cwe": "", "confidence": "high", "description": "d", "evidence": "",
+            "recommendation": "", "url": "", "references": [], "instance_key": "k"}  # fmt: skip
+    scored = {**base, "id": "TLS-CERT-EXPIRED", "severity": "CRITICAL", "fingerprint": "1" * 32,
+              "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N", "cvss_score": 6.8}  # fmt: skip
+    # Not a scorable weakness: falls back to the table derived from our severity.
+    unscored = {**base, "id": "CORS-WILDCARD", "severity": "INFO", "fingerprint": "2" * 32,
+                "cvss_vector": "", "cvss_score": None}  # fmt: skip
+    rules = sarif.to_sarif({**_empty_report(), "findings": [scored, unscored]})["runs"][0]["tool"]["driver"]["rules"]
+    by_id = {rule["id"]: rule["properties"]["security-severity"] for rule in rules}
+    assert by_id == {"TLS-CERT-EXPIRED": "6.8", "CORS-WILDCARD": "0.0"}
+
+
 def _empty_report():
     return {"target": "https://t/", "findings": [], "errors": [], "gate": {"incomplete": False}, "scan_id": "s"}
 

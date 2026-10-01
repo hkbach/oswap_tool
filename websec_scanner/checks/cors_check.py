@@ -8,6 +8,7 @@ when combined with credentialed requests).
 
 from __future__ import annotations
 
+from ..catalog import CVSS_CORS_REFLECT_WITHOUT_CREDENTIALS
 from ..http_utils import safe_get
 from ..models import Finding, Severity
 
@@ -66,6 +67,9 @@ def check_cors(session, url: str) -> list[Finding]:
                 recommendation="Validate Origin against an explicit allow-list server-side; never reflect it verbatim.",
                 url=url,
                 instance_key=url,
+                # Without credentials only unauthenticated responses are readable, so this
+                # instance is milder than the catalog's worst case (FR-MODEL-03).
+                cvss_vector="" if acac else CVSS_CORS_REFLECT_WITHOUT_CREDENTIALS,
             )
         )
     elif acao == "*":

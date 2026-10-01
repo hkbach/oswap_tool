@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.12.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.13.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.12.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.13.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -241,7 +241,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.12.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.13.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -546,6 +546,28 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 
 ## Changelog
 
+- **v1.13.0** (CVSS scores revised). A review of the per-type CVSS vectors on 2026-10-01
+  corrected several of them, so **scores change for findings you may already have on
+  record**:
+  - Missing HSTS and "HTTP not redirected to HTTPS" now share one vector (6.8): both
+    describe an on-path attacker stripping TLS after the victim navigates over `http://`.
+    Expired / not-yet-valid / untrusted certificates drop from 7.4 to 6.8, because the
+    victim still has to click past the browser warning.
+  - A cookie without `Secure` rises from 3.1 to 5.3; cookies that only lack `HttpOnly` or
+    `SameSite` stay at 3.1. Reflected-CORS without credentials drops from 6.5 to 4.3, and a
+    weak cipher that still encrypts (RC4/3DES/MD5) scores 5.9 while NULL/EXPORT stays 7.4.
+    These are per-finding scores now: the catalog holds the worst case and each check lowers
+    it when the evidence is milder.
+  - **Findings that are not a scorable weakness no longer carry a score at all**: early
+    warnings (certificate expiring soon), hints (robots.txt / sitemap.xml) and everything
+    whose severity is INFO. Their `cvss_vector` is `""` and `cvss_score` is `null`.
+  - **SARIF `security-severity` is now the CVSS score** instead of a number derived from our
+    own severity. **GitHub code scanning will re-rank existing alerts** the first time you
+    upload a report from this version.
+  - Certificate findings: `TLS-CERT-EXPIRED` and `TLS-CERT-EXPIRING-SOON` are now CWE-324
+    (key used past its expiry) rather than the client-side CWE-298.
+  - Reports that carry scores now explain, in the console and HTML footer, that CVSS and the
+    report's own severity are two different scales.
 - **v1.12.0.** Changes to note:
   - **Every finding carries an estimated CVSS v3.1 score** (`cvss_vector`/`cvss_score`,
     schema_version 1.6, fields added only): a generic, per-finding-type estimate (not an

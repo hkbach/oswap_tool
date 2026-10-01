@@ -69,12 +69,12 @@ def test_console_report_shows_the_score_as_estimated(scanned_report):
     scored = [f for f in scanned_report["findings"] if f["cvss_vector"]]
     assert scored, "the mock server should trigger at least one scored finding"
     for f in scored:
-        assert f"CVSS 3.1: {f['cvss_score']} (estimated)" in printed, f["id"]
+        assert f"CVSS 3.1 base: {f['cvss_score']} (estimated)" in printed, f["id"]
 
 
 def test_html_report_shows_the_score_and_vector_as_estimated(scanned_report):
     html = render_html(scanned_report)
-    assert "CVSS 3.1 (estimated)" in html
+    assert "CVSS 3.1 base (estimated)" in html
     for f in scanned_report["findings"]:
         if f["cvss_vector"]:
             assert f["cvss_vector"] in html, f["id"]

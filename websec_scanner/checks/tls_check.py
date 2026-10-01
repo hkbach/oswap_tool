@@ -28,12 +28,27 @@ from dataclasses import replace
 
 from cryptography import x509
 
+from ..catalog import CVSS_TLS_CIPHER_BROKEN_BUT_ENCRYPTING
 from ..http_utils import url_host
 from ..models import Finding, Severity
 from ..rule_loader import is_interceptor_issuer
 
 _WEAK_PROTOCOLS = {"SSLv2", "SSLv3", "TLSv1", "TLSv1.1"}
+_WEAK_CIPHERS = ("RC4", "3DES", "MD5", "NULL", "EXPORT")
+# OpenSSL spells export suites "EXP-RC4-MD5" / "EXP1024-DES-CBC-SHA"; IANA names carry "EXPORT".
+_NO_REAL_ENCRYPTION = ("NULL", "EXPORT", "EXP-", "EXP1024")
 _CERT_EXPIRY_WARN_DAYS = 30
+
+
+def cipher_cvss_vector(cipher_name: str) -> str:
+    """Per-instance CVSS vector for a weak cipher (FR-MODEL-03).
+
+    Empty means "keep the catalog's worst case", which is NULL/EXPORT: no real encryption
+    left. RC4/3DES/MD5 are broken but still encrypt, so they score lower.
+    """
+    if any(none in cipher_name for none in _NO_REAL_ENCRYPTION):
+        return ""
+    return CVSS_TLS_CIPHER_BROKEN_BUT_ENCRYPTING
 
 
 def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int):
@@ -115,7 +130,7 @@ def check_tls(
             )
         )
 
-    if cipher and cipher[0] and any(weak in cipher[0] for weak in ("RC4", "3DES", "MD5", "NULL", "EXPORT")):
+    if cipher and cipher[0] and any(weak in cipher[0] for weak in _WEAK_CIPHERS):
         findings.append(
             Finding(
                 id="TLS-WEAK-CIPHER",
@@ -126,6 +141,7 @@ def check_tls(
                 recommendation="Restrict the server's cipher list to modern AEAD suites (e.g. AES-GCM, ChaCha20).",
                 url=url,
                 instance_key=f"{hostname}:{port}",
+                cvss_vector=cipher_cvss_vector(cipher[0]),
             )
         )
 
