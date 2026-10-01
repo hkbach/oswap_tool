@@ -318,16 +318,16 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-AUTHZ-01** (P0 · Business) **Xác minh sở hữu domain** bằng ít nhất 2 cách: bản ghi DNS TXT (`_scanner-verify.<domain>=<token>`) và file `/.well-known/<tool>-verify.txt`; tùy chọn meta tag.
   AC: token ngẫu nhiên gắn với org/target; xác minh thất bại → không gửi request quét; có thể xác minh lại định kỳ; trạng thái lưu cùng target.
 - [ ] **FR-AUTHZ-02** (P0 · Business) Chế độ **consent theo mức**: config (non-intrusive) (mặc định) / crawl / active. Mỗi mức hiển thị banner riêng và yêu cầu xác nhận riêng, ghi lại ai xác nhận, lúc nào, cho mức nào.
-- [ ] **FR-AUTHZ-03** (P0 · all) **Scope guard**: chỉ gửi request tới host/port trong phạm vi khai báo; không theo redirect sang host ngoài phạm vi; cảnh báo khi redirect đi ra ngoài.
+- [x] **FR-AUTHZ-03** (P0 · all) **Scope guard**: chỉ gửi request tới host/port trong phạm vi khai báo; không theo redirect sang host ngoài phạm vi; cảnh báo khi redirect đi ra ngoài.
   AC: mock server redirect sang host khác → tool không gửi request tới host đó, ghi vào `errors`/`notes`.
-  Phần tối thiểu cho redirect (**D4**: cùng host hoặc chỉ khác tiền tố `www.`) **đã xong ở Sprint 3b** (`ScopedSession`, SRS NFR-SEC-05, AT-34). Còn phạm vi khai báo nhiều host và cảnh báo trong UI.
+  Phần tối thiểu cho redirect (**D4**: cùng host hoặc chỉ khác tiền tố `www.`) **đã xong ở Sprint 3b** (`ScopedSession`, SRS NFR-SEC-05, AT-34); phạm vi khai báo nhiều host (`--scope-host`, áp cho cả hai đường kiểm scope) **xong ở Sprint 11** (SRS FR-SCOPE-01, AT-66). Cảnh báo redirect ra ngoài phạm vi đã có sẵn trong `errors` và hiển thị ở cả Web UI lẫn báo cáo HTML.
 - [ ] **FR-AUTHZ-04** (P0 · Business – bắt buộc khi có dịch vụ dùng chung) **Chống SSRF cho dịch vụ**: từ chối target phân giải ra IP loopback, private (RFC1918), link-local (kể cả `169.254.169.254`), multicast, IPv6 tương đương; kiểm tra lại sau mỗi redirect và **ghim IP đã phân giải** (chống DNS rebinding).
   AC: test với `localhost`, `127.0.0.1`, `10.0.0.1`, `169.254.169.254`, hostname trỏ về IP private → đều bị từ chối. Cho phép cấu hình ngoại lệ chỉ cho bản on-premise nội bộ, với cờ tường minh.
-- [ ] **FR-AUTHZ-05** (P0 · all) **Giới hạn tốc độ** toàn cục và theo host: `--rate-limit` (request/giây), `--max-requests`, `--max-duration`; tự giảm tốc khi gặp 429/503.
-- [ ] **FR-AUTHZ-06** (P1 · Pro) **Exclusion**: danh sách path/regex/host bị loại khỏi quét (ví dụ `/logout`, `/delete`, trang thanh toán).
+- [x] **FR-AUTHZ-05** (P0 · all) *(xong ở Sprint 11: `limits.ScanLimiter`, SRS mục 4.12 FR-LIM-01…06, AT-63…65. Mặc định **không giới hạn** — quyết định chủ sản phẩm 2026-10-01, giữ nguyên hành vi cũ và không làm chậm CI. Áp ở tầng `_TrustAdapter.send` nên tính cả hop redirect và retry của urllib3, và truyền tường minh vào `check_tls` vì nhóm TLS tự mở socket. JSON thêm khối `limits`, `schema_version` 1.7)* **Giới hạn tốc độ** toàn cục và theo host: `--rate-limit` (request/giây), `--max-requests`, `--max-duration`; tự giảm tốc khi gặp 429/503.
+- [x] **FR-AUTHZ-06** (P1 · Pro) *(xong ở Sprint 11: `rules/exclusions.json` (dữ liệu khai báo, có trong `rules_version`), `--exclude`, `--exclude-host`, `--no-default-excludes`; chặn cả redirect dẫn vào path bị loại; SRS FR-EXCL-01, AT-66)* **Exclusion**: danh sách path/regex/host bị loại khỏi quét (ví dụ `/logout`, `/delete`, trang thanh toán).
 - [ ] **FR-AUTHZ-07** (P1 · Business) **Khung giờ được phép quét** (scan window) và nút **dừng khẩn cấp** (kill switch) cho từng target/org.
 - [ ] **FR-AUTHZ-08** (P1 · Pro) **Safe mode** mặc định cho môi trường production: chỉ GET/HEAD/OPTIONS, không submit form, không gọi endpoint có dấu hiệu thay đổi dữ liệu.
-- [ ] **FR-AUTHZ-09** (P1 · all) User-Agent nhận diện rõ scanner + header tùy chọn `X-Scanner-Scan-Id` để bên đích lọc log/WAF (giữ NFR-SEC-03).
+- [x] **FR-AUTHZ-09** (P1 · all) *(xong ở Sprint 11: `--scan-id-header`, mặc định tắt; SRS FR-SCANID-01, AT-66)* User-Agent nhận diện rõ scanner + header tùy chọn `X-Scanner-Scan-Id` để bên đích lọc log/WAF (giữ NFR-SEC-03).
 - [ ] **FR-AUTHZ-10** (P0 · Business) Điều khoản sử dụng (ToS) và chính sách sử dụng chấp nhận được (AUP) phải được người dùng chấp nhận trước lần quét đầu; backend ghi nhận bằng chứng chấp nhận (ai, lúc nào, phiên bản điều khoản) và cung cấp qua API; việc hiển thị do UI hiện có. `[CONFIRM]` nội dung với pháp lý.
 
 ### E6. Crawler và quét nhiều trang (kể cả SPA)
@@ -513,7 +513,7 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 - [x] **FR-QA-02** (P0 · all) *(test không-lộ-secret có từ Sprint 3; golden file JSON/SARIF/HTML ở Sprint 6: `tests/golden/`, SRS AT-48)* Test **golden file** cho JSON/SARIF/HTML (snapshot) và test không-lộ-secret (FR-AUTH-02).
 - [ ] **FR-QA-03** (P1 · Pro) **Benchmark độ chính xác** trên ứng dụng cố ý dễ tổn thương chạy **local/nội bộ** (ví dụ OWASP Juice Shop, DVWA, crAPI, VAmPI – kiểm tra license và điều khoản từng dự án): đo precision/recall theo từng loại lỗi, lưu kết quả theo phiên bản scanner để phát hiện hồi quy.
 - [ ] **FR-QA-04** (P1 · Pro) **Corpus false positive**: mỗi false positive khách báo → thêm test hồi quy; mục tiêu độ chính xác đặt sau khi có số đo baseline `[CONFIRM]` (không hứa con số khi chưa đo).
-- [ ] **FR-QA-05** (P1 · Pro) Kiểm thử tải/an toàn: chứng minh scanner tuân thủ giới hạn tốc độ và không gây tải bất thường lên mock server.
+- [x] **FR-QA-05** (P1 · Pro) *(xong ở Sprint 11: đo trên mock server theo thời điểm request đến nơi — tốc độ trung bình và không cửa sổ 1 giây nào vượt mức, cho cả nhóm tuần tự và nhóm chạy 5 luồng; AT-63)* Kiểm thử tải/an toàn: chứng minh scanner tuân thủ giới hạn tốc độ và không gây tải bất thường lên mock server.
 - [ ] **FR-QA-06** (P1 · Business) Kiểm thử phân quyền/đa tenant tự động (không đọc chéo org, chống IDOR trên chính API của nền tảng).
 - [ ] **FR-QA-07** (P0 · all) *(cấu hình xong ở Sprint 3; workflow `.github/workflows/ci.yml` ở Sprint 6, SRS AT-47. CI xanh trên GitHub ngày 2026-09-30. Chưa tick: còn chờ admin bật branch protection cho `main`, xem README "Branch protection for main")* CI cho repo: `ruff check` + `ruff format --check`, `pytest` (offline), quét phụ thuộc (ví dụ `pip-audit`), quét secret; ma trận Python 3.9 và bản mới nhất; chặn merge khi fail. Type-check (mypy/pyright) và build image thêm sau.
   AC: cấu hình ruff trong `pyproject.toml`; workflow CI chạy được trên nhánh mẫu; README ghi lệnh chạy cục bộ.
@@ -593,6 +593,7 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 8 | Nhóm mục tiêu kiểm thử: chọn nhóm khi quét (CLI `--checks`, Web UI), kết quả và báo cáo HTML nhóm theo test target / OWASP Top 10 | SRS 4.11 (FR-GRP-01…03), FR-UI-07, FR-UI-10, FR-UI-11 (yêu cầu của chủ sản phẩm ngày 2026-09-30) | Xong (v1.7.0) trên branch `feat/sprint-8`, chờ review |
 | 9 | Đóng Phase A: Web UI bắt buộc token khi bind ra ngoài, phạm vi & giới hạn trong mọi báo cáo, kiểm kê license, image Docker chính thức, rà lại README | FR-WEB-02, FR-RPT-08, FR-SEC-10, FR-CI-04, FR-DOC-01 | Xong (v1.8.0) trên branch `feat/sprint-9`, chờ review |
 | 10 | Điểm số CVSS v3.1 ước tính theo loại finding; báo cáo HTML đầy đủ (top issues, điểm rủi ro, cách tái hiện); Web UI hiện cùng điểm đó; sửa bảng vector theo review ngày 2026-10-01 và đưa điểm vào SARIF | FR-MODEL-03, FR-RPT-01, FR-RPT-10, FR-DET-17, SRS FR-UI-12 | Xong (v1.13.0) trên branch `feat/sprint-10`, chờ review |
+| 11 | Kiểm soát quét an toàn: giới hạn tốc độ/số request/thời lượng, tự giảm tốc khi target đẩy lùi, phạm vi khai báo nhiều host, loại trừ URL, header scan id | FR-AUTHZ-05, FR-AUTHZ-03, FR-AUTHZ-06, FR-AUTHZ-09, FR-QA-05 | Xong (v1.14.0) trên branch `feat/sprint-11`, chờ review |
 
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
 
@@ -664,7 +665,7 @@ Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên l�
 | E2 | ☑ | ☐ | – | MODEL-01, 02 xong (Sprint 3); MODEL-03 (P1) xong (Sprint 10) |
 | E3 | ☑ | ☐ | ☐ | RPT-02, RPT-09 xong (Sprint 5); RPT-08 xong (Sprint 9); RPT-01, RPT-10 xong (Sprint 10) |
 | E4 | ☐ | ☐ | – | CI-01, CI-03, CI-10 xong (Sprint 5); CI-04 xong (Sprint 9); còn CI-02 |
-| E5 | ☐ | ☐ | – | AUTHZ-03 phần D4 xong (Sprint 3b) |
+| E5 | ☐ | ☐ | – | AUTHZ-03 (D4 ở Sprint 3b, phần còn lại ở Sprint 11), AUTHZ-05, AUTHZ-06, AUTHZ-09 xong (Sprint 11); còn AUTHZ-01, 02, 04, 07, 08, 10 |
 | E6 | ☐ | ☐ | ☐ | |
 | E7 | ☐ | ☐ | ☐ | |
 | E8 | ☐ | ☐ | ☐ | AUTH-02 xong (Sprint 3) |

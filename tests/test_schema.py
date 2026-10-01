@@ -27,7 +27,7 @@ def validator():
 
 
 def test_schema_version_matches_the_schema_file(validator):
-    assert validator.schema["properties"]["schema_version"]["const"] == SCHEMA_VERSION == "1.6"
+    assert validator.schema["properties"]["schema_version"]["const"] == SCHEMA_VERSION == "1.7"
 
 
 def test_cli_json_report_matches_schema(validator, http_server, tmp_path):

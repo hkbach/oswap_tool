@@ -55,7 +55,9 @@ def build_report(result: ScanResult, *, show_secrets: bool = False, fail_on: str
     report["gate"] = {
         "fail_on": fail_on,
         "failed": gate_failed(report, fail_on),
-        "incomplete": not result.baseline_fetched,  # the home page could not be fetched
+        # The home page could not be fetched, or a traffic limit stopped the scan part way
+        # through (FR-AUTHZ-05): either way the findings are not the whole picture.
+        "incomplete": not result.baseline_fetched or result.limits.get("stopped_by") is not None,
     }
     if show_secrets:
         return report

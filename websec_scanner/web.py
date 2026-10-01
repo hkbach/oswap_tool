@@ -30,7 +30,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from . import catalog
-from .cli import _ca_bundle, _normalize_target, run_scan
+from .cli import _ca_bundle, _normalize_target, _positive_float, _positive_int, run_scan
 from .html_report import render_html
 from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, gate_message, group_findings, owasp_groups
 from .redact import redact
@@ -234,6 +234,9 @@ class ScanUIHandler(BaseHTTPRequestHandler):
                 target,
                 timeout=self.server.scan_timeout,
                 workers=self.server.scan_workers,
+                rate_limit=self.server.scan_rate_limit,
+                max_requests=self.server.scan_max_requests,
+                max_duration=self.server.scan_max_duration,
                 ca_bundle=self.server.scan_ca_bundle,
                 groups=groups,
             )
@@ -286,6 +289,9 @@ def build_server(
     ca_bundle: str | None = None,
     fail_on: str = DEFAULT_FAIL_ON,
     access_token: str | None = None,
+    rate_limit: float | None = None,
+    max_requests: int | None = None,
+    max_duration: float | None = None,
 ) -> ThreadingHTTPServer:
     """``access_token``, if set, is required (header/query/cookie) on every request (FR-WEB-02).
 
@@ -300,6 +306,11 @@ def build_server(
     server.scan_workers = workers
     server.scan_ca_bundle = ca_bundle
     server.scan_fail_on = fail_on
+    # Scan limits are set when the server starts, not per request: a browser user must not be
+    # able to lift a limit the operator chose (FR-AUTHZ-05).
+    server.scan_rate_limit = rate_limit
+    server.scan_max_requests = max_requests
+    server.scan_max_duration = max_duration
     server.reports = OrderedDict()
     server.reports_lock = threading.Lock()
     return server
@@ -314,6 +325,10 @@ def main(argv=None) -> int:
     parser.add_argument("--port", type=int, default=8765, help="Port to listen on (default: 8765)")
     parser.add_argument("--timeout", type=int, default=10, help="Per-request timeout in seconds (default: 10)")
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
+    limits = parser.add_argument_group("scan limits (FR-AUTHZ-05; apply to every scan this server runs)")
+    limits.add_argument("--rate-limit", type=_positive_float, metavar="N", help="At most N requests per second")
+    limits.add_argument("--max-requests", type=_positive_int, metavar="N", help="Stop a scan after N requests")
+    limits.add_argument("--max-duration", type=_positive_float, metavar="SECONDS", help="Stop a scan after SECONDS")
     parser.add_argument(
         "--fail-on",
         choices=FAIL_ON_CHOICES,
@@ -347,7 +362,18 @@ def main(argv=None) -> int:
         )
     access_token = (args.token or secrets.token_urlsafe(32)) if not _is_loopback(args.host) else None
 
-    server = build_server(args.host, args.port, args.timeout, args.workers, args.ca_bundle, args.fail_on, access_token)
+    server = build_server(
+        host=args.host,
+        port=args.port,
+        timeout=args.timeout,
+        workers=args.workers,
+        ca_bundle=args.ca_bundle,
+        fail_on=args.fail_on,
+        access_token=access_token,
+        rate_limit=args.rate_limit,
+        max_requests=args.max_requests,
+        max_duration=args.max_duration,
+    )
     if not server.loopback_only:
         print(
             f"WARNING: listening on {args.host}; an access token is required on every request "

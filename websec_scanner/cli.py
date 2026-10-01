@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import re
 import ssl
 import sys
 from collections.abc import Iterable
@@ -25,10 +26,12 @@ from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
 from .html_report import render_html
 from .http_utils import build_session
+from .limits import ScanLimiter, ScanLimitReached
 from .models import ScanResult
 from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, exit_code
 from .redact import redact
 from .report import print_report, write_json
+from .rule_loader import load_exclusions
 from .sarif import to_sarif
 from .soft404 import build_profile
 
@@ -87,8 +90,41 @@ def _run_check(result: ScanResult, name: str, check, *args, **kwargs) -> None:
     try:
         for f in check(*args, **kwargs):
             result.add(replace(enrich(f, result.target), check=name))
+    except ScanLimitReached:
+        raise  # a reached limit stops the whole scan, it is not a broken check
     except Exception as exc:  # one broken check must not abort the scan (FR-REPORT-05)
         result.errors.append(f"Check '{name}' failed: {exc!r}")
+
+
+def _positive_float(value: str) -> float:
+    """argparse type for --rate-limit / --max-duration."""
+    try:
+        number = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a number") from exc
+    if number <= 0:
+        raise argparse.ArgumentTypeError(f"must be greater than 0, got {number:g}")
+    return number
+
+
+def _positive_int(value: str) -> int:
+    """argparse type for --max-requests."""
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a whole number") from exc
+    if number <= 0:
+        raise argparse.ArgumentTypeError(f"must be greater than 0, got {number}")
+    return number
+
+
+def _regex(value: str) -> str:
+    """argparse type for --exclude: validate here so a typo fails before any request."""
+    try:
+        re.compile(value)
+    except re.error as exc:
+        raise argparse.ArgumentTypeError(f"invalid regular expression {value!r}: {exc}") from exc
+    return value
 
 
 def _ca_bundle(value: str) -> str:
@@ -125,6 +161,14 @@ def run_scan(
     workers: int = 5,
     ca_bundle: str | None = None,
     groups: Iterable[str] | None = None,
+    rate_limit: float | None = None,
+    max_requests: int | None = None,
+    max_duration: float | None = None,
+    scope_hosts: Iterable[str] = (),
+    exclude: Iterable[str] = (),
+    exclude_hosts: Iterable[str] = (),
+    default_excludes: bool = True,
+    send_scan_id: bool = False,
 ) -> ScanResult:
     """Scan ``base_url``. ``groups`` selects check groups (catalog.GROUP_IDS); None means all.
 
@@ -136,7 +180,19 @@ def run_scan(
 
     result = ScanResult(target=base_url, started_at=_utc_timestamp(), scan_groups=selected)
     want = set(selected).__contains__
-    session = build_session(timeout=timeout, scope_host=hostname, ca_bundle=ca_bundle)
+    limiter = ScanLimiter(rate_limit=rate_limit, max_requests=max_requests, max_duration=max_duration)
+    exclusions = list(load_exclusions().patterns) if default_excludes else []
+    exclusions += [re.compile(pattern, re.IGNORECASE) for pattern in exclude]
+    session = build_session(
+        timeout=timeout,
+        scope_host=hostname,
+        ca_bundle=ca_bundle,
+        limiter=limiter,
+        allowed_hosts=scope_hosts,
+        exclusions=exclusions,
+        excluded_hosts=exclude_hosts,
+        scan_id=result.scan_id if send_scan_id else None,
+    )
 
     def run_tls(url: str) -> None:
         tls_host, tls_port = _host_port(url)
@@ -149,89 +205,102 @@ def run_scan(
             timeout=timeout,
             warnings=result.errors,
             trust=session.trust_context,  # same trust decision as the HTTP requests (FR-CI-10)
+            limiter=limiter,  # TLS opens its own sockets, so it needs the limiter explicitly
         )
 
-    # 1. Baseline fetch of the target page
-    resp, err, tls_error_url = _fetch_baseline(session, base_url)
-    if err or resp is None:
-        result.errors.append(f"Could not fetch {base_url}: {err}")
-        # An expired/untrusted certificate makes the verifying baseline GET fail;
-        # the TLS check opens its own connections and is exactly what explains it.
-        if tls_error_url and want("tls"):
-            run_tls(tls_error_url)
-        if tls_error_url and want("https-redirect"):
-            if parsed.scheme == "http" and tls_error_url.lower().startswith("https://"):
-                # We were redirected to HTTPS; the certificate problem is the TLS check's finding (FIX-09).
-                _run_check(result, "http-to-https-redirect", lambda: [])
+    try:
+        # 1. Baseline fetch of the target page
+        resp, err, tls_error_url = _fetch_baseline(session, base_url)
+        if err or resp is None:
+            result.errors.append(f"Could not fetch {base_url}: {err}")
+            # An expired/untrusted certificate makes the verifying baseline GET fail;
+            # the TLS check opens its own connections and is exactly what explains it.
+            if tls_error_url and want("tls"):
+                run_tls(tls_error_url)
+            if tls_error_url and want("https-redirect"):
+                if parsed.scheme == "http" and tls_error_url.lower().startswith("https://"):
+                    # We were redirected to HTTPS; the certificate problem is the TLS check's finding (FIX-09).
+                    _run_check(result, "http-to-https-redirect", lambda: [])
+            return result
+
+        result.baseline_fetched = True
+        # FR-FIX-10: header checks judge the page the user actually gets (the final response),
+        # and HSTS is only meaningful when that response came over HTTPS.
+        result.final_url = resp.url
+        result.redirect_chain = [{"url": hop.url, "status": hop.status_code} for hop in resp.history]
+        final_is_https = resp.url.lower().startswith("https://")
+        if want("headers"):
+            _run_check(
+                result,
+                "security-headers",
+                headers.check_security_headers,
+                base_url,
+                dict(resp.headers),
+                is_https=final_is_https,
+            )
+            if final_is_https and (urlparse(resp.url).hostname or "").lower() != hostname.lower():
+                _run_check(result, "hsts-start-host", headers.check_start_host_hsts, session, base_url, resp.url)
+
+        if want("cookies"):
+            # requests folds repeated Set-Cookie headers into one string, so read them from
+            # the raw urllib3 headers — of the final response and of every redirect hop.
+            set_cookie_headers = [raw for r in (*resp.history, resp) for raw in r.raw.headers.getlist("Set-Cookie")]
+            _run_check(result, "cookies", cookies.check_cookies, base_url, set_cookie_headers)
+
+        # FIX-09: TLS runs on the first HTTPS URL of the baseline chain (the target itself,
+        # or where an http:// target redirected to), and the redirect check always runs.
+        chain = [r.url for r in (*resp.history, resp)]
+        https_url = next((url for url in chain if url.lower().startswith("https://")), None)
+        if https_url and want("tls"):
+            run_tls(https_url)
+        if want("https-redirect"):
+            if parsed.scheme == "https":
+                _run_check(
+                    result, "http-to-https-redirect", redirect_check.check_http_to_https_redirect, session, hostname
+                )
+            elif not resp.is_redirect:  # a redirect stopped by the scope guard gives no verdict
+                _run_check(result, "http-to-https-redirect", redirect_check.evaluate_redirect_chain, base_url, chain)
+
+        if want("cors"):
+            _run_check(result, "cors", cors_check.check_cors, session, base_url)
+        if want("exposed-files") or want("directory-listing"):
+            # One soft-404 profile (2 random probes) shared by both path-based checks (FR-DET-02).
+            profile = build_profile(session, base_url)
+            if want("exposed-files"):
+                _run_check(
+                    result,
+                    "sensitive-paths",
+                    exposure.check_sensitive_paths,
+                    session,
+                    base_url,
+                    max_workers=workers,
+                    soft404_profile=profile,
+                )
+            if want("directory-listing"):
+                _run_check(
+                    result,
+                    "directory-listing",
+                    exposure.check_directory_listing,
+                    session,
+                    base_url,
+                    soft404_profile=profile,
+                )
+        if want("robots-sitemap"):
+            _run_check(result, "robots-sitemap", exposure.check_robots_and_sitemap, session, base_url)
+
+    except ScanLimitReached as exc:
+        # A cap was hit: stop here rather than let every remaining check hit it too.
+        result.errors.append(f"Scan stopped early: {exc}")
+    finally:
         result.errors.extend(session.blocked_redirects.values())
+        if session.excluded_urls:
+            result.errors.append(
+                f"{len(session.excluded_urls)} URL(s) were not requested because they are excluded "
+                f"(FR-AUTHZ-06): {', '.join(sorted(session.excluded_urls)[:5])}"
+                + (" ..." if len(session.excluded_urls) > 5 else "")
+            )
+        result.limits = limiter.snapshot()
         result.finished_at = _utc_timestamp()
-        return result
-
-    result.baseline_fetched = True
-    # FR-FIX-10: header checks judge the page the user actually gets (the final response),
-    # and HSTS is only meaningful when that response came over HTTPS.
-    result.final_url = resp.url
-    result.redirect_chain = [{"url": hop.url, "status": hop.status_code} for hop in resp.history]
-    final_is_https = resp.url.lower().startswith("https://")
-    if want("headers"):
-        _run_check(
-            result,
-            "security-headers",
-            headers.check_security_headers,
-            base_url,
-            dict(resp.headers),
-            is_https=final_is_https,
-        )
-        if final_is_https and (urlparse(resp.url).hostname or "").lower() != hostname.lower():
-            _run_check(result, "hsts-start-host", headers.check_start_host_hsts, session, base_url, resp.url)
-
-    if want("cookies"):
-        # requests folds repeated Set-Cookie headers into one string, so read them from
-        # the raw urllib3 headers — of the final response and of every redirect hop.
-        set_cookie_headers = [raw for r in (*resp.history, resp) for raw in r.raw.headers.getlist("Set-Cookie")]
-        _run_check(result, "cookies", cookies.check_cookies, base_url, set_cookie_headers)
-
-    # FIX-09: TLS runs on the first HTTPS URL of the baseline chain (the target itself,
-    # or where an http:// target redirected to), and the redirect check always runs.
-    chain = [r.url for r in (*resp.history, resp)]
-    https_url = next((url for url in chain if url.lower().startswith("https://")), None)
-    if https_url and want("tls"):
-        run_tls(https_url)
-    if want("https-redirect"):
-        if parsed.scheme == "https":
-            _run_check(result, "http-to-https-redirect", redirect_check.check_http_to_https_redirect, session, hostname)
-        elif not resp.is_redirect:  # a redirect stopped by the scope guard gives no verdict
-            _run_check(result, "http-to-https-redirect", redirect_check.evaluate_redirect_chain, base_url, chain)
-
-    if want("cors"):
-        _run_check(result, "cors", cors_check.check_cors, session, base_url)
-    if want("exposed-files") or want("directory-listing"):
-        # One soft-404 profile (2 random probes) shared by both path-based checks (FR-DET-02).
-        profile = build_profile(session, base_url)
-        if want("exposed-files"):
-            _run_check(
-                result,
-                "sensitive-paths",
-                exposure.check_sensitive_paths,
-                session,
-                base_url,
-                max_workers=workers,
-                soft404_profile=profile,
-            )
-        if want("directory-listing"):
-            _run_check(
-                result,
-                "directory-listing",
-                exposure.check_directory_listing,
-                session,
-                base_url,
-                soft404_profile=profile,
-            )
-    if want("robots-sitemap"):
-        _run_check(result, "robots-sitemap", exposure.check_robots_and_sitemap, session, base_url)
-
-    result.errors.extend(session.blocked_redirects.values())
-    result.finished_at = _utc_timestamp()
     return result
 
 
@@ -247,6 +316,43 @@ def main(argv=None) -> int:
     parser.add_argument("--timeout", type=int, default=10, help="Per-request timeout in seconds (default: 10)")
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors in CLI output")
+    limits = parser.add_argument_group("scan limits (FR-AUTHZ-05; no limit unless set)")
+    limits.add_argument("--rate-limit", type=_positive_float, metavar="N", help="Send at most N requests per second")
+    limits.add_argument("--max-requests", type=_positive_int, metavar="N", help="Stop the scan after N requests")
+    limits.add_argument("--max-duration", type=_positive_float, metavar="SECONDS", help="Stop the scan after SECONDS")
+    scope = parser.add_argument_group("scope and exclusions (FR-AUTHZ-03, FR-AUTHZ-06)")
+    scope.add_argument(
+        "--scope-host",
+        action="append",
+        default=[],
+        metavar="HOST",
+        help="Additional host that counts as in scope (repeatable)",
+    )
+    scope.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        type=_regex,
+        metavar="REGEX",
+        help="Never request URLs whose path matches REGEX (repeatable)",
+    )
+    scope.add_argument(
+        "--exclude-host",
+        action="append",
+        default=[],
+        metavar="HOST",
+        help="Never request this host (repeatable)",
+    )
+    scope.add_argument(
+        "--no-default-excludes",
+        action="store_true",
+        help="Drop the built-in exclusions (logout, delete, checkout; see rules/exclusions.json)",
+    )
+    scope.add_argument(
+        "--scan-id-header",
+        action="store_true",
+        help="Send X-Scanner-Scan-Id so the target can filter this scan out of its logs",
+    )
     parser.add_argument(
         "--fail-on",
         choices=FAIL_ON_CHOICES,
@@ -296,7 +402,21 @@ def main(argv=None) -> int:
     target = _normalize_target(args.target)
     print(f"Scanning {target if args.show_secrets else redact(target)} ...\n")
 
-    result = run_scan(target, timeout=args.timeout, workers=args.workers, ca_bundle=args.ca_bundle, groups=args.checks)
+    result = run_scan(
+        target,
+        timeout=args.timeout,
+        workers=args.workers,
+        ca_bundle=args.ca_bundle,
+        groups=args.checks,
+        rate_limit=args.rate_limit,
+        max_requests=args.max_requests,
+        max_duration=args.max_duration,
+        scope_hosts=args.scope_host,
+        exclude=args.exclude,
+        exclude_hosts=args.exclude_host,
+        default_excludes=not args.no_default_excludes,
+        send_scan_id=args.scan_id_header,
+    )
     if args.show_secrets:
         print(
             "WARNING: --show-secrets is set: cookie values and sensitive URL parameters are NOT redacted. "

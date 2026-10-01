@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.15 |
-| **Ngày** | 2026-10-01 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.13: 2026-09-30 · v1.14–v1.15: 2026-10-01) |
+| **Phiên bản tài liệu** | 1.16 |
+| **Ngày** | 2026-10-01 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.13: 2026-09-30 · v1.14–v1.16: 2026-10-01) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `websec_scanner` `v1.13.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, Sprint 10). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `websec_scanner` `v1.14.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, Sprint 11). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -38,6 +38,7 @@
 | 1.13 | 2026-09-30 | Theo code v1.11.0: bỏ tên công ty khỏi toàn bộ source code theo yêu cầu chủ sản phẩm (NFR-SEC-03: `User-Agent` không còn tiền tố tên công ty, chỉ còn `WebSec-Scanner/<version>`; các mục tài liệu khác nhắc tên công ty được viết lại theo nghĩa trung tính, không đổi ý; `docs/PRODUCT-BACKLOG.md`, `docs/srs-feedback.md`). Không đổi hành vi nào khác. |
 | 1.14 | 2026-10-01 | Theo code v1.12.0 (Sprint 10): mỗi finding có `cvss_vector`/`cvss_score` CVSS v3.1 ước tính theo loại (FR-MODEL-03, `websec_scanner/cvss.py`, `catalog._CVSS_VECTORS`, mục 6.1); `schema_version` 1.6 (mục 6.2); console, báo cáo HTML và Web UI (FR-UI-12) hiển thị điểm kèm "(estimated)"; báo cáo HTML thêm mục "Top issues" và dòng "Reproduce" (chạy lại `--checks <group>`) cho mỗi finding — cả hai không đổi JSON schema (FR-RPT-01, cosmetic); sửa lỗi `<title>` báo cáo HTML còn sót "OWASP scan report" từ đợt đổi tên package; AT-61. |
 | 1.15 | 2026-10-01 | Theo code v1.13.0 (Sprint 10, sau review bảng vector ngày 2026-10-01): sửa lại vector CVSS theo kịch bản tấn công thật (HSTS thiếu và không redirect HTTPS cùng 6.8; chứng chỉ hết hạn/chưa hiệu lực/không tin cậy 7.4 → 6.8; clickjacking 4.3; cookie thiếu `Secure` 3.1 → 5.3). Thêm `catalog.NO_CVSS`: finding không phải điểm yếu (cảnh báo sớm, gợi ý, mọi finding severity INFO — quyết định C1) **không có** `cvss_vector`/`cvss_score`. Check ghi đè vector theo từng instance, `enrich()` luôn tính lại điểm từ vector thắng (mục 6.1). SARIF `security-severity` lấy từ `cvss_score` (FR-REPORT-06, FR-RPT-10 — **đổi mức cảnh báo trên GitHub code scanning**). CWE-324 cho chứng chỉ hết hạn/sắp hết hạn (C2). `output.CVSS_NOTE` giải thích CVSS và Severity là hai thang khác nhau (console + HTML). **FR-DET-17**: nhận diện cipher yếu viết lại thành bảng khai báo có lý do, bịt chỗ bỏ lọt DES đơn 56-bit và suite ẩn danh `ADH-`/`AECDH-` (FR-TLS-04, AT-62). AT-61 mở rộng, AT-44 cập nhật. |
+| 1.16 | 2026-10-01 | Theo code v1.14.0 (Sprint 11, kiểm soát quét an toàn): giới hạn lưu lượng mỗi lần quét `--rate-limit`/`--max-requests`/`--max-duration`, tự giảm tốc khi target trả 429/503 (FR-AUTHZ-05, mục 4.12, `limits.ScanLimiter`), áp ở tầng HTTP adapter nên tính cả redirect hop và retry, và truyền tường minh vào check TLS vốn tự mở socket; JSON thêm khối `limits`, `schema_version` 1.7; `gate.incomplete` nay còn đúng khi một giới hạn dừng lần quét giữa chừng. Phạm vi khai báo nhiều host `--scope-host` (FR-AUTHZ-03). Loại trừ URL `--exclude`/`--exclude-host`/`--no-default-excludes` với bảng mặc định `rules/exclusions.json` (FR-AUTHZ-06), chặn cả redirect dẫn vào path bị loại; `rules_version` thêm phần `exclusions`. Header tùy chọn `X-Scanner-Scan-Id` qua `--scan-id-header` (FR-AUTHZ-09). AT-63…AT-66. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -390,6 +391,22 @@ Các check được gom thành 8 nhóm mục tiêu kiểm thử, khai báo **m�
 | FR-GRP-02 | Lựa chọn PHẢI được chuẩn hoá bởi `catalog.normalize_groups()`: không phân biệt hoa/thường, bỏ trùng, trả theo thứ tự bảng; id lạ hoặc danh sách rỗng → `ValueError` nêu các id hợp lệ. | M |
 | FR-GRP-03 | Báo cáo PHẢI ghi `scan_groups` (các nhóm đã chọn) và mỗi finding PHẢI có `check` (tên check tạo ra nó). Gate và exit code chỉ tính trên finding của các nhóm đã chạy; nhóm không được chọn phải được hiển thị là "not selected", không phải "no issues". | M |
 
+### 4.12 Kiểm soát lưu lượng và phạm vi quét (từ v1.14.0)
+
+Mỗi lần quét tạo một `limits.ScanLimiter` và một `ScopedSession`; cả hai **mặc định không giới hạn gì**, giữ nguyên hành vi trước v1.14.0.
+
+| ID | Yêu cầu | Ưu tiên |
+|---|---|---|
+| FR-LIM-01 | `--rate-limit N` PHẢI giới hạn tốc độ ở N request/giây, tính **toàn cục** và **theo từng host**. Giới hạn áp ở `http_utils._TrustAdapter.send()` — tầng duy nhất thấy đúng một lần cho mỗi request thực sự ra khỏi máy: `Session.request()` không thấy các hop redirect do `resolve_redirects()` gửi, và retry của urllib3 nằm bên dưới nó. | M |
+| FR-LIM-02 | Bắt tay TLS (2 kết nối socket của nhóm `tls`) KHÔNG đi qua HTTP session, nên `check_tls` PHẢI nhận limiter tường minh và đếm mỗi lần bắt tay như một request. | M |
+| FR-LIM-03 | `--max-requests N` và `--max-duration SECONDS` PHẢI **dừng cả lần quét** khi chạm hạn: `limits.ScanLimitReached` (KHÔNG kế thừa `requests.exceptions.RequestException`, vì `safe_get()`/`get_limited()` nuốt loại đó) đi xuyên qua `_run_check` thay vì bị ghi thành "check failed", `errors` có một dòng `Scan stopped early: ...`, và `gate.incomplete` là `true`. Exit code theo mục 7.3 giữ nguyên thứ tự ưu tiên: có finding đạt ngưỡng `--fail-on` → `1`; không có → `3` (quét không kết luận được vì đã dừng giữa chừng). | M |
+| FR-LIM-04 | Khi target trả **429 hoặc 503**, scanner PHẢI tự giảm tốc: chờ theo `Retry-After` nếu là số giây hợp lệ, nếu không thì backoff 2s nhân đôi mỗi lần, tối đa 60s. Số lần giảm tốc ghi vào `limits.slowdowns`. | S |
+| FR-LIM-05 | Limiter PHẢI an toàn khi dùng nhiều luồng (check `sensitive-paths` chạy trên pool `--workers`), và `--max-requests` PHẢI chính xác tuyệt đối dưới tải đồng thời. | M |
+| FR-LIM-06 | Báo cáo JSON PHẢI có khối `limits` = `{rate_limit, max_requests, max_duration, requests_sent, slowdowns, stopped_by}`; `stopped_by` là `null`, `"max-requests"` hoặc `"max-duration"`. | M |
+| FR-SCOPE-01 | `--scope-host HOST` (lặp được) PHẢI mở rộng phạm vi D4 sang các host khai báo, áp cho **cả hai** đường kiểm scope: redirect tự động (`ScopedSession.get_redirect_target`) và vòng lặp redirect thủ công của `check_http_to_https_redirect`. Host ngoài phạm vi vẫn bị chặn và ghi vào `errors` như trước. | M |
+| FR-EXCL-01 | Tool KHÔNG được gửi request tới URL bị loại trừ: path khớp regex trong `rules/exclusions.json` (mặc định, tắt bằng `--no-default-excludes`), path khớp `--exclude REGEX`, hoặc host trong `--exclude-host`. Áp cả khi URL đến từ một redirect. Các URL bị bỏ qua được ghi một dòng tổng hợp trong `errors`. Regex sai cú pháp PHẢI báo lỗi ở argparse, trước khi gửi bất kỳ request nào. | S |
+| FR-SCANID-01 | `--scan-id-header` PHẢI gửi `X-Scanner-Scan-Id: <scan_id>` trên mọi request HTTP để bên đích lọc log/WAF. Mặc định **tắt** (NFR-SEC-03 vẫn yêu cầu `User-Agent` nhận diện rõ scanner). | S |
+
 ---
 
 ## 5. Yêu cầu phi chức năng (Non-Functional Requirements)
@@ -479,12 +496,12 @@ class ScanResult:
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
 
-Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.6`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01); `1.4` (scanner 1.7.0) **thêm** `scan_groups` và `check` của mỗi finding (FR-GRP-03); `1.5` (scanner 1.10.0) **thêm** `disclaimer` (FR-RPT-08, cùng nội dung với `output.SCOPE_NOTE` hiện trên console và HTML); `1.6` (scanner 1.12.0) **thêm** `cvss_vector`/`cvss_score` của mỗi finding (FR-MODEL-03, ước tính theo loại, xem mục 6.1). Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
+Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.7`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01); `1.4` (scanner 1.7.0) **thêm** `scan_groups` và `check` của mỗi finding (FR-GRP-03); `1.5` (scanner 1.10.0) **thêm** `disclaimer` (FR-RPT-08, cùng nội dung với `output.SCOPE_NOTE` hiện trên console và HTML); `1.6` (scanner 1.12.0) **thêm** `cvss_vector`/`cvss_score` của mỗi finding (FR-MODEL-03, ước tính theo loại, xem mục 6.1); `1.7` (scanner 1.14.0) **thêm** khối `limits` (FR-LIM-06, mục 4.12). Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
 
 ```json
 {
-  "schema_version": "1.6",
-  "scanner_version": "1.12.0",
+  "schema_version": "1.7",
+  "scanner_version": "1.14.0",
   "rules_version": "1.1.0",
   "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "secrets_redacted": true,
@@ -497,6 +514,7 @@ class ScanResult:
   "finished_at": "2026-09-22T08:26:09.273000Z",
   "scan_groups": ["headers", "cookies", "tls", "https-redirect", "cors", "exposed-files", "directory-listing", "robots-sitemap"],
   "checks_run": ["security-headers", "cookies", "tls", "http-to-https-redirect", "cors", "sensitive-paths", "directory-listing", "robots-sitemap"],
+  "limits": { "rate_limit": null, "max_requests": null, "max_duration": null, "requests_sent": 29, "slowdowns": 0, "stopped_by": null },
   "summary": { "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0 },
   "findings": [
     {
@@ -687,6 +705,10 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-60 | README khớp SRS và `ci.yml` (FR-DOC-01) | Câu "AT-01 to AT-NN" trong README so với số AT lớn nhất trong mục 9; danh sách check bắt buộc trong README (khối `text` và JSON của `gh api`) so với job/matrix thật của `ci.yml` | Hai giá trị bằng nhau ở cả hai phép so sánh; test tự fail nếu ai đó thêm AT hoặc đổi job/matrix mà quên sửa README | `test_readme_at_range_matches_the_srs`, `test_readme_required_checks_list_matches_the_workflow` |
 | AT-61 | CVSS v3.1 ước tính theo loại finding (FR-MODEL-03) | Công thức `cvss.base_score()` với các vector mẫu đã công bố (vd `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H` = 9.8); mọi id trong `catalog.FINDING_CATALOG` trừ `NOT_A_WEAKNESS`; quét mock thật | Điểm khớp các ví dụ CVSS v3.1 đã công bố; mọi id có vector hợp lệ parse được và điểm trong [0, 10]; id thuộc `NOT_A_WEAKNESS` không có vector/điểm; finding của một lần quét thật có `cvss_vector`/`cvss_score` nhất quán với `catalog`; JSON đúng `docs/report.schema.json` (`schema_version` 1.6); console, báo cáo HTML và `app.js` của Web UI đều hiện điểm kèm "(estimated)" (FR-UI-12); finding thuộc `catalog.NO_CVSS` không hiện điểm; từ v1.13.0: bảng vector khớp từng dòng với review ngày 2026-10-01, mọi id INFO nằm trong `NO_CVSS`, vector ghi đè theo instance (CORS/cookie/cipher) cho đúng điểm và `enrich()` tính lại điểm từ vector ghi đè | `test_base_score_matches_published_examples`, `test_invalid_vectors_are_rejected`, `test_catalog_entries_are_complete`, `test_every_finding_of_a_real_scan_is_enriched`, `test_cli_json_report_matches_schema`, `test_console_report_shows_the_score_as_estimated`, `test_html_report_shows_the_score_and_vector_as_estimated`, `test_web_ui_shows_the_score_as_estimated`, `test_findings_that_are_not_a_weakness_carry_no_score`, `tests/test_catalog_cvss.py` (toàn bộ) |
 | AT-62 | Nhận diện cipher yếu cho đủ (FR-DET-17, FR-TLS-04) | Tên suite OpenSSL theo từng nhóm: `NULL-SHA256`, `EXP-RC4-MD5`, `EXP1024-DES-CBC-SHA`, `TLS_RSA_EXPORT_WITH_RC4_40_MD5`, `ADH-AES256-SHA`, `AECDH-AES128-SHA`, `RC4-MD5`, `EXP-RC2-CBC-MD5`, `DES-CBC-SHA`, `DES-CBC3-SHA`, `IDEA-CBC-SHA`; và suite hiện đại `ECDHE-RSA-AES256-GCM-SHA384`, `ECDHE-RSA-CHACHA20-POLY1305`, `TLS_AES_128_GCM_SHA256` | Mỗi suite yếu trả đúng lý do (`no-encryption`/`unauthenticated`/`broken`), suite export được xếp theo export chứ không theo RC2/RC4; suite hiện đại không sinh finding nào; điểm CVSS 7.4 cho nhóm không mã hoá/không xác thực và 5.9 cho nhóm còn lại; finding ghi rõ lý do trong mô tả và tên suite trong evidence | `tests/test_weak_ciphers.py` (toàn bộ) |
+| AT-63 | Giới hạn tốc độ (FR-LIM-01, FR-LIM-02, FR-LIM-05, FR-QA-05) | Đồng hồ giả: 4 req/s, nhiều host, caller chậm hơn khoảng cách; mock server thật: nhóm tuần tự và nhóm chạy trên pool 5 worker; nhóm `tls` so với nhóm chỉ có baseline | Với đồng hồ giả, khoảng cách đúng 1/N và không chờ khi caller đã đủ chậm; đo trên mock server, tốc độ trung bình không vượt mức đặt và không cửa sổ 1 giây nào vượt quá, kể cả khi chạy 5 luồng; nhóm `tls` đếm nhiều request hơn nhóm không bắt tay TLS | `tests/test_limits.py`, `test_the_scanner_keeps_to_the_rate_it_was_given`, `test_the_rate_holds_even_when_checks_run_on_the_worker_pool`, `test_tls_handshakes_are_counted_even_though_they_bypass_the_session` |
+| AT-64 | Dừng khi chạm hạn (FR-LIM-03, FR-LIM-06) | `--max-requests 3`; `--max-duration 0.001`; chuỗi 3 redirect với `--max-requests 2`; pool 5 worker với `--max-requests 6` | `limits.stopped_by` đúng loại hạn, `requests_sent` đúng bằng hạn (kể cả khi 5 luồng cùng chạy), `errors` có đúng một dòng `Scan stopped early` và **không** có dòng `failed:`, `gate.incomplete` là `true`; mỗi hop redirect được tính một request | `test_max_requests_stops_the_scan_and_says_so`, `test_max_duration_stops_the_scan`, `test_a_stopped_scan_is_reported_as_incomplete`, `test_every_redirect_hop_is_counted`, `test_the_limiter_is_shared_by_the_worker_pool`, `test_a_reached_limit_is_not_reported_as_a_broken_check` |
+| AT-65 | Tự giảm tốc khi bị đẩy lùi (FR-LIM-04) | Response 429 và 503; `Retry-After: 2`; `Retry-After` không phải số; response 200 | 429/503 làm lần chờ kế tiếp dài hơn khoảng cách thường và tăng `slowdowns`; `Retry-After` hợp lệ được tôn trọng đúng số giây; giá trị rác quay về backoff mặc định; response bình thường không gây chờ | `test_the_scanner_slows_down_when_the_target_pushes_back`, `test_retry_after_is_honoured`, `test_a_nonsense_retry_after_falls_back_to_the_default_backoff`, `test_an_ordinary_response_does_not_slow_anything_down` |
+| AT-66 | Phạm vi khai báo, loại trừ và header scan id (FR-SCOPE-01, FR-EXCL-01, FR-SCANID-01) | 10 path mẫu so với bảng mặc định; `--exclude`, `--exclude-host`, `--no-default-excludes`; regex sai cú pháp; redirect dẫn vào `/logout`; redirect sang host ngoài phạm vi; quét có và không có `--scan-id-header` | Path đổi trạng thái bị loại (kể cả chữ hoa), `/blog/how-we-delete-data` thì không; URL bị loại không hề được gửi và được ghi trong `errors`; regex sai làm CLI thoát trước khi quét; redirect vào path bị loại không được đi theo; host ngoài phạm vi vẫn bị chặn và báo; header chỉ xuất hiện khi bật cờ và bằng đúng `scan_id` | `tests/test_scope_and_exclusions.py` (toàn bộ) |
 
 ---
 

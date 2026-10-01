@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 import ssl
+from collections.abc import Iterable
 from urllib.parse import urljoin, urlsplit
 
 import requests
@@ -50,12 +52,14 @@ def url_host(host: str) -> str:
         return host
 
 
-def in_scope(url: str, scope_host: str) -> bool:
+def in_scope(url: str, scope_host: str, allowed_hosts: Iterable[str] = ()) -> bool:
     """D4: same host as the target, or differing only by a leading ``www.``.
 
     Scheme and port may change (http -> https, :80 -> :443); other subdomains may not.
+    ``allowed_hosts`` widens the scope to hosts the user declared (FR-AUTHZ-03).
     """
-    return _canonical_host(urlsplit(url).hostname) == _canonical_host(scope_host)
+    host = _canonical_host(urlsplit(url).hostname)
+    return host == _canonical_host(scope_host) or host in {_canonical_host(h) for h in allowed_hosts}
 
 
 class ScopedSession(requests.Session):
@@ -66,19 +70,50 @@ class ScopedSession(requests.Session):
     response becomes the final one and nothing is sent to the other host.
     """
 
-    def __init__(self, scope_host: str | None = None) -> None:
+    def __init__(
+        self,
+        scope_host: str | None = None,
+        allowed_hosts: Iterable[str] = (),
+        exclusions: Iterable[re.Pattern] = (),
+        excluded_hosts: Iterable[str] = (),
+    ) -> None:
         super().__init__()
         self.scope_host = scope_host
+        # Extra hosts the user declared as in scope (FR-AUTHZ-03).
+        self.allowed_hosts = frozenset(_canonical_host(h) for h in allowed_hosts if h)
+        # Paths and hosts the scanner must not request at all (FR-AUTHZ-06).
+        self.exclusions = tuple(exclusions)
+        self.excluded_hosts = frozenset(_canonical_host(h) for h in excluded_hosts if h)
         self.max_redirects = MAX_REDIRECTS
         # out-of-scope host -> one error line, so many blocked paths give one report line
         self.blocked_redirects: dict[str, str] = {}
+        # excluded URL -> why, so the report can say what was deliberately not requested
+        self.excluded_urls: dict[str, str] = {}
+
+    def is_excluded(self, url: str) -> bool:
+        """True when the user excluded this URL; the caller must not send the request."""
+        parts = urlsplit(url)
+        host = _canonical_host(parts.hostname)
+        if host and host in self.excluded_hosts:
+            self.excluded_urls.setdefault(url, f"host {host} is excluded")
+            return True
+        path = parts.path or "/"
+        for pattern in self.exclusions:
+            if pattern.search(path):
+                self.excluded_urls.setdefault(url, f"path matches exclusion {pattern.pattern!r}")
+                return True
+        return False
 
     def get_redirect_target(self, resp):
         location = super().get_redirect_target(resp)
-        if location is None or self.scope_host is None:
+        if location is None:
             return location
         target = urljoin(resp.url, location)
-        if in_scope(target, self.scope_host):
+        if self.is_excluded(target):
+            return None
+        if self.scope_host is None:
+            return location
+        if in_scope(target, self.scope_host, self.allowed_hosts):
             return location
         self.note_blocked(target, resp.url)
         return None
@@ -110,11 +145,25 @@ class _TrustAdapter(HTTPAdapter):
     Follows requests' documented extension point (build_connection_pool_key_attributes)
     and also stops cert_verify() from pointing the connection at certifi, which urllib3
     would otherwise load *into* the shared context.
+
+    It is also where the scan's traffic limits are enforced (FR-AUTHZ-05). This is the
+    only layer that sees exactly one call per request actually put on the wire: Session
+    .request() misses the redirect hops that resolve_redirects() sends, and urllib3's
+    retries happen below it.
     """
 
-    def __init__(self, ssl_context: ssl.SSLContext, **kwargs) -> None:
+    def __init__(self, ssl_context: ssl.SSLContext, limiter=None, **kwargs) -> None:
         self._ssl_context = ssl_context
+        self._limiter = limiter
         super().__init__(**kwargs)
+
+    def send(self, request, **kwargs):
+        if self._limiter is not None:
+            self._limiter.acquire(request.url)
+        response = super().send(request, **kwargs)
+        if self._limiter is not None:
+            self._limiter.note_response(request.url, response.status_code, response.headers.get("Retry-After"))
+        return response
 
     def build_connection_pool_key_attributes(self, request, verify, cert=None):
         host_params, pool_kwargs = super().build_connection_pool_key_attributes(request, verify, cert)
@@ -132,11 +181,22 @@ class _TrustAdapter(HTTPAdapter):
 
 
 def build_session(
-    timeout: int = DEFAULT_TIMEOUT, scope_host: str | None = None, ca_bundle: str | None = None
+    timeout: int = DEFAULT_TIMEOUT,
+    scope_host: str | None = None,
+    ca_bundle: str | None = None,
+    limiter=None,
+    allowed_hosts: Iterable[str] = (),
+    exclusions: Iterable[re.Pattern] = (),
+    excluded_hosts: Iterable[str] = (),
+    scan_id: str | None = None,
 ) -> ScopedSession:
-    session = ScopedSession(scope_host)
+    session = ScopedSession(scope_host, allowed_hosts, exclusions, excluded_hosts)
     session.headers.update({"User-Agent": USER_AGENT})
+    if scan_id:
+        # FR-AUTHZ-09: lets the target filter this scan out of its logs and WAF rules.
+        session.headers["X-Scanner-Scan-Id"] = scan_id
     session.trust_context = trust_context(ca_bundle)
+    session.limiter = limiter
 
     retry = Retry(
         total=1,
@@ -146,7 +206,7 @@ def build_session(
         status_forcelist=(),  # do not retry on 4xx/5xx; that's signal, not noise
         raise_on_status=False,
     )
-    adapter = _TrustAdapter(session.trust_context, max_retries=retry)
+    adapter = _TrustAdapter(session.trust_context, limiter=limiter, max_retries=retry)
     session.mount("http://", adapter)
     session.mount("https://", adapter)
     session.request = _with_default_timeout(session.request, timeout)  # type: ignore
@@ -161,8 +221,16 @@ def _with_default_timeout(request_fn, timeout):
     return wrapped
 
 
+def excluded(session: requests.Session, url: str) -> bool:
+    """True when ``session`` was told not to request this URL (FR-AUTHZ-06)."""
+    check = getattr(session, "is_excluded", None)
+    return bool(check and check(url))
+
+
 def safe_get(session: requests.Session, url: str, **kwargs):
     """GET that never raises on connection issues; returns (response, error_str)."""
+    if excluded(session, url):
+        return None, "excluded by configuration"
     try:
         resp = session.get(url, **kwargs)
         return resp, None
@@ -175,6 +243,8 @@ def get_limited(session: requests.Session, url: str, max_bytes: int = MAX_BODY_B
 
     Returns ``(response, body_bytes, error_str)``; never raises on network errors.
     """
+    if excluded(session, url):
+        return None, b"", "excluded by configuration"
     try:
         resp = session.get(url, stream=True, **kwargs)
     except requests.exceptions.RequestException as exc:

@@ -1,7 +1,7 @@
 {
-  "schema_version": "1.6",
+  "schema_version": "1.7",
   "scanner_version": "<VERSION>",
-  "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1",
+  "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1;exclusions=2026.10.01.1",
   "scan_id": "<SCAN_ID>",
   "target": "http://127.0.0.1:<PORT>/",
   "final_url": "http://127.0.0.1:<PORT>/",
@@ -27,6 +27,14 @@
     "directory-listing",
     "robots-sitemap"
   ],
+  "limits": {
+    "rate_limit": null,
+    "max_requests": null,
+    "max_duration": null,
+    "requests_sent": <REQUESTS_SENT>,
+    "slowdowns": 0,
+    "stopped_by": null
+  },
   "summary": {
     "CRITICAL": 2,
     "HIGH": 1,
