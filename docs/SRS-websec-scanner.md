@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.17 |
-| **Ngày** | 2026-10-01 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.13: 2026-09-30 · v1.14–v1.17: 2026-10-01) |
+| **Phiên bản tài liệu** | 1.18 |
+| **Ngày** | 2026-10-01 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.13: 2026-09-30 · v1.14–v1.18: 2026-10-01) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `websec_scanner` `v1.15.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, Sprint 12). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `websec_scanner` `v1.16.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, Sprint 13). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -40,6 +40,7 @@
 | 1.15 | 2026-10-01 | Theo code v1.13.0 (Sprint 10, sau review bảng vector ngày 2026-10-01): sửa lại vector CVSS theo kịch bản tấn công thật (HSTS thiếu và không redirect HTTPS cùng 6.8; chứng chỉ hết hạn/chưa hiệu lực/không tin cậy 7.4 → 6.8; clickjacking 4.3; cookie thiếu `Secure` 3.1 → 5.3). Thêm `catalog.NO_CVSS`: finding không phải điểm yếu (cảnh báo sớm, gợi ý, mọi finding severity INFO — quyết định C1) **không có** `cvss_vector`/`cvss_score`. Check ghi đè vector theo từng instance, `enrich()` luôn tính lại điểm từ vector thắng (mục 6.1). SARIF `security-severity` lấy từ `cvss_score` (FR-REPORT-06, FR-RPT-10 — **đổi mức cảnh báo trên GitHub code scanning**). CWE-324 cho chứng chỉ hết hạn/sắp hết hạn (C2). `output.CVSS_NOTE` giải thích CVSS và Severity là hai thang khác nhau (console + HTML). **FR-DET-17**: nhận diện cipher yếu viết lại thành bảng khai báo có lý do, bịt chỗ bỏ lọt DES đơn 56-bit và suite ẩn danh `ADH-`/`AECDH-` (FR-TLS-04, AT-62). AT-61 mở rộng, AT-44 cập nhật. |
 | 1.16 | 2026-10-01 | Theo code v1.14.0 (Sprint 11, kiểm soát quét an toàn): giới hạn lưu lượng mỗi lần quét `--rate-limit`/`--max-requests`/`--max-duration`, tự giảm tốc khi target trả 429/503 (FR-AUTHZ-05, mục 4.12, `limits.ScanLimiter`), áp ở tầng HTTP adapter nên tính cả redirect hop và retry, và truyền tường minh vào check TLS vốn tự mở socket; JSON thêm khối `limits`, `schema_version` 1.7; `gate.incomplete` nay còn đúng khi một giới hạn dừng lần quét giữa chừng. Phạm vi khai báo nhiều host `--scope-host` (FR-AUTHZ-03). Loại trừ URL `--exclude`/`--exclude-host`/`--no-default-excludes` với bảng mặc định `rules/exclusions.json` (FR-AUTHZ-06), chặn cả redirect dẫn vào path bị loại; `rules_version` thêm phần `exclusions`. Header tùy chọn `X-Scanner-Scan-Id` qua `--scan-id-header` (FR-AUTHZ-09). AT-63…AT-66. |
 | 1.17 | 2026-10-01 | Theo code v1.15.0 (Sprint 12, CI với nợ cũ): `--baseline` — gate chỉ tính finding mới, khối `baseline` ghi finding đã sửa và finding chưa được kiểm lại (FR-CI-02, FR-RPT-06, mục 4.13 FR-BASE-01…05); `--suppressions` file TOML có lý do và ngày hết hạn bắt buộc (FR-MODEL-06, FR-SUPP-01…04); `--csv` chặn formula injection, `--junit` có số test fail khớp exit code (FR-RPT-03, FR-OUT-01/02); SARIF dùng `baselineState` và `suppressions` chuẩn (FR-REPORT-06); `schema_version` 1.8, `summary` giữ nguyên nghĩa. **FR-MODEL-07**: `instance_key` của finding CORS và `TLS-NO-HTTPS-REDIRECT` là `site_root()` thay vì URL đầy đủ, để fingerprint không đổi theo trang bắt đầu quét hay token trong query (mục 6.1). Sửa `gate_message` báo sai lý do khi lần quét bị một giới hạn dừng (`gate.incomplete_reason`, lỗi từ v1.14.0). Bổ sung bảng tham số mục 7: các cờ của Sprint 11 và `--allow-remote`/`--token` của Web UI bị thiếu từ v1.8.0. AT-67…AT-71. |
+| 1.18 | 2026-10-01 | Theo code v1.16.0 (Sprint 13): file cấu hình `--config` (TOML, nghiêm ngặt, `${ENV}`, cảnh báo credential ghi thẳng; FR-CI-06, mục 4.14 FR-CFG-01…03); nhiều target với `--targets-file`, `--output-dir`/`--formats`, `--baseline-dir`, `--parallel`, exit code theo target tệ nhất, từ chối gửi credential tới nhiều host (FR-CI-05, FR-MULTI-01…05); `--header`, `--cookie` (che ở mọi nơi kể cả khi target phản xạ), `--proxy` `http://` cho cả check TLS qua `CONNECT`, `--user-agent` chỉ ghép trước (NFR-SEC-03), `--quiet`/`--verbose`, `--version` (FR-CI-07, FR-OPT-01…05). Không đổi `schema_version`. AT-72…AT-74. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -426,6 +427,26 @@ Chỉ có ở CLI. `summary` **giữ nguyên nghĩa** (đếm mọi finding); nh
 | FR-OUT-01 | `--csv PATH` PHẢI ghi một dòng cho mỗi finding, theo thứ tự báo cáo, từ cùng báo cáo đã che secret, có cột `counts_toward_gate`. Ô bắt đầu bằng `=`, `+`, `-`, `@`, tab hoặc CR PHẢI được thêm tiền tố `'` để chặn *formula injection* khi mở bằng bảng tính. | M |
 | FR-OUT-02 | `--junit PATH` PHẢI ghi một test case cho mỗi finding và một cho chính lần quét: finding làm gate fail → `<failure>`; các finding khác → `<skipped>` kèm lý do (dưới ngưỡng, không đổi so với baseline, đã suppress); test case của lần quét fail khi quét không hoàn tất và `--fail-on` khác `none`. Vì vậy file có `failures` > 0 **khi và chỉ khi** exit code khác 0. Ký tự XML 1.0 không chứa được PHẢI bị bỏ. | M |
 
+### 4.14 File cấu hình, nhiều target, tham số vận hành (từ v1.16.0)
+
+Chỉ có ở CLI. Không đổi cấu trúc báo cáo JSON (`schema_version` vẫn 1.8).
+
+| ID | Yêu cầu | Ưu tiên |
+|---|---|---|
+| FR-CFG-01 | `--config FILE` (TOML) PHẢI chấp nhận mọi tùy chọn của CLI dưới tên riêng (`config.CONFIG_KEYS`), **trừ** `--yes`, `--show-secrets`, `--config`, `--list-checks`, `--version`: hai cái đầu là quyết định riêng của từng lần chạy, không được nằm trong file dùng chung. Cờ trên dòng lệnh ghi đè file; tùy chọn lặp được (`headers`, `cookies`, `exclude`, `scope_hosts`, `exclude_hosts`) thì gộp, của file trước. File chỉ được đọc khi chỉ định rõ, không tự tìm. | M |
+| FR-CFG-02 | Loader PHẢI nghiêm ngặt: khoá lạ, sai kiểu, `show_secrets`/`yes`, hoặc `quiet` và `verbose` cùng bật → lỗi argparse trước khi gửi request nào. Mỗi giá trị đi qua đúng bộ kiểm tra của cờ CLI tương ứng. | M |
+| FR-CFG-03 | `${NAME}` PHẢI được thay từ biến môi trường; biến không tồn tại là lỗi, không phải chuỗi rỗng. Credential ghi thẳng vào file (header nhạy cảm, cookie, mật khẩu proxy) được chấp nhận nhưng PHẢI in cảnh báo. Đường dẫn trong file tính theo thư mục chứa file. | M |
+| FR-MULTI-01 | CLI PHẢI nhận nhiều target (đối số vị trí, `--targets-file` — mỗi dòng một target, `#` là comment —, hoặc `targets` trong config), chuẩn hoá và bỏ trùng, giữ thứ tự. Exit code là của target tệ nhất: `1` nếu có target fail gate, nếu không thì `3` nếu có target không quét được, nếu không thì `0`. Có nhiều target thì in bảng tổng hợp cuối cùng. | M |
+| FR-MULTI-02 | `--output-dir DIR` PHẢI ghi một bộ file cho mỗi target theo `--formats` (mặc định `json`), tên file `<host>_<port>-<8 hex của SHA-256 URL>`, giống nhau ở mọi lần chạy. Nhiều target kèm tùy chọn ghi một file (`--json`...) → lỗi, gợi ý `--output-dir`. | M |
+| FR-MULTI-03 | `--baseline-dir DIR` PHẢI so mỗi target với báo cáo của chính nó trong DIR (cùng tên file). Target chưa có báo cáo trong DIR: không có baseline, mọi finding được tính, `errors` ghi rõ. Nhiều target kèm `--baseline` → lỗi, gợi ý `--baseline-dir`. | M |
+| FR-MULTI-04 | `--parallel N` (1–64, mặc định 1) PHẢI giới hạn số target quét đồng thời; báo cáo vẫn in theo thứ tự target đầu vào. Mỗi target có limiter riêng (mục 4.12). | S |
+| FR-MULTI-05 | Header nhạy cảm hoặc cookie kèm target thuộc **nhiều host khác nhau** PHẢI bị từ chối: cùng một credential sẽ bị gửi tới mọi target, tức token của site này lọt sang site khác. | M |
+| FR-OPT-01 | `--header 'NAME: VALUE'` và `--cookie NAME=VALUE` (lặp được) PHẢI được gửi trên mọi request; tên phải là token HTTP hợp lệ, giá trị không được chứa ký tự điều khiển (CR/LF sẽ chèn thêm header — request splitting). | M |
+| FR-OPT-02 | Giá trị của header nhạy cảm (`Authorization`, `Proxy-Authorization`, `Cookie`, hoặc tên chứa token/secret/session/password/api-key/auth/credential/signature), mọi giá trị cookie và mật khẩu proxy PHẢI bị che **ở mọi nơi** trong báo cáo, console và log `--verbose`, kể cả khi target phản xạ lại chúng và kể cả khi có `--show-secrets` (đó là credential của chính người vận hành, báo cáo không bao giờ cần). Header không nhạy cảm thì giữ nguyên, để không cắt nát các hostname tình cờ chứa cùng chuỗi. | M |
+| FR-OPT-03 | `--proxy URL` PHẢI là proxy `http://` (có thể kèm `user:pass@`) và áp cho **mọi** request, kể cả hai lần bắt tay của nhóm `tls` qua tunnel `CONNECT` (kèm `Proxy-Authorization` khi có credential). Khi có `--proxy`, biến môi trường proxy và `NO_PROXY` không còn áp dụng. Proxy `https://`, SOCKS hoặc không có scheme → lỗi argparse (FR-CI-11). | M |
+| FR-OPT-04 | `--user-agent PREFIX` PHẢI được ghép **trước** User-Agent của scanner, không bao giờ thay thế (NFR-SEC-03). | M |
+| FR-OPT-05 | `--quiet` PHẢI in đúng một dòng cho mỗi target (bỏ banner nếu đã có `--yes`) và giữ nguyên exit code; `--verbose` PHẢI in mỗi request thực sự gửi đi ra stderr dạng `[request] METHOD URL -> status`, đã che secret. Hai cờ loại trừ nhau. `--version` in phiên bản rồi thoát. | S |
+
 ---
 
 ## 5. Yêu cầu phi chức năng (Non-Functional Requirements)
@@ -434,7 +455,7 @@ Chỉ có ở CLI. `summary` **giữ nguyên nghĩa** (đếm mọi finding); nh
 |---|---|---|
 | NFR-SEC-01 | Bảo mật/đạo đức | Tool TUYỆT ĐỐI KHÔNG gửi payload khai thác (SQLi, XSS thật, command injection, path traversal thật, brute-force). Mọi request tới target là GET tiêu chuẩn, không sửa dữ liệu phía target. |
 | NFR-SEC-02 | Bảo mật/đạo đức | Bước xác nhận quyền quét không tắt được bằng cấu hình mặc định: CLI chỉ bỏ qua bằng cờ `--yes`; Web UI luôn yêu cầu `authorized: true`. |
-| NFR-SEC-03 | Bảo mật/đạo đức | Mọi request PHẢI gửi `User-Agent` nhận diện rõ là scanner kèm phiên bản thật: `WebSec-Scanner/<version> (+non-intrusive security configuration check)`, không giả mạo trình duyệt, **không chứa tên công ty hay thông tin thương mại khác** (yêu cầu chủ sản phẩm, đợt rà soát 2026-09-30). *(Chuỗi đã đổi hai lần trong lịch sử, đều không phải bên nào phải hành động lại nếu đã cập nhật sau lần gần nhất: trước v1.3.0 không mang tên sản phẩm; từ v1.3.0 đến trước bản rà soát này, chuỗi có mang tên sản phẩm và tên công ty; từ bản rà soát 2026-09-30, chỉ còn tên sản phẩm. Bên nào lọc log/WAF theo chuỗi cũ cần cập nhật theo giá trị hiện tại ở cột bên trái.)* |
+| NFR-SEC-03 | Bảo mật/đạo đức | Mọi request PHẢI gửi `User-Agent` nhận diện rõ là scanner kèm phiên bản thật: `WebSec-Scanner/<version> (+non-intrusive security configuration check)`, không giả mạo trình duyệt, **không chứa tên công ty hay thông tin thương mại khác** (yêu cầu chủ sản phẩm, đợt rà soát 2026-09-30). *(Chuỗi đã đổi hai lần trong lịch sử, đều không phải bên nào phải hành động lại nếu đã cập nhật sau lần gần nhất: trước v1.3.0 không mang tên sản phẩm; từ v1.3.0 đến trước bản rà soát này, chuỗi có mang tên sản phẩm và tên công ty; từ bản rà soát 2026-09-30, chỉ còn tên sản phẩm. Bên nào lọc log/WAF theo chuỗi cũ cần cập nhật theo giá trị hiện tại ở cột bên trái.)* Từ v1.16.0, `--user-agent PREFIX` chỉ được ghép **trước** chuỗi này (FR-OPT-04), không bao giờ thay thế. |
 | NFR-SEC-04 | Bảo mật | Mọi đầu ra (console, `--json`, response Web UI, báo cáo HTML) PHẢI qua `output.build_report()`, nơi che (1) cặp `tên=giá trị` của cookie do check khai báo chính xác, và (2) giá trị của mọi tham số URL có tên chứa `token`, `key`, `session`, `sess`, `password`, `passwd`, `pwd`, `secret`, `sig`, `auth`, `jwt`, và (3) thông tin đăng nhập trong URL (`scheme://user:password@host`: che riêng user và password, từ v1.6.0) — trong `target`, `final_url`, `redirect_chain`, `errors`, và `title`/`description`/`evidence`/`url`/`instance_key` của finding. Dòng `Scanning <target>` của CLI cũng được che. Cờ `--show-secrets` **chỉ có ở CLI**: in cảnh báo ra stderr, JSON có `secrets_redacted: false`, báo cáo HTML có băng cảnh báo. Web UI luôn che, bỏ qua mọi trường yêu cầu tắt che. |
 | NFR-SEC-05 | Bảo mật/đạo đức | **Phạm vi khi theo redirect (D4):** mọi request của một lần quét chỉ được theo redirect tới cùng hostname với target, hoặc hostname chỉ khác một tiền tố `www.` (không phân biệt hoa thường; được đổi scheme và cổng; target là IP thì phải khớp chính xác). Redirect ra ngoài phạm vi thì **không gửi request tới host đó**: chuỗi redirect dừng ở response 3xx cuối cùng trong phạm vi, các check chạy tiếp trên response đó, và `errors` có đúng **một dòng** cho mỗi host bị chặn. Tối đa 10 bước redirect cho mỗi request. |
 | NFR-PERF-01 | Hiệu năng | Mỗi request PHẢI có timeout cấu hình được (mặc định 10 giây). |
@@ -520,7 +541,7 @@ class ScanResult:
 ```json
 {
   "schema_version": "1.8",
-  "scanner_version": "1.15.0",
+  "scanner_version": "1.16.0",
   "rules_version": "1.1.0",
   "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "secrets_redacted": true,
@@ -614,6 +635,18 @@ python -m websec_scanner <target> [--json PATH] [--sarif PATH] [--html PATH] [--
 | `--suppressions FILE` | Không | — | File TOML các finding được chấp nhận, mỗi mục có lý do và ngày hết hạn (FR-SUPP-01, từ v1.15.0). |
 | `--csv PATH` | Không | (không xuất) | Ghi các finding ra CSV (FR-OUT-01, từ v1.15.0). |
 | `--junit PATH` | Không | (không xuất) | Ghi báo cáo JUnit XML (FR-OUT-02, từ v1.15.0). |
+| `--config FILE` | Không | — | File TOML chứa các tùy chọn; dòng lệnh ghi đè (FR-CFG-01, từ v1.16.0). |
+| `--targets-file FILE` | Không | — | Mỗi dòng một target, `#` là comment (FR-MULTI-01, từ v1.16.0). |
+| `--output-dir DIR` | Không | — | Một bộ báo cáo cho mỗi target (FR-MULTI-02, từ v1.16.0). |
+| `--formats LIST` | Không | `json` | Định dạng ghi vào `--output-dir` (FR-MULTI-02, từ v1.16.0). |
+| `--baseline-dir DIR` | Không | — | So mỗi target với báo cáo của nó trong DIR (FR-MULTI-03, từ v1.16.0). |
+| `--parallel N` | Không | `1` | Số target quét đồng thời, tối đa 64 (FR-MULTI-04, từ v1.16.0). |
+| `--header 'NAME: VALUE'` | Không | — | Header gửi kèm; lặp được (FR-OPT-01, từ v1.16.0). |
+| `--cookie NAME=VALUE` | Không | — | Cookie gửi kèm; lặp được (FR-OPT-01, từ v1.16.0). |
+| `--proxy URL` | Không | env `HTTP(S)_PROXY` (chỉ HTTP) | Proxy `http://` cho mọi request, kể cả check TLS (FR-OPT-03, từ v1.16.0). |
+| `--user-agent PREFIX` | Không | — | Ghép trước User-Agent của scanner (FR-OPT-04, từ v1.16.0). |
+| `--quiet` / `--verbose` | Không | tắt | Một dòng mỗi target / log mọi request ra stderr (FR-OPT-05, từ v1.16.0). |
+| `--version` | Không | — | In phiên bản rồi thoát (FR-OPT-05, từ v1.16.0). |
 
 ### 7.3 Exit code
 
@@ -750,6 +783,9 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-69 | Suppression (FR-SUPP-01…04) | Khớp theo `id`, `fingerprint`, `path`, kết hợp nhiều trường; mục hết hạn, mục hết hạn đúng hôm nay; ngày dạng chuỗi; 7 kiểu mục sai; file không phải TOML, file không tồn tại, file rỗng; suppression kết hợp baseline | Finding bị suppress vẫn liệt kê, vẫn trong `summary`, không làm fail gate; mọi trường đã nêu phải khớp; mục hết hạn ngừng suppress và được báo trong `errors`, còn hiệu lực đến hết ngày `expires`; mọi mục sai làm hỏng cả file | `tests/test_suppressions.py` (toàn bộ) |
 | AT-70 | CSV và JUnit (FR-OUT-01/02) | Hai finding khác mức; 6 kiểu payload công thức trong title/description; quét sạch; 6 tổ hợp finding × `--fail-on` × quét hoàn tất/không; markup và ký tự điều khiển từ target; xuất qua CLI | CSV mỗi finding một dòng, công thức bị vô hiệu bằng `'`, giá trị thường giữ nguyên, quét sạch vẫn có dòng tiêu đề; JUnit đúng cấu trúc, tổng số khớp, `failures` > 0 khi và chỉ khi exit code khác 0, quét sạch vẫn có 1 test, markup được escape, ký tự cấm bị bỏ; file từ CLI không lộ secret | `tests/test_exports.py` (toàn bộ) |
 | AT-71 | Baseline và suppression trong mọi định dạng (FR-CI-02, FR-RPT-06, FR-REPORT-06) | Một báo cáo có finding không đổi, mới, mới-và-bị-suppress, và một finding đã sửa; báo cáo không có baseline | Console có nhãn `[NEW]`/`[UNCHANGED]`/`[SUPPRESSED ...]`, dòng *Counted toward the gate* và mục *Compared with baseline*; HTML có pill trạng thái và mục so sánh, lý do suppress được escape; SARIF có `baselineState` và `suppressions` chuẩn; không có baseline thì không thêm gì | `tests/test_baseline_views.py` (toàn bộ), `test_baseline_state_and_suppressions_use_the_native_sarif_fields`, `test_without_a_baseline_results_carry_no_baseline_state` |
+| AT-72 | File cấu hình (FR-CFG-01…03) | File đầy đủ; 9 kiểu file sai (khoá gõ nhầm, sai kiểu, `show_secrets`, `yes`, `quiet`+`verbose`, không phải TOML); `${ENV}` có và thiếu biến; credential ghi thẳng; đường dẫn tương đối; quét qua `--config`; cờ CLI ghi đè; header từ file và CLI | Giá trị đúng kiểu; mọi file sai bị từ chối kèm lý do và **trước** request đầu tiên; biến thiếu là lỗi; credential ghi thẳng sinh cảnh báo, header thường thì không; đường dẫn tính theo thư mục file; CLI thắng file; header được gộp; mọi tùy chọn CLI (trừ 5 tùy chọn theo từng lần chạy) đều có khoá trong file | `tests/test_config.py` (toàn bộ) |
+| AT-73 | Nhiều target (FR-MULTI-01…05) | Hai target vị trí; target sạch + target không kết nối được; `--targets-file` có comment/dòng trống; hai lần chạy cùng target; `--formats` đủ 5 loại; `--json` với nhiều target; `--baseline-dir` từ lần chạy trước; `--baseline` với nhiều target; `Authorization` với 2 host; header thường với nhiều target; `--parallel 3` với 4 target; `--quiet`; `--parallel` 0/-1/65 | Exit code theo target tệ nhất (1 > 3 > 0); tên file giống nhau giữa các lần chạy; đủ 5 loại file; tổ hợp sai bị từ chối kèm gợi ý; mỗi target so với báo cáo của chính nó; credential tới nhiều host bị từ chối, header thường thì không; quét song song đủ target và in đúng thứ tự; bảng tổng hợp liệt kê mọi target; `--quiet` một dòng mỗi target | `tests/test_multi_target.py` (toàn bộ) |
+| AT-74 | Tham số vận hành (FR-OPT-01…05) | Phân tích header/cookie hợp lệ và có CR/LF/NUL; 10 tên header nhạy cảm/không; target phản xạ `Authorization` và cookie vào evidence, xuất 5 định dạng; header thường bị phản xạ; `--user-agent` thường và có CR/LF; proxy cục bộ cho target `http://` và cho check TLS qua `CONNECT`; proxy có credential; proxy `https://`/`socks5://`/không scheme; `--version`; `--quiet`; `--verbose` với `Authorization` | Header/cookie tới được target; credential **không** xuất hiện trong bất kỳ định dạng nào, console hay stderr; giá trị header thường giữ nguyên; header injection bị chặn trước request đầu tiên; User-Agent = tiền tố + chuỗi của scanner; request HTTP và cả hai lần bắt tay TLS đi qua proxy, check TLS vẫn đo được cert thật; `Proxy-Authorization` được gửi, mật khẩu không bị in; proxy không phải `http://` bị từ chối; `--quiet` một dòng và giữ exit code; `--verbose` log mỗi request đã che secret | `tests/test_operating_options.py` (toàn bộ) |
 
 ---
 

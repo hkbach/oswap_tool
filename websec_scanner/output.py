@@ -7,6 +7,8 @@ the Web UI response and the HTML report cannot drift apart.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from .baseline import Baseline, compare
 from .catalog import CHECK_GROUPS, group_of_check
 from .models import SEVERITY_ORDER, ScanResult
@@ -52,6 +54,7 @@ def build_report(
     fail_on: str = DEFAULT_FAIL_ON,
     baseline: Baseline | None = None,
     suppressions: Suppressions | None = None,
+    secrets: Iterable[str] = (),
 ) -> dict:
     """The report dict (SRS 6.2) every output format is rendered from.
 
@@ -60,6 +63,10 @@ def build_report(
 
     ``baseline`` (FR-CI-02) and ``suppressions`` (FR-MODEL-06) decide which findings count
     toward the gate; ``summary`` still counts every finding, so its meaning never changes.
+
+    ``secrets`` are the operator's own credentials (``--header``/``--cookie``/proxy password,
+    FR-CI-07). They are masked everywhere in the report, even with ``show_secrets``: they are
+    never needed in a report, and a target can echo them back in a header or a page.
     """
     report = result.to_dict()
     report["disclaimer"] = SCOPE_NOTE  # FR-RPT-08: scope & limitations, in the JSON report too
@@ -103,7 +110,7 @@ def build_report(
         "counted": counted,
     }
     if show_secrets:
-        return report
+        return _scrub(report, tuple(secrets))
 
     # Findings can share a fingerprint (the same cookie set on a redirect hop and on the final
     # response), so collect the pairs of all of them instead of keeping only the last.
@@ -118,7 +125,27 @@ def build_report(
         pairs = pairs_by_fingerprint.get(finding["fingerprint"], ())
         for key in _REDACTED_FINDING_FIELDS:
             finding[key] = redact(finding[key], pairs)
-    return report
+    return _scrub(report, tuple(secrets))
+
+
+def _scrub(value, secrets: tuple[str, ...]):
+    """Replace every occurrence of each secret, anywhere in the report (strings in dicts and lists)."""
+    if not secrets:
+        return value
+    if isinstance(value, str):
+        for secret in secrets:  # longest first (request_options.secrets_of), so no partial overlap
+            value = value.replace(secret, f"<redacted len={len(secret)}>")
+        return value
+    if isinstance(value, list):
+        return [_scrub(item, secrets) for item in value]
+    if isinstance(value, dict):
+        return {key: _scrub(item, secrets) for key, item in value.items()}
+    return value
+
+
+def scrub_text(text: str, secrets: Iterable[str]) -> str:
+    """The same masking for a line that is not part of a report (the --verbose request log)."""
+    return _scrub(redact(text), tuple(secrets))
 
 
 def gate_failed(report: dict, fail_on: str = DEFAULT_FAIL_ON) -> bool:

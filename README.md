@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.15.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.16.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.15.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.16.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -182,23 +182,84 @@ python -m websec_scanner https://example.com --timeout 15 --workers 8
 
 # Only some test targets (see --list-checks)
 python -m websec_scanner https://example.com --yes --checks headers,cookies,tls
+
+# Several targets, one set of reports per target, two at a time
+python -m websec_scanner https://a.example.com https://b.example.com --yes \
+  --output-dir reports --formats json,sarif --parallel 2
+
+# Everything from a config file; the command line still overrides it
+python -m websec_scanner --config scanner.toml --yes
 ```
+
+Every option below can also be set in a [config file](#config-file), except
+`--yes`, `--show-secrets`, `--config`, `--list-checks` and `--version`.
 
 | Option | Meaning |
 |---|---|
-| `target` | URL or hostname, for example `https://example.com` |
+| `target` | One or more URLs or hostnames, for example `https://example.com` |
+| `--config FILE` | TOML file with any of these options (see [Config file](#config-file)) |
 | `--json PATH` | Write the full JSON report (schema: `docs/report.schema.json`) |
 | `--sarif PATH` | Write a SARIF 2.1.0 report, for example for GitHub code scanning |
 | `--html PATH` | Write a standalone HTML report (the same file as the web UI download) |
+| `--csv PATH` | Write the findings as CSV (cells that would run as a spreadsheet formula are defused) |
+| `--junit PATH` | Write a JUnit XML report; it shows failures exactly when the command exits non-zero |
 | `--fail-on LEVEL` | Lowest severity that fails the scan with exit code `1`: `critical`, `high` (default), `medium`, `low`, `none` |
+| `--baseline FILE` | `--json` report of an earlier run: only findings new since then fail the gate |
+| `--suppressions FILE` | TOML file of accepted findings, each with a reason and an expiry date |
+| `--checks GROUPS` | Comma-separated test targets to run, for example `headers,tls` (default: all). See [Test targets](#test-targets-check-groups) |
+| `--list-checks` | Print the test targets and exit (no target, no prompt) |
 | `--ca-bundle PATH` | PEM file of CA certificates to trust instead of the OS store, for the HTTP requests and the TLS check |
 | `--timeout SECONDS` | Per-request timeout (default `10`) |
 | `--workers N` | Concurrent requests for the path checks (default `5`) |
+| `--rate-limit N` | At most N requests per second, overall and per host (default: no limit) |
+| `--max-requests N` / `--max-duration SECONDS` | Stop the scan at this many requests / seconds; the report is then marked incomplete |
+| `--scope-host HOST` | Another host that counts as in scope (repeatable) |
+| `--exclude REGEX` / `--exclude-host HOST` | Never request matching paths / this host (repeatable) |
+| `--no-default-excludes` | Drop the built-in exclusions (logout, delete, checkout, ...) |
+| `--scan-id-header` | Send `X-Scanner-Scan-Id` so the target can filter this scan out of its logs |
+| `--header 'NAME: VALUE'` | Extra request header (repeatable). Credential headers are masked in every report |
+| `--cookie NAME=VALUE` | Cookie to send (repeatable). Values are masked in every report |
+| `--proxy URL` | `http://` proxy for every request, the TLS check included |
+| `--user-agent PREFIX` | Text put in front of the scanner's User-Agent; it never replaces it |
+| `--targets-file FILE` | One target per line; `#` starts a comment |
+| `--output-dir DIR` / `--formats LIST` | One set of reports per target in DIR, in these formats (default `json`) |
+| `--baseline-dir DIR` | A previous `--output-dir`: each target is compared with its own report there |
+| `--parallel N` | Scan up to N targets at the same time (default `1`, at most `64`) |
+| `--quiet` / `--verbose` | One summary line per target / also log every request to stderr (credentials masked) |
 | `--no-color` | No ANSI colours in the terminal output |
 | `--yes`, `--i-have-authorization` | Skip the interactive authorization prompt |
-| `--checks GROUPS` | Comma-separated test targets to run, for example `headers,tls` (default: all). See [Test targets](#test-targets-check-groups) |
-| `--list-checks` | Print the test targets and exit (no target, no prompt) |
-| `--show-secrets` | Do not redact cookie values and sensitive URL parameters. For local debugging only; the report then carries a warning. Never use it in CI. |
+| `--show-secrets` | Do not redact cookie values and sensitive URL parameters. For local debugging only; the report then carries a warning. Never use it in CI. Credentials you pass with `--header`/`--cookie`/`--proxy` stay masked even then. |
+| `--version` | Print the version and exit |
+
+**Credentials and several targets:** a credential header or a cookie would be
+sent to every target, so a run with targets on more than one host refuses
+them. Scan each host in its own run.
+
+### Config file
+
+`--config scanner.toml` holds any of the options above under their own names
+(`fail_on`, `rate_limit`, `scope_hosts`, `exclude_hosts`, `headers`, ...). The
+command line overrides the file; repeatable options from both are combined.
+Paths are relative to the config file. An unknown key is an error, so a typo
+cannot go unnoticed.
+
+```toml
+targets = ["https://staging.example.com/"]
+checks = ["headers", "tls", "cookies"]
+fail_on = "medium"
+rate_limit = 5
+output_dir = "reports"
+formats = ["json", "sarif"]
+
+[headers]
+Authorization = "Bearer ${SCANNER_TOKEN}"   # read from the environment
+```
+
+`${NAME}` is replaced from the environment, and a missing variable is an
+error. A credential written into the file itself is accepted with a warning.
+`--yes` and `--show-secrets` cannot be put in the file: a shared, committed
+file must not turn one run's authorization into a permanent one, or switch
+off redaction for every CI run.
 
 **Trust store:** by default both the HTTP requests and the TLS check trust the
 operating system's certificate store. `--ca-bundle`, or the environment
@@ -236,12 +297,16 @@ CI systems themselves.** Try them on a non-production target first.
 
 1. **Authorization.** Get approval to scan the target, and record it where your
    team keeps such approvals. `--yes` means "the approval already exists".
-2. **Network.** The runner must reach the target. The HTTP requests honour the
-   usual `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` variables. The TLS check opens
-   direct connections and does not use a proxy. Proxy setups have not been
-   tested in this repository.
+2. **Network.** The runner must reach the target. Behind a proxy, pass
+   `--proxy http://host:port` (credentials as `http://user:pass@host:port`):
+   **every** request then goes through it, the TLS check's own handshakes
+   included (they tunnel with `CONNECT`), and `NO_PROXY` from the environment
+   no longer applies. Only `http://` proxies are supported; `https://` and
+   SOCKS proxies are refused. Without `--proxy`, the HTTP requests still honour
+   `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
+   directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.15.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.16.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -423,7 +488,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-71 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-74 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -589,6 +654,24 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog
+
+- **v1.16.0** (config file, several targets, request options). The JSON report is
+  unchanged (`schema_version` 1.8).
+  - **`--config scanner.toml`**: every option in one file; the command line wins, and
+    repeatable options from both are combined. Unknown keys are errors. `${NAME}` comes
+    from the environment, and a credential written into the file gives a warning.
+    `--yes` and `--show-secrets` cannot be put in the file.
+  - **Several targets**: as arguments, in `--targets-file`, or in the config file. Use
+    `--output-dir` (and `--formats`) for one set of reports per target, `--baseline-dir`
+    to compare each target with its own previous report, and `--parallel N`. The exit
+    code is the worst target's. Credentials are refused when the targets span more than
+    one host, since they would reach every target.
+  - **Request options**: `--header`, `--cookie`, `--proxy`, `--user-agent`, `--version`,
+    `--quiet`, `--verbose`. Credential headers, cookies and the proxy password are masked
+    everywhere, even if the target echoes them back and even with `--show-secrets`.
+    `--proxy` takes `http://` proxies only and now covers the TLS check too, through a
+    `CONNECT` tunnel; it also ignores `NO_PROXY` from the environment. `--user-agent` is
+    put in front of the scanner's own User-Agent and never replaces it.
 
 - **v1.15.0** (CI with existing findings). New options, all CLI only:
   - **`--baseline FILE`** fails the gate only on findings that are new since an

@@ -21,16 +21,19 @@ Maps to OWASP Top 10 A02:2021 (Cryptographic Failures) and ASVS V9
 
 from __future__ import annotations
 
+import base64
 import datetime
 import socket
 import ssl
 from dataclasses import replace
+from urllib.parse import urlsplit
 
 from cryptography import x509
 
 from ..catalog import CVSS_TLS_CIPHER_BROKEN_BUT_ENCRYPTING
-from ..http_utils import url_host
+from ..http_utils import USER_AGENT, url_host
 from ..models import Finding, Severity
+from ..request_options import proxy_credentials
 from ..rule_loader import is_interceptor_issuer
 
 _WEAK_PROTOCOLS = {"SSLv2", "SSLv3", "TLSv1", "TLSv1.1"}
@@ -100,7 +103,50 @@ def _weak_cipher_findings(url: str, hostname: str, port: int, cipher) -> list[Fi
     ]
 
 
-def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int, limiter=None):
+_MAX_PROXY_RESPONSE = 16 * 1024
+_CRLF = "\r\n"
+_END_OF_HEADERS = b"\r\n\r\n"
+
+
+def _open_connection(hostname: str, port: int, timeout: int, proxy: str | None = None) -> socket.socket:
+    """A TCP connection to ``hostname:port``, through an http:// proxy's CONNECT tunnel if one is set.
+
+    The TLS check opens its own sockets rather than going through the HTTP session, so without
+    this it would connect directly even when the operator asked for a proxy (FR-CI-07): on a
+    network that blocks direct connections that is a false TLS-CONN-FAILED, and elsewhere it
+    exposes the scanner's address that the proxy was meant to hide.
+    """
+    if not proxy:
+        return socket.create_connection((hostname, port), timeout=timeout)
+    parts = urlsplit(proxy)
+    sock = socket.create_connection((parts.hostname, parts.port or 80), timeout=timeout)
+    try:
+        authority = f"{url_host(hostname)}:{port}"
+        lines = [f"CONNECT {authority} HTTP/1.1", f"Host: {authority}", f"User-Agent: {USER_AGENT}"]
+        creds = proxy_credentials(proxy)
+        if creds is not None:
+            token = base64.b64encode(f"{creds[0]}:{creds[1]}".encode()).decode("ascii")
+            lines.append(f"Proxy-Authorization: Basic {token}")
+        sock.sendall((_CRLF.join(lines) + _CRLF + _CRLF).encode("latin-1"))
+        response = b""
+        while _END_OF_HEADERS not in response:
+            chunk = sock.recv(4096)
+            if not chunk:
+                raise OSError("the proxy closed the connection during CONNECT")
+            response += chunk
+            if len(response) > _MAX_PROXY_RESPONSE:
+                raise OSError("the proxy's CONNECT response is too long")
+        status_line = response.split(_CRLF.encode("ascii"), 1)[0].decode("latin-1", "replace")
+        fields = status_line.split()
+        if len(fields) < 2 or fields[1] != "200":
+            raise OSError(f"the proxy refused CONNECT {authority}: {status_line}")
+        return sock
+    except BaseException:
+        sock.close()
+        raise
+
+
+def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int, limiter=None, proxy=None):
     """Step 1: non-verifying connection. Returns (der_cert, protocol, cipher, error)."""
     if limiter is not None:
         limiter.acquire(f"https://{hostname}:{port}/")  # a handshake is traffic too (FR-AUTHZ-05)
@@ -115,7 +161,7 @@ def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int, 
     insecure_ctx.set_ciphers("DEFAULT:ALL:@SECLEVEL=0")
 
     try:
-        with socket.create_connection((hostname, port), timeout=timeout) as sock:
+        with _open_connection(hostname, port, timeout, proxy) as sock:
             with insecure_ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
                 der_cert = ssock.getpeercert(binary_form=True)
                 protocol = ssock.version()
@@ -125,13 +171,15 @@ def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int, 
         return None, None, None, exc
 
 
-def _verify_trust(hostname: str, port: int, timeout: int, trust: ssl.SSLContext | None = None, limiter=None):
+def _verify_trust(
+    hostname: str, port: int, timeout: int, trust: ssl.SSLContext | None = None, limiter=None, proxy=None
+):
     """Step 2: verifying connection. Returns None if trusted, or the raised exception."""
     verify_ctx = trust if trust is not None else ssl.create_default_context()
     if limiter is not None:
         limiter.acquire(f"https://{hostname}:{port}/")
     try:
-        with socket.create_connection((hostname, port), timeout=timeout) as sock:
+        with _open_connection(hostname, port, timeout, proxy) as sock:
             with verify_ctx.wrap_socket(sock, server_hostname=hostname):
                 pass
         return None
@@ -150,12 +198,13 @@ def check_tls(
     warnings: list[str] | None = None,
     trust: ssl.SSLContext | None = None,
     limiter=None,
+    proxy: str | None = None,
 ) -> list[Finding]:
     """TLS checks; ``warnings`` receives a note when the handshake looks intercepted (FR-DET-16)."""
     findings: list[Finding] = []
     url = f"https://{url_host(hostname)}:{port}"
 
-    der_cert, protocol, cipher, conn_err = _fetch_raw_cert_and_connection_info(hostname, port, timeout, limiter)
+    der_cert, protocol, cipher, conn_err = _fetch_raw_cert_and_connection_info(hostname, port, timeout, limiter, proxy)
     if conn_err is not None:
         findings.append(
             Finding(
@@ -259,7 +308,7 @@ def check_tls(
     # period is fine — otherwise a self-signed-style verification failure
     # would just re-state the expiry/not-yet-valid finding above.
     if not cert_time_problem:
-        trust_err = _verify_trust(hostname, port, timeout, trust, limiter)
+        trust_err = _verify_trust(hostname, port, timeout, trust, limiter, proxy)
         if trust_err is not None:
             findings.append(
                 Finding(

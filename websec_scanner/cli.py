@@ -12,25 +12,29 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
+import os
 import re
 import ssl
 import sys
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
 import requests
 
-from . import catalog
+from . import __version__, catalog, request_options
 from .baseline import Baseline, BaselineError, load_baseline
 from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
+from .config import CONFIG_KEYS, ConfigError, load_config
 from .exports import to_csv, to_junit
 from .html_report import render_html
 from .http_utils import build_session
 from .limits import ScanLimiter, ScanLimitReached
 from .models import ScanResult
-from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, exit_code
+from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, exit_code, gate_message, scrub_text
 from .redact import redact
 from .report import print_report, write_json
 from .rule_loader import load_exclusions
@@ -130,6 +134,19 @@ def _regex(value: str) -> str:
     return value
 
 
+def _as_type(parse):
+    """Turn a request_options parser into an argparse type."""
+
+    def convert(value: str):
+        try:
+            return parse(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(str(exc)) from exc
+
+    convert.__name__ = parse.__name__
+    return convert
+
+
 def _baseline(value: str) -> Baseline:
     """argparse type for --baseline: load it now, so a bad file fails before any request."""
     try:
@@ -155,8 +172,11 @@ def _ca_bundle(value: str) -> str:
     return value
 
 
-def _confirm_authorization(assume_yes: bool) -> bool:
-    print(CONSENT_BANNER)
+def _confirm_authorization(assume_yes: bool, quiet: bool = False) -> bool:
+    # --quiet drops the banner only when the operator has already confirmed with --yes;
+    # an interactive confirmation always shows what is being agreed to.
+    if not (quiet and assume_yes):
+        print(CONSENT_BANNER)
     if assume_yes:
         return True
     try:
@@ -188,6 +208,11 @@ def run_scan(
     exclude_hosts: Iterable[str] = (),
     default_excludes: bool = True,
     send_scan_id: bool = False,
+    extra_headers: dict[str, str] | None = None,
+    extra_cookies: dict[str, str] | None = None,
+    proxy: str | None = None,
+    user_agent_prefix: str | None = None,
+    on_request=None,
 ) -> ScanResult:
     """Scan ``base_url``. ``groups`` selects check groups (catalog.GROUP_IDS); None means all.
 
@@ -211,6 +236,11 @@ def run_scan(
         exclusions=exclusions,
         excluded_hosts=exclude_hosts,
         scan_id=result.scan_id if send_scan_id else None,
+        user_agent=request_options.user_agent(user_agent_prefix),
+        extra_headers=extra_headers,
+        cookies=extra_cookies,
+        proxy=proxy,
+        on_request=on_request,
     )
 
     def run_tls(url: str) -> None:
@@ -225,6 +255,7 @@ def run_scan(
             warnings=result.errors,
             trust=session.trust_context,  # same trust decision as the HTTP requests (FR-CI-10)
             limiter=limiter,  # TLS opens its own sockets, so it needs the limiter explicitly
+            proxy=proxy,  # ...and the proxy, so it does not connect directly (FR-CI-07)
         )
 
     try:
@@ -323,12 +354,41 @@ def run_scan(
     return result
 
 
-def main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="websec-scanner",
         description="Non-intrusive web security configuration scanner (headers, TLS, cookies, CORS, exposure).",
     )
-    parser.add_argument("target", nargs="?", help="Target URL or hostname, e.g. https://example.com")
+    parser.add_argument(
+        "target", nargs="*", help="Target URL(s) or hostname(s), e.g. https://example.com (several allowed)"
+    )
+    parser.add_argument("--config", metavar="FILE", help="TOML file with any of these options; the command line wins")
+    multi = parser.add_argument_group("several targets (FR-CI-05)")
+    multi.add_argument("--targets-file", metavar="FILE", help="File with one target per line ('#' starts a comment)")
+    multi.add_argument(
+        "--output-dir",
+        metavar="DIR",
+        help="Write one set of reports per target into DIR, named after the target (see --formats)",
+    )
+    multi.add_argument(
+        "--formats",
+        type=_formats,
+        default=["json"],
+        metavar="LIST",
+        help=f"With --output-dir: comma-separated formats to write (default: json; any of {', '.join(_FORMATS)})",
+    )
+    multi.add_argument(
+        "--baseline-dir",
+        metavar="DIR",
+        help="Previous --output-dir: each target is compared with its own report there (like --baseline)",
+    )
+    multi.add_argument(
+        "--parallel",
+        type=_parallel,
+        default=1,
+        metavar="N",
+        help="Scan up to N targets at the same time (default: 1, one after another; at most 64)",
+    )
     parser.add_argument("--json", metavar="PATH", help="Write full JSON report to PATH")
     parser.add_argument("--sarif", metavar="PATH", help="Write a SARIF 2.1.0 report to PATH (e.g. for code scanning)")
     parser.add_argument("--html", metavar="PATH", help="Write a standalone HTML report to PATH")
@@ -352,6 +412,41 @@ def main(argv=None) -> int:
     parser.add_argument("--timeout", type=int, default=10, help="Per-request timeout in seconds (default: 10)")
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors in CLI output")
+    parser.add_argument("--version", action="version", version=f"websec-scanner {__version__}")
+    verbosity = parser.add_mutually_exclusive_group()
+    verbosity.add_argument("--quiet", action="store_true", help="Print one summary line per target")
+    verbosity.add_argument(
+        "--verbose", action="store_true", help="Also log every request sent, to stderr (credentials masked)"
+    )
+    requests_group = parser.add_argument_group("request options (FR-CI-07)")
+    requests_group.add_argument(
+        "--header",
+        action="append",
+        default=[],
+        type=_as_type(request_options.parse_header),
+        metavar="'NAME: VALUE'",
+        help="Extra request header (repeatable). Credential headers are masked in every report",
+    )
+    requests_group.add_argument(
+        "--cookie",
+        action="append",
+        default=[],
+        type=_as_type(request_options.parse_cookie),
+        metavar="NAME=VALUE",
+        help="Cookie to send (repeatable). Values are masked in every report",
+    )
+    requests_group.add_argument(
+        "--proxy",
+        type=_as_type(request_options.validate_proxy),
+        metavar="URL",
+        help="http:// proxy for every request, the TLS check included (http://[user:pass@]host:port)",
+    )
+    requests_group.add_argument(
+        "--user-agent",
+        type=_as_type(request_options.user_agent_prefix),
+        metavar="PREFIX",
+        help="Text put in front of the scanner's User-Agent; it never replaces it (NFR-SEC-03)",
+    )
     limits = parser.add_argument_group("scan limits (FR-AUTHZ-05; no limit unless set)")
     limits.add_argument("--rate-limit", type=_positive_float, metavar="N", help="Send at most N requests per second")
     limits.add_argument("--max-requests", type=_positive_int, metavar="N", help="Stop the scan after N requests")
@@ -422,73 +517,289 @@ def main(argv=None) -> int:
         action="store_true",
         help="Skip the interactive authorization confirmation (use in CI with care).",
     )
+    return parser
+
+
+_FORMATS = ("json", "sarif", "html", "csv", "junit")
+_EXTENSIONS = {"json": "json", "sarif": "sarif", "html": "html", "csv": "csv", "junit": "xml"}
+_SINGLE_FILE_OPTIONS = ("json", "sarif", "html", "csv", "junit")
+_MAX_PARALLEL = 64
+
+
+def _formats(value: str) -> list[str]:
+    """argparse type for --formats."""
+    wanted = [item.strip().lower() for item in value.split(",") if item.strip()]
+    unknown = sorted(set(wanted) - set(_FORMATS))
+    if unknown or not wanted:
+        raise argparse.ArgumentTypeError(f"unknown format(s) {unknown}; choose from {', '.join(_FORMATS)}")
+    return [f for f in _FORMATS if f in wanted]
+
+
+def _parallel(value: str) -> int:
+    """argparse type for --parallel: a bounded number, so a typo cannot start hundreds of scans."""
+    number = _positive_int(value)
+    if number > _MAX_PARALLEL:
+        raise argparse.ArgumentTypeError(f"at most {_MAX_PARALLEL} targets at a time, got {number}")
+    return number
+
+
+def _apply_config(parser: argparse.ArgumentParser, argv) -> None:
+    """FR-CI-06: load --config into the parser's defaults, so the command line still wins."""
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config")
+    known, _ = pre.parse_known_args(argv)
+    if not known.config:
+        return
+    try:
+        values, warnings = load_config(known.config)
+    except ConfigError as exc:
+        parser.error(str(exc))
+    for warning in warnings:
+        print(f"WARNING: {warning}", file=sys.stderr)
+
+    def convert(key: str, raw):
+        """Run a config value through the same validation as its command-line option."""
+        try:
+            if key == "headers":
+                return [request_options.parse_header(f"{name}: {value}") for name, value in raw.items()]
+            if key == "cookies":
+                return [request_options.parse_cookie(f"{name}={value}") for name, value in raw.items()]
+            if key == "checks":
+                return _check_groups(",".join(raw))
+            if key == "formats":
+                return _formats(",".join(raw))
+            if key == "exclude":
+                return [_regex(pattern) for pattern in raw]
+            if key in ("default_excludes", "color"):
+                return not raw  # stored as --no-default-excludes / --no-color
+            if key == "proxy":
+                return request_options.validate_proxy(raw)
+            if key == "user_agent":
+                return request_options.user_agent_prefix(raw)
+            if key in ("rate_limit", "max_duration"):
+                return _positive_float(str(raw))
+            if key == "max_requests":
+                return _positive_int(str(raw))
+            if key == "parallel":
+                return _parallel(str(raw))
+            if key == "fail_on" and raw not in FAIL_ON_CHOICES:
+                raise ValueError(f"must be one of {', '.join(FAIL_ON_CHOICES)}")
+            if key == "baseline":
+                return _baseline(raw)
+            if key == "suppressions":
+                return _suppressions(raw)
+            if key == "ca_bundle":
+                return _ca_bundle(raw)
+            return raw
+        except (ValueError, argparse.ArgumentTypeError) as exc:
+            parser.error(f"{known.config}: '{key}': {exc}")
+
+    parser.set_defaults(**{CONFIG_KEYS[key]: convert(key, raw) for key, raw in values.items()})
+
+
+def _collect_targets(parser: argparse.ArgumentParser, args) -> list[str]:
+    """Positional targets and --targets-file, normalised, in order, without duplicates."""
+    raw = list(args.target or [])
+    if args.targets_file:
+        try:
+            with open(args.targets_file, encoding="utf-8") as fh:
+                lines = fh.read().splitlines()
+        except OSError as exc:
+            parser.error(f"cannot read --targets-file {args.targets_file!r}: {exc.strerror or exc}")
+        for line in lines:
+            entry = line.split("#", 1)[0].strip()
+            if entry:
+                raw.append(entry)
+    seen, targets = set(), []
+    for entry in raw:
+        target = _normalize_target(entry)
+        if target not in seen:
+            seen.add(target)
+            targets.append(target)
+    return targets
+
+
+def _report_name(target: str) -> str:
+    """File name stem for one target: readable, and the same on every run (--baseline-dir relies on it)."""
+    parts = urlsplit(target)
+    host = (parts.hostname or "target").replace(":", "-")  # IPv6 has no place in a file name
+    port = parts.port or {"http": 80, "https": 443}.get(parts.scheme, 0)
+    digest = hashlib.sha256(target.encode("utf-8")).hexdigest()[:8]
+    return f"{host}_{port}-{digest}"
+
+
+def _check_run_options(parser: argparse.ArgumentParser, args, targets: list[str], headers, cookies) -> None:
+    """Refuse combinations that would silently do the wrong thing, before any request is sent."""
+    single_files = [f"--{name}" for name in _SINGLE_FILE_OPTIONS if getattr(args, name)]
+    if args.output_dir and single_files:
+        parser.error(f"use either --output-dir (with --formats) or {', '.join(single_files)}, not both")
+    if len(targets) > 1 and single_files:
+        parser.error(f"{', '.join(single_files)} writes one file; with several targets use --output-dir instead")
+    if args.baseline and args.baseline_dir:
+        parser.error("use either --baseline or --baseline-dir, not both")
+    if len(targets) > 1 and args.baseline:
+        parser.error("--baseline is one target's report; with several targets use --baseline-dir")
+    hosts = {(urlsplit(t).hostname or "").lower() for t in targets}
+    credentials = [name for name in headers if request_options.is_sensitive_header(name)] + list(cookies)
+    if len(hosts) > 1 and credentials:
+        parser.error(
+            f"credential(s) {', '.join(credentials)} would be sent to every target ({len(hosts)} different hosts), "
+            "so one site's token would reach the others; scan each host in its own run"
+        )
+
+
+def _baseline_for(parser: argparse.ArgumentParser, args, target: str):
+    """--baseline, or this target's own report in --baseline-dir (None when it has none yet)."""
+    if args.baseline:
+        return args.baseline, None
+    if not args.baseline_dir:
+        return None, None
+    path = os.path.join(args.baseline_dir, _report_name(target) + ".json")
+    if not os.path.exists(path):
+        return None, f"No baseline for {target} in {args.baseline_dir}; every finding counts toward the gate"
+    try:
+        return load_baseline(path), None
+    except BaselineError as exc:
+        parser.error(str(exc))
+
+
+def _write_outputs(args, target: str, report: dict, quiet: bool) -> None:
+    writers = {
+        "json": lambda path: write_json(report, path),
+        "sarif": lambda path: write_json(to_sarif(report), path),
+        "html": lambda path: _write_text(path, render_html(report)),
+        "csv": lambda path: _write_text(path, to_csv(report), newline=""),
+        "junit": lambda path: _write_text(path, to_junit(report)),
+    }
+    labels = {"json": "Full JSON", "sarif": "SARIF", "html": "HTML", "csv": "CSV", "junit": "JUnit"}
+    if args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+        jobs = [
+            (fmt, os.path.join(args.output_dir, f"{_report_name(target)}.{_EXTENSIONS[fmt]}")) for fmt in args.formats
+        ]
+    else:
+        jobs = [(fmt, getattr(args, fmt)) for fmt in _SINGLE_FILE_OPTIONS if getattr(args, fmt)]
+    for fmt, path in jobs:
+        writers[fmt](path)
+        if not quiet:
+            print(f"{labels[fmt]} report written to: {path}")
+
+
+def _write_text(path: str, text: str, newline: str | None = None) -> None:
+    with open(path, "w", encoding="utf-8", newline=newline) as fh:
+        fh.write(text)
+
+
+def _quiet_line(target: str, report: dict, code: int) -> str:
+    status, _ = gate_message(report["gate"])
+    return f"{target}: {len(report['findings'])} findings, gate {status} (exit {code})"
+
+
+def main(argv=None) -> int:
+    parser = build_parser()
+    _apply_config(parser, argv)
     args = parser.parse_args(argv)
     if args.list_checks:
         for group in catalog.CHECK_GROUPS:
             print(f"{group.id:<18} {group.title}")
             print(f"{'':<18} {group.description}")
         return 0
-    if args.target is None:
-        parser.error("the following arguments are required: target")
 
-    if not _confirm_authorization(args.assume_yes):
+    targets = _collect_targets(parser, args)
+    if not targets:
+        parser.error("the following arguments are required: target (or --targets-file, or targets in --config)")
+    headers, cookies = dict(args.header), dict(args.cookie)
+    _check_run_options(parser, args, targets, headers, cookies)
+    baselines = {target: _baseline_for(parser, args, target) for target in targets}  # fail on a bad file now
+
+    if not _confirm_authorization(args.assume_yes, args.quiet):
         print("Authorization not confirmed. Aborting.")
         return 2
-
-    target = _normalize_target(args.target)
-    print(f"Scanning {target if args.show_secrets else redact(target)} ...\n")
-
-    result = run_scan(
-        target,
-        timeout=args.timeout,
-        workers=args.workers,
-        ca_bundle=args.ca_bundle,
-        groups=args.checks,
-        rate_limit=args.rate_limit,
-        max_requests=args.max_requests,
-        max_duration=args.max_duration,
-        scope_hosts=args.scope_host,
-        exclude=args.exclude,
-        exclude_hosts=args.exclude_host,
-        default_excludes=not args.no_default_excludes,
-        send_scan_id=args.scan_id_header,
-    )
     if args.show_secrets:
         print(
             "WARNING: --show-secrets is set: cookie values and sensitive URL parameters are NOT redacted. "
             "Do not share this output.",
             file=sys.stderr,
         )
-    report = build_report(
-        result,
-        show_secrets=args.show_secrets,
-        fail_on=args.fail_on,
-        baseline=args.baseline,
-        suppressions=args.suppressions,
-    )
-    print_report(report, use_color=not args.no_color)
 
-    if args.json:
-        write_json(report, args.json)
-        print(f"\nFull JSON report written to: {args.json}")
-    if args.sarif:
-        write_json(to_sarif(report), args.sarif)
-        print(f"SARIF report written to: {args.sarif}")
-    if args.html:
-        # Same renderer as the Web UI's "Download Test result" (FR-RPT-09).
-        with open(args.html, "w", encoding="utf-8") as fh:
-            fh.write(render_html(report))
-        print(f"HTML report written to: {args.html}")
-    if args.csv:
-        with open(args.csv, "w", encoding="utf-8", newline="") as fh:
-            fh.write(to_csv(report))
-        print(f"CSV report written to: {args.csv}")
-    if args.junit:
-        with open(args.junit, "w", encoding="utf-8") as fh:
-            fh.write(to_junit(report))
-        print(f"JUnit report written to: {args.junit}")
+    secrets = request_options.secrets_of(headers, cookies, args.proxy)
 
-    return exit_code(report)
+    def log_request(method: str, url: str, status, error) -> None:
+        outcome = status if status is not None else f"error {error}"
+        print(f"[request] {method} {scrub_text(url, secrets)} -> {outcome}", file=sys.stderr)
+
+    def scan(target: str) -> ScanResult:
+        return run_scan(
+            target,
+            timeout=args.timeout,
+            workers=args.workers,
+            ca_bundle=args.ca_bundle,
+            groups=args.checks,
+            rate_limit=args.rate_limit,
+            max_requests=args.max_requests,
+            max_duration=args.max_duration,
+            scope_hosts=args.scope_host,
+            exclude=args.exclude,
+            exclude_hosts=args.exclude_host,
+            default_excludes=not args.no_default_excludes,
+            send_scan_id=args.scan_id_header,
+            extra_headers=headers,
+            extra_cookies=cookies,
+            proxy=args.proxy,
+            user_agent_prefix=args.user_agent,
+            on_request=log_request if args.verbose else None,
+        )
+
+    def report_for(target: str, result: ScanResult) -> dict:
+        baseline, note = baselines[target]
+        if note:
+            result.errors.append(note)
+        return build_report(
+            result,
+            show_secrets=args.show_secrets,
+            fail_on=args.fail_on,
+            baseline=baseline,
+            suppressions=args.suppressions,
+            secrets=secrets,
+        )
+
+    def show(target: str, report: dict) -> int:
+        code = exit_code(report)
+        if args.quiet:
+            print(_quiet_line(target, report, code))
+        else:
+            print_report(report, use_color=not args.no_color)
+            print()
+        _write_outputs(args, target, report, args.quiet)
+        return code
+
+    codes: list[int] = []
+    summary: list[tuple[str, dict, int]] = []
+    if args.parallel == 1 or len(targets) == 1:
+        for target in targets:  # one after another: each report as soon as its scan ends
+            if not args.quiet:
+                print(f"Scanning {target if args.show_secrets else redact(target)} ...\n")
+            report = report_for(target, scan(target))
+            codes.append(show(target, report))
+            summary.append((target, report, codes[-1]))
+    else:
+        if not args.quiet:
+            print(f"Scanning {len(targets)} targets, up to {args.parallel} at a time ...\n")
+        with ThreadPoolExecutor(max_workers=args.parallel) as pool:
+            results = list(pool.map(scan, targets))  # map keeps input order
+        for target, result in zip(targets, results, strict=True):
+            report = report_for(target, result)
+            codes.append(show(target, report))
+            summary.append((target, report, codes[-1]))
+
+    if len(targets) > 1 and not args.quiet:
+        print("=" * 72)
+        print(f" Summary of {len(targets)} targets:")
+        for target, report, code in summary:
+            status, _ = gate_message(report["gate"])
+            print(f"  {status:<5} exit {code}  {len(report['findings']):>3} findings  {redact(target)}")
+    # The worst target decides: a failing gate (1) outranks an incomplete scan (3), then a pass (0).
+    return 1 if 1 in codes else 3 if 3 in codes else 0
 
 
 if __name__ == "__main__":
