@@ -12,7 +12,7 @@ from . import __version__
 # report shape: minor for added fields, major for removed/renamed fields or changed meaning.
 # History: "1.0" = unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0;
 # 1.2 adds final_url and redirect_chain; 1.3 adds gate.
-SCHEMA_VERSION = "1.5"
+SCHEMA_VERSION = "1.6"
 
 
 class Severity(str, Enum):
@@ -51,6 +51,10 @@ class Finding:
     cwe: str = ""  # e.g. "CWE-693"; empty for informational findings that are not weaknesses
     confidence: str = ""  # "high" | "medium" | "low"
     references: list[str] = field(default_factory=list)
+    # CVSS v3.1 base vector/score for this finding *type* (FR-MODEL-03), estimated and generic
+    # (see catalog._CVSS_VECTORS); empty/None for ids in catalog.NOT_A_WEAKNESS.
+    cvss_vector: str = ""
+    cvss_score: float | None = None
     fingerprint: str = ""  # stable across scans, see catalog.fingerprint()
     check: str = ""  # name of the check that produced it (a checks_run entry), set by run_scan()
     # Exact (raw, masked) substrings that output.build_report() replaces unless --show-secrets.
@@ -70,6 +74,8 @@ class Finding:
             "recommendation": self.recommendation,
             "url": self.url,
             "references": list(self.references),
+            "cvss_vector": self.cvss_vector,
+            "cvss_score": self.cvss_score,
             "instance_key": self.instance_key,
             "fingerprint": self.fingerprint,
             "check": self.check,

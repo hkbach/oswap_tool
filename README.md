@@ -29,7 +29,7 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
 - [`docs/PRODUCT-BACKLOG.md`](./docs/PRODUCT-BACKLOG.md) — backlog, decisions, sprint order.
 - [`CLAUDE.md`](./CLAUDE.md) — working rules for this repository.
 - [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema of the `--json`
-  report (`schema_version` 1.4).
+  report (`schema_version` 1.6).
 - [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md) — license of every
   runtime and dev dependency, direct and transitive.
 
@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.11.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.12.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.11.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.12.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -241,7 +241,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.11.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.12.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -379,7 +379,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-60 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-61 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -546,6 +546,17 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 
 ## Changelog
 
+- **v1.12.0.** Changes to note:
+  - **Every finding carries an estimated CVSS v3.1 score** (`cvss_vector`/`cvss_score`,
+    schema_version 1.6, fields added only): a generic, per-finding-type estimate (not an
+    assessment of your specific target), computed by `websec_scanner/cvss.py` from a
+    declarative vector table in `websec_scanner/catalog.py`. Every place that shows it
+    labels it "(estimated)"; see the SRS for the `[CONFIRM]` note on reviewing the
+    per-type vectors before relying on them commercially.
+  - **HTML report**: new "Top issues" section (up to 5 highest-severity findings) in the
+    executive summary, and a "Reproduce" line on every finding (re-run with
+    `--checks <group>`). Also fixes a leftover "OWASP scan report" page `<title>` from the
+    v1.9.0 package rename.
 - **v1.11.0.** The company name has been removed from the source code entirely (product
   owner, 2026-09-30); it must never appear here. What actually changed:
   - **User-Agent sent to targets (NFR-SEC-03):** the company-name prefix is gone. The

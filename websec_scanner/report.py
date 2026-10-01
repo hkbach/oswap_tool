@@ -50,7 +50,8 @@ def print_report(report: dict, use_color: bool = True) -> None:
             tag = _colorize(f"[{f['severity']}]", f["severity"], use_color)
             print(f" {tag} {f['title']}")
             confidence = f"confidence: {f['confidence']}" if f["confidence"] else ""
-            classification = " | ".join(filter(None, (f["cwe"], confidence)))
+            cvss_text = f"CVSS 3.1: {f['cvss_score']} (estimated)" if f.get("cvss_vector") else ""
+            classification = " | ".join(filter(None, (f["cwe"], confidence, cvss_text)))
             print(f"     OWASP: {f['owasp_category']}" + (f" | {classification}" if classification else ""))
             print(f"     {f['description']}")
             if f["evidence"]:

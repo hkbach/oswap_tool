@@ -8,7 +8,7 @@ import pytest
 from conftest import QuietHandler
 from mock_server import Handler as MockHandler
 
-from websec_scanner import catalog, cli, rule_loader
+from websec_scanner import catalog, cli, cvss, rule_loader
 from websec_scanner.checks import cookies, headers
 from websec_scanner.models import Finding, Severity
 
@@ -84,8 +84,12 @@ def test_catalog_entries_are_complete(finding_id):
     assert meta.references and all(ref.startswith("https://") for ref in meta.references)
     if finding_id in catalog.NOT_A_WEAKNESS:
         assert meta.cwe == ""
+        assert meta.cvss_vector == "" and meta.cvss_score is None
     else:
         assert re.fullmatch(r"CWE-\d+", meta.cwe)
+        assert meta.cvss_vector, finding_id
+        assert cvss.base_score(meta.cvss_vector) == meta.cvss_score
+        assert 0.0 <= meta.cvss_score <= 10.0
 
 
 def test_every_finding_of_a_real_scan_is_enriched(http_server):
@@ -97,6 +101,10 @@ def test_every_finding_of_a_real_scan_is_enriched(http_server):
         assert f.confidence in ("high", "medium", "low"), f.id
         assert f.references, f.id
         assert f.cwe or f.id in catalog.NOT_A_WEAKNESS, f.id
+        if f.id in catalog.NOT_A_WEAKNESS:
+            assert f.cvss_vector == "" and f.cvss_score is None, f.id
+        else:
+            assert f.cvss_vector and f.cvss_score is not None, f.id
 
 
 def test_same_type_in_two_places_gets_two_fingerprints(http_server):
@@ -155,4 +163,4 @@ def test_cookie_cwe_follows_the_most_important_missing_attribute(raw, cwe):
 
 def test_new_fields_are_serialized():
     data = catalog.enrich(_finding(), "https://example.com/").to_dict()
-    assert {"cwe", "confidence", "references", "instance_key", "fingerprint"} <= set(data)
+    assert {"cwe", "confidence", "references", "cvss_vector", "cvss_score", "instance_key", "fingerprint"} <= set(data)

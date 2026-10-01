@@ -11,8 +11,11 @@ from __future__ import annotations
 from html import escape
 
 from . import __version__
+from .catalog import CHECK_GROUPS, group_of_check
 from .models import SEVERITY_ORDER
 from .output import SCOPE_NOTE, gate_message, group_findings, owasp_groups
+
+_GROUP_TITLE = {g.id: g.title for g in CHECK_GROUPS}
 
 _SEVERITIES = SEVERITY_ORDER
 _STATUS_TEXT = {"clean": "No issues", "not-run": "Not run", "not-selected": "Not selected"}
@@ -58,6 +61,8 @@ dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; }
 code { font:12.5px/1.45 ui-monospace,"Cascadia Mono",Consolas,monospace; background:var(--bg);
   border:1px solid var(--border); border-radius:6px; padding:1px 6px; white-space:pre-wrap; word-break:break-word; }
 ul.errors { margin:0; padding-left:20px; overflow-wrap:anywhere; }
+ol.top-issues { margin:0; padding-left:20px; } ol.top-issues li { margin:4px 0; }
+ol.top-issues a { color:inherit; }
 footer { margin-top:32px; font-size:12px; color:var(--muted); }
 .sev-CRITICAL { --c:var(--critical); } .sev-HIGH { --c:var(--high); } .sev-MEDIUM { --c:var(--medium); }
 .sev-LOW { --c:var(--low); } .sev-INFO { --c:var(--info); }
@@ -96,6 +101,16 @@ def _finding(f: dict, index: int) -> str:
         rows.append(f"<dt>Recommendation</dt><dd>{_e(f['recommendation'])}</dd>")
     if f.get("url"):
         rows.append(f"<dt>URL</dt><dd><code>{_e(f['url'])}</code></dd>")
+    if f.get("cvss_vector"):
+        rows.append(
+            f"<dt>CVSS 3.1 (estimated)</dt><dd>{f['cvss_score']} &middot; <code>{_e(f['cvss_vector'])}</code></dd>"
+        )
+    group_id = group_of_check(f["check"]) if f.get("check") else ""
+    if group_id:
+        rows.append(
+            f"<dt>Reproduce</dt><dd>Re-run <code>--checks {_e(group_id)}</code> "
+            f"({_e(_GROUP_TITLE[group_id])}) against this target, or inspect the response above directly.</dd>"
+        )
     links = [ref for ref in f.get("references") or [] if str(ref).startswith("https://")]
     if links:
         items = "<br>".join(f'<a href="{_e(ref)}">{_e(ref)}</a>' for ref in links)
@@ -117,6 +132,25 @@ def _finding(f: dict, index: int) -> str:
         f'<p class="muted">{classification}</p>'
         f"<p>{_e(f.get('description'))}</p>{details}</section>"
     )
+
+
+_TOP_ISSUES_LIMIT = 5
+
+
+def _top_issues(findings: list[dict]) -> str:
+    """Up to the 5 highest-severity findings, most severe first (FR-REPORT-02 order)."""
+    if not findings:
+        return ""
+    rank = {sev: i for i, sev in enumerate(_SEVERITIES)}
+    ordered = sorted(
+        range(len(findings)), key=lambda i: (rank.get(findings[i].get("severity"), len(rank)), findings[i].get("id"))
+    )[:_TOP_ISSUES_LIMIT]
+    items = "".join(
+        f'<li><span class="badge sev-{findings[i].get("severity", "INFO")}">{_e(findings[i].get("severity"))}</span> '
+        f'<a href="#finding-{i}">{_e(findings[i].get("title"))}</a></li>'
+        for i in ordered
+    )
+    return f'<h2>Top issues</h2><div class="card"><ol class="top-issues">{items}</ol></div>'
 
 
 def _count_cells(counts: dict) -> str:
@@ -212,7 +246,7 @@ def render_html(report: dict) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OWASP scan report - {_e(report.get("target"))}</title>
+<title>Non-intrusive web security scan report - {_e(report.get("target"))}</title>
 <style>{_CSS}</style>
 </head>
 <body>
@@ -229,6 +263,7 @@ def render_html(report: dict) -> str:
 {secrets_banner}<p class="gate {gate_class}">{_e(gate_text)}</p>
 <table class="summary"><tr>{summary_cells}</tr></table>
 </div>
+{_top_issues(findings)}
 {errors_html}
 {findings_html}
 <footer>

@@ -226,6 +226,8 @@ def test_at12_json_report(http_server, tmp_path):
         "instance_key",
         "fingerprint",
         "check",  # SRS 4.11
+        "cvss_vector",
+        "cvss_score",  # FR-MODEL-03
     }
     ranks = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
     order = [ranks.index(f["severity"]) for f in data["findings"]]

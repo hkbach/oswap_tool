@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.13 |
-| **Ngày** | 2026-09-30 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.12: 2026-09-30) |
+| **Phiên bản tài liệu** | 1.14 |
+| **Ngày** | 2026-10-01 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.13: 2026-09-30 · v1.14: 2026-10-01) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `websec_scanner` `v1.11.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 9, đổi tên package). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `websec_scanner` `v1.12.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, Sprint 10). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -36,6 +36,7 @@
 | 1.11 | 2026-09-30 | Theo code v1.9.0: **đổi tên package** `owasp_scanner`/`owasp-scanner` → `websec_scanner`/`websec-scanner` theo yêu cầu chủ sản phẩm (tool không còn giới hạn ở riêng OWASP). Đổi: import path, lệnh CLI, tên gói pip, User-Agent (NFR-SEC-03, breaking — WAF/log filter theo chuỗi cũ cần cập nhật), khoá `partialFingerprints` của SARIF (FR-REPORT-06, breaking — mất liên tục fingerprint trên GitHub code scanning), tên file báo cáo tải về, tiêu đề sản phẩm. Không đổi: `schema_version` (1.4), trường `owasp_category`/`owasp_groups`, hành vi CLI/Web UI, exit code. |
 | 1.12 | 2026-09-30 | Theo code v1.10.0: JSON thêm `disclaimer` (FR-RPT-08, `schema_version` 1.5, mục 6.2, AT-57); Docker image publish lên `ghcr.io/hkbach/websec-scanner` qua job `docker-publish` chỉ khi push tag `v*` (FR-CI-04, AT-59); tiêu đề trang Web UI (`<title>`/`<h1>`) đổi thành "WebSec Scanner" theo yêu cầu chủ sản phẩm (cosmetic, không có FR riêng, không đổi hành vi). |
 | 1.13 | 2026-09-30 | Theo code v1.11.0: bỏ tên công ty khỏi toàn bộ source code theo yêu cầu chủ sản phẩm (NFR-SEC-03: `User-Agent` không còn tiền tố tên công ty, chỉ còn `WebSec-Scanner/<version>`; các mục tài liệu khác nhắc tên công ty được viết lại theo nghĩa trung tính, không đổi ý; `docs/PRODUCT-BACKLOG.md`, `docs/srs-feedback.md`). Không đổi hành vi nào khác. |
+| 1.14 | 2026-10-01 | Theo code v1.12.0 (Sprint 10): mỗi finding có `cvss_vector`/`cvss_score` CVSS v3.1 ước tính theo loại (FR-MODEL-03, `websec_scanner/cvss.py`, `catalog._CVSS_VECTORS`, mục 6.1); `schema_version` 1.6 (mục 6.2); console, báo cáo HTML hiển thị điểm kèm "(estimated)"; báo cáo HTML thêm mục "Top issues" và dòng "Reproduce" (chạy lại `--checks <group>`) cho mỗi finding — cả hai không đổi JSON schema (FR-RPT-01, cosmetic); sửa lỗi `<title>` báo cáo HTML còn sót "OWASP scan report" từ đợt đổi tên package; AT-61. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -442,6 +443,8 @@ class Finding:
     cwe: str = ""           # VD "CWE-693"; rỗng với finding thông tin không phải điểm yếu
     confidence: str = ""    # "high" | "medium" | "low"
     references: list[str] = field(default_factory=list)  # link OWASP/CWE, chỉ https://
+    cvss_vector: str = ""    # VD "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"; rỗng nếu không phải điểm yếu
+    cvss_score: float | None = None  # tính từ cvss_vector; None nếu cvss_vector rỗng (FR-MODEL-03)
     fingerprint: str = ""   # 32 hex, ổn định giữa các lần quét
 
 @dataclass
@@ -464,17 +467,18 @@ class ScanResult:
 - `Finding.id` là mã ổn định theo **loại** lỗi, không đổi giữa các lần chạy. Hai **vị trí** khác nhau của cùng một loại lỗi (ví dụ hai cookie cùng thiếu cờ) có cùng `id` nhưng khác `instance_key` và `fingerprint` (FR-MODEL-01).
 - `fingerprint` = 32 ký tự hex đầu của SHA-256(`id|instance_key|origin`), với `origin` = `scheme://host:port` của target (chữ thường, cổng mặc định 80/443). Không phụ thuộc path, thời gian quét hay giá trị bị che, nên cùng một lỗi ở cùng một chỗ luôn cho cùng fingerprint.
 - `cwe`, `confidence`, `references` lấy từ bảng khai báo `catalog.FINDING_CATALOG` (mỗi finding id một dòng). Mọi id tool sinh ra PHẢI có trong bảng. `cwe` để trống cho 3 finding thông tin không phải điểm yếu: `TLS-CONN-FAILED`, `TLS-CERT-PARSE-FAILED`, `EXPOSURE-SECURITY-TXT`. `COOKIE-FLAGS-MISSING` lấy CWE theo thuộc tính quan trọng nhất đang thiếu: Secure → CWE-614, HttpOnly → CWE-1004, SameSite → CWE-1275.
+- `cvss_vector`/`cvss_score` (FR-MODEL-03): vector CVSS v3.1 **ước tính theo loại finding** (`catalog._CVSS_VECTORS`, một dòng mỗi id), không phải đánh giá riêng cho từng target quét. `cvss_score` = `cvss.base_score(cvss_vector)` theo đúng công thức CVSS v3.1 chính thức (`websec_scanner/cvss.py`, có test đối chiếu với các ví dụ điểm đã công bố). Rỗng/`None` cho 3 id trong `catalog.NOT_A_WEAKNESS` ở trên. `[CONFIRM]` Đây là thang điểm **độc lập** với `Severity` nội bộ của tool (vốn còn tính thêm khả năng khai thác theo ngữ cảnh như quyết định D3 cho CORS), nên hai thang có thể không khớp nhau — mọi nơi hiển thị đều ghi rõ "(estimated)"; cần đội bảo mật rà lại vector gán cho từng loại trước khi dùng làm số chính thức với khách hàng trả tiền.
 - `confidence` (FR-DET-03): `high` = quan sát trực tiếp từ response/bắt tay (header, cookie, TLS, CORS, directory listing có dấu hiệu nội dung) hoặc file nhạy cảm có nội dung khớp chữ ký (FR-EXP-04); `medium` = quan sát gián tiếp (hiện chưa có finding nào); `low` = chỉ là gợi ý (robots.txt, sitemap.xml), hoặc finding TLS khi bắt tay có vẻ bị chặn giữa đường (FR-TLS-11).
 - Khi xuất ra (CLI/JSON/HTML), `findings` được sắp theo `severity.rank` tăng dần (CRITICAL trước).
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
 
-Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.5`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01); `1.4` (scanner 1.7.0) **thêm** `scan_groups` và `check` của mỗi finding (FR-GRP-03); `1.5` (scanner 1.10.0) **thêm** `disclaimer` (FR-RPT-08, cùng nội dung với `output.SCOPE_NOTE` hiện trên console và HTML). Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
+Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.6`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01); `1.4` (scanner 1.7.0) **thêm** `scan_groups` và `check` của mỗi finding (FR-GRP-03); `1.5` (scanner 1.10.0) **thêm** `disclaimer` (FR-RPT-08, cùng nội dung với `output.SCOPE_NOTE` hiện trên console và HTML); `1.6` (scanner 1.12.0) **thêm** `cvss_vector`/`cvss_score` của mỗi finding (FR-MODEL-03, ước tính theo loại, xem mục 6.1). Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
 
 ```json
 {
-  "schema_version": "1.5",
-  "scanner_version": "1.10.0",
+  "schema_version": "1.6",
+  "scanner_version": "1.12.0",
   "rules_version": "1.1.0",
   "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "secrets_redacted": true,
@@ -501,6 +505,8 @@ class ScanResult:
       "recommendation": "Remove the file from the web root or block access at the web server/proxy layer.",
       "url": "https://example.com/.env",
       "references": ["https://owasp.org/Top10/A01_2021-Broken_Access_Control/", "https://cwe.mitre.org/data/definitions/538.html"],
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "cvss_score": 7.5,
       "instance_key": ".env",
       "fingerprint": "<32 ký tự hex>",
       "check": "sensitive-paths"
@@ -673,6 +679,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-58 | Kiểm kê license (FR-SEC-10, NFR-LEGAL-01) | `THIRD_PARTY_LICENSES.md` đối chiếu `pyproject.toml`; nội dung cột License của từng dòng | Tập package trực tiếp trong bảng Runtime/Dev khớp chính xác `dependencies`/`optional-dependencies.dev` của `pyproject.toml`; không dòng nào có license GPL/AGPL/LGPL | `test_third_party_licenses_lists_every_direct_dependency`, `test_third_party_licenses_has_no_copyleft_that_would_force_releasing_source` |
 | AT-59 | Image Docker chính thức (FR-CI-04) | `Dockerfile`, `.dockerignore`; job CI `docker` build và quét mock server qua `--network host`; job `docker-publish` (chỉ khi push tag `v*`, sau khi `docker` qua) | 2 giai đoạn (không còn source/pyproject trong stage cuối); có `USER` khác root với `--uid`; entrypoint `python -m websec_scanner`; `.dockerignore` loại `.venv`/`.git`/`tests`/`docs`; có OCI label `image.source`, không tự nhận license chưa công bố. *Không build/chạy được trên máy dev (không có Docker); kiểm tra nội dung file ở đây, build và smoke test thật chạy trên GitHub.* Từ v1.10.0: `docker-publish` đẩy image lên `ghcr.io/hkbach/websec-scanner` (tag phiên bản + `latest`), chỉ chạy khi push tag `v*`, dùng `secrets.GITHUB_TOKEN` của chính lần chạy (không phải secret người dùng tạo), quyền `packages: write` chỉ cấp cho job này; **không** phải required check (không chạy trên PR). Lần publish đầu cần admin tự đặt visibility công khai cho package trên GitHub (README mục Docker). | `test_dockerfile_exists_and_is_two_stage`, `test_dockerfile_runs_as_a_non_root_user`, `test_dockerfile_entrypoint_is_the_cli`, `test_dockerfile_final_stage_does_not_copy_the_source_tree`, `test_dockerfile_has_oci_source_label_but_no_unverified_license_claim`, `test_dockerignore_excludes_the_venv_and_test_suite`, `test_workflow_has_the_seven_jobs`, `test_docker_job_builds_runs_non_root_and_smoke_tests_a_scan`, `test_docker_publish_job_only_runs_on_a_release_tag_after_the_smoke_test`, `test_workflow_is_read_only_and_uses_no_repository_secrets`, `test_jenkinsfile_installs_from_the_source_archive_not_git` |
 | AT-60 | README khớp SRS và `ci.yml` (FR-DOC-01) | Câu "AT-01 to AT-NN" trong README so với số AT lớn nhất trong mục 9; danh sách check bắt buộc trong README (khối `text` và JSON của `gh api`) so với job/matrix thật của `ci.yml` | Hai giá trị bằng nhau ở cả hai phép so sánh; test tự fail nếu ai đó thêm AT hoặc đổi job/matrix mà quên sửa README | `test_readme_at_range_matches_the_srs`, `test_readme_required_checks_list_matches_the_workflow` |
+| AT-61 | CVSS v3.1 ước tính theo loại finding (FR-MODEL-03) | Công thức `cvss.base_score()` với các vector mẫu đã công bố (vd `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H` = 9.8); mọi id trong `catalog.FINDING_CATALOG` trừ `NOT_A_WEAKNESS`; quét mock thật | Điểm khớp các ví dụ CVSS v3.1 đã công bố; mọi id có vector hợp lệ parse được và điểm trong [0, 10]; id thuộc `NOT_A_WEAKNESS` không có vector/điểm; finding của một lần quét thật có `cvss_vector`/`cvss_score` nhất quán với `catalog`; JSON đúng `docs/report.schema.json` (`schema_version` 1.6) | `test_base_score_matches_published_examples`, `test_invalid_vectors_are_rejected`, `test_catalog_entries_are_complete`, `test_every_finding_of_a_real_scan_is_enriched`, `test_cli_json_report_matches_schema` |
 
 ---
 
