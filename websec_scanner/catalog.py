@@ -13,6 +13,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from urllib.parse import urlsplit
 
+from . import cvss
 from .models import Finding
 
 _CWE_URL = "https://cwe.mitre.org/data/definitions/{}.html"
@@ -39,6 +40,18 @@ class FindingMeta:
     cwe: str
     confidence: str  # "high" | "medium" | "low"
     references: tuple[str, ...]
+    # CVSS v3.1 vector for this *type* of finding (FR-MODEL-03): a generic, estimated
+    # severity for the underlying weakness class, not an assessment of one target.
+    # Three rules, from the vector review of 2026-10-01:
+    #   1. the vector here is the *worst case* for this type of finding;
+    #   2. a check overrides it per finding when the evidence shows a milder case
+    #      (enrich() then recomputes the score from the overriding vector);
+    #   3. findings that are not a scorable weakness (early warnings, hints, anything
+    #      whose default severity is INFO) carry no CVSS at all - see NO_CVSS.
+    # Filled in below from _CVSS_VECTORS, not per entry, so the vector choices stay in
+    # one reviewable table rather than scattered across the catalog.
+    cvss_vector: str = ""
+    cvss_score: float | None = None
 
 
 def _meta(cwe: str, confidence: str, *refs: str) -> FindingMeta:
@@ -78,8 +91,8 @@ FINDING_CATALOG: dict[str, FindingMeta] = {
     "TLS-WEAK-PROTOCOL": _meta("CWE-327", "high", _CS_TLS, _TOP10_A02),
     "TLS-WEAK-CIPHER": _meta("CWE-327", "high", _CS_TLS, _TOP10_A02),
     "TLS-CERT-NOT-YET-VALID": _meta("CWE-298", "high", _CS_TLS, _TOP10_A02),
-    "TLS-CERT-EXPIRED": _meta("CWE-298", "high", _CS_TLS, _TOP10_A02),
-    "TLS-CERT-EXPIRING-SOON": _meta("CWE-298", "high", _CS_TLS, _TOP10_A02),
+    "TLS-CERT-EXPIRED": _meta("CWE-324", "high", _CS_TLS, _TOP10_A02),
+    "TLS-CERT-EXPIRING-SOON": _meta("CWE-324", "high", _CS_TLS, _TOP10_A02),
     "TLS-CERT-NOT-TRUSTED": _meta("CWE-295", "high", _CS_TLS, _TOP10_A02),
     "TLS-CERT-PARSE-FAILED": _meta("", "high", _CS_TLS),
     "TLS-NO-HTTPS-REDIRECT": _meta("CWE-319", "high", _CS_HSTS, _CS_TLS, _TOP10_A02),
@@ -111,6 +124,106 @@ FINDING_CATALOG: dict[str, FindingMeta] = {
     "EXPOSURE-SITEMAP-HINTS": _meta("CWE-200", "low", _TOP10_A01),
 }
 
+# Findings that are a real observation but not a scorable weakness, so they carry no CVSS:
+# the three in NOT_A_WEAKNESS, plus early warnings, hints, and (decision C1 of the 2026-10-01
+# vector review) everything whose default severity is INFO - a score printed next to "INFO"
+# reads as a contradiction.
+NO_CVSS: frozenset[str] = NOT_A_WEAKNESS | frozenset(
+    {
+        "TLS-CERT-EXPIRING-SOON",  # the certificate is still valid; this is an advance warning
+        "EXPOSURE-ROBOTS-HINTS",  # a hint only, and robots.txt is public by design
+        "EXPOSURE-SITEMAP-HINTS",
+        "HDR-XXP-LEGACY",  # discloses nothing; modern browsers ignore the header
+        "HDR-PERMISSIONS-POLICY-MISSING",
+        "HDR-INFO-SERVER",
+        "HDR-INFO-X-POWERED-BY",
+        "HDR-INFO-X-ASPNET-VERSION",
+        "HDR-INFO-X-ASPNETMVC-VERSION",
+        "CORS-WILDCARD",  # '*' without credentials exposes only what is already public
+    }
+)
+
+# CVSS v3.1 base vectors by finding type (FR-MODEL-03), revised by the vector review of
+# 2026-10-01. `[CONFIRM]` Each is a generic, estimated vector for the *worst case* of that
+# type of weakness, not an assessment of one target; checks override it per finding for
+# milder cases (see the CVSS_* constants below). It is deliberately a separate scale from
+# this tool's own Severity (which also folds in D3-style exploitability-in-context), so the
+# two do not always line up, and the table still needs a security-team pass before the
+# scores are presented as authoritative to a paying customer.
+# Grouped by the scenario each one describes, so the reasoning lives in one place:
+_UNAUTH_SECRET_FILE_READ = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"  # noqa: S105 - not a credential, a CVSS vector; 7.5
+_UNAUTH_LIMITED_INFO_READ = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"  # 5.3: non-secret info/structure disclosure
+_TLS_PASSIVE_EAVESDROP = "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N"  # 5.9: traffic can be decrypted, not altered
+_TLS_ACTIVE_MITM = "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N"  # 7.4: no encryption left to break (NULL/EXPORT)
+# 6.8: an on-path attacker, but the victim has to navigate over http:// first.
+_TLS_STRIP_NEEDS_HTTP_NAV = "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N"
+# 6.8 (same vector, different story): an on-path attacker, and the victim has to click past
+# the browser's certificate warning - which HSTS turns into a hard block.
+_TLS_CERT_WARNING_CLICKTHROUGH = "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N"
+# AC:H here is this tool's convention for "needs a second bug (e.g. XSS) to matter", which is
+# not how the CVSS spec defines Attack Complexity; the spec scores the conditions for
+# exploiting *this* weakness alone.
+_HEADER_HARDENING_GAP = "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N"  # 4.2
+_HEADER_MINOR_HARDENING_GAP = "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N"  # 3.1: narrower version of the above
+_CLICKJACKING = "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N"  # 4.3: victim lured into clicking framed UI
+_CLICKJACKING_WEAK = "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:N/I:L/A:N"  # 3.1: partial protection present
+_SESSION_COOKIE_EXPOSED = "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"  # 5.3: no Secure, so the cookie can leak
+_CORS_WILDCARD_NOT_BROWSER_EXPLOITABLE = "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N"  # 3.7: browsers refuse it (D3)
+_CORS_CROSS_ORIGIN_READ_VIA_VICTIM = "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:N"  # 6.5: needs a lured victim
+
+# Public: the milder cases a check overrides the catalog with, per finding (never a raw
+# vector string inside a check). enrich() recomputes the score from whichever vector wins.
+CVSS_CORS_REFLECT_WITHOUT_CREDENTIALS = "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:N/A:N"  # 4.3: no authenticated data
+CVSS_COOKIE_READABLE_BY_SCRIPT = "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N"  # 3.1: Secure set, HttpOnly missing
+CVSS_COOKIE_SENT_CROSS_SITE = "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:N/I:L/A:N"  # 3.1: only SameSite missing
+CVSS_TLS_CIPHER_BROKEN_BUT_ENCRYPTING = _TLS_PASSIVE_EAVESDROP  # 5.9: RC4/3DES/MD5 still encrypt
+
+_CVSS_VECTORS: dict[str, str] = {
+    # security headers: missing/weak hardening, each needs another condition to be exploitable
+    "HDR-STRICT-TRANSPORT-SECURITY-MISSING": _TLS_STRIP_NEEDS_HTTP_NAV,
+    "HDR-HSTS-MISSING-ON-START-HOST": _HEADER_MINOR_HARDENING_GAP,
+    "HDR-CONTENT-SECURITY-POLICY-MISSING": _HEADER_HARDENING_GAP,
+    "HDR-CSP-UNSAFE": _HEADER_HARDENING_GAP,
+    "HDR-X-CONTENT-TYPE-OPTIONS-MISSING": _HEADER_MINOR_HARDENING_GAP,
+    "HDR-X-FRAME-OPTIONS-MISSING": _CLICKJACKING,
+    "HDR-XFO-WEAK": _CLICKJACKING_WEAK,
+    "HDR-REFERRER-POLICY-MISSING": _HEADER_MINOR_HARDENING_GAP,
+    # cookies: the worst case is a cookie without Secure; check_cookies() lowers it per cookie
+    "COOKIE-FLAGS-MISSING": _SESSION_COOKIE_EXPOSED,
+    # TLS
+    "TLS-WEAK-PROTOCOL": _TLS_PASSIVE_EAVESDROP,
+    "TLS-WEAK-CIPHER": _TLS_ACTIVE_MITM,  # worst case NULL/EXPORT; the check lowers RC4/3DES/MD5
+    "TLS-CERT-NOT-YET-VALID": _TLS_CERT_WARNING_CLICKTHROUGH,
+    "TLS-CERT-EXPIRED": _TLS_CERT_WARNING_CLICKTHROUGH,
+    "TLS-CERT-NOT-TRUSTED": _TLS_CERT_WARNING_CLICKTHROUGH,
+    "TLS-NO-HTTPS-REDIRECT": _TLS_STRIP_NEEDS_HTTP_NAV,
+    # CORS: the worst case D3 assigns to the id; check_cors() overrides the milder case
+    "CORS-WILDCARD-WITH-CREDENTIALS": _CORS_WILDCARD_NOT_BROWSER_EXPLOITABLE,
+    "CORS-REFLECTS-ARBITRARY-ORIGIN": _CORS_CROSS_ORIGIN_READ_VIA_VICTIM,
+    # exposed files: full secrets/credentials vs. limited system/version info
+    "EXPOSURE-GIT-HEAD": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-GIT-CONFIG": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-SVN-ENTRIES": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-ENV": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-ENV-LOCAL": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-ENV-PRODUCTION": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-WEB-CONFIG": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-DOCKER-COMPOSE": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-ID-RSA": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-WP-CONFIG-BAK": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-CONFIG-PHP-BAK": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-BACKUP-ZIP": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-BACKUP-SQL": _UNAUTH_SECRET_FILE_READ,
+    "EXPOSURE-DS-STORE": _UNAUTH_LIMITED_INFO_READ,
+    "EXPOSURE-PHPINFO": _UNAUTH_LIMITED_INFO_READ,
+    "EXPOSURE-SERVER-STATUS": _UNAUTH_LIMITED_INFO_READ,
+    # other exposure checks
+    "EXPOSURE-DIR-LISTING": _UNAUTH_LIMITED_INFO_READ,
+}
+for _id, _vector in _CVSS_VECTORS.items():
+    FINDING_CATALOG[_id] = replace(FINDING_CATALOG[_id], cvss_vector=_vector, cvss_score=cvss.base_score(_vector))
+del _id, _vector
+
 
 def _origin(target: str) -> str:
     parts = urlsplit(target)
@@ -132,11 +245,16 @@ def fingerprint(finding_id: str, instance_key: str, target: str) -> str:
 def enrich(finding: Finding, target: str) -> Finding:
     """Return ``finding`` with catalog metadata and fingerprint filled in."""
     meta = FINDING_CATALOG.get(finding.id)
+    vector = finding.cvss_vector or (meta.cvss_vector if meta else "")
     return replace(
         finding,
         cwe=finding.cwe or (meta.cwe if meta else ""),
         confidence=finding.confidence or (meta.confidence if meta else "low"),
         references=list(finding.references or (meta.references if meta else ())),
+        cvss_vector=vector,
+        # Always derived from the winning vector: a check that overrode the vector for this
+        # one finding must not end up carrying the catalog's score for the worst case.
+        cvss_score=cvss.base_score(vector) if vector else None,
         fingerprint=fingerprint(finding.id, finding.instance_key, target),
     )
 

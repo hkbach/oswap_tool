@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.5",
+  "schema_version": "1.6",
   "scanner_version": "<VERSION>",
   "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1",
   "scan_id": "<SCAN_ID>",
@@ -50,6 +50,8 @@
         "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
         "https://cwe.mitre.org/data/definitions/538.html"
       ],
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "cvss_score": 7.5,
       "instance_key": ".env",
       "fingerprint": "<FINGERPRINT>",
       "check": "sensitive-paths"
@@ -69,6 +71,8 @@
         "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
         "https://cwe.mitre.org/data/definitions/527.html"
       ],
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "cvss_score": 7.5,
       "instance_key": ".git/HEAD",
       "fingerprint": "<FINGERPRINT>",
       "check": "sensitive-paths"
@@ -90,6 +94,8 @@
         "https://owasp.org/Top10/A02_2021-Cryptographic_Failures/",
         "https://cwe.mitre.org/data/definitions/319.html"
       ],
+      "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N",
+      "cvss_score": 6.8,
       "instance_key": "http://127.0.0.1:<PORT>/",
       "fingerprint": "<FINGERPRINT>",
       "check": "http-to-https-redirect"
@@ -110,6 +116,8 @@
         "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
         "https://cwe.mitre.org/data/definitions/614.html"
       ],
+      "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N",
+      "cvss_score": 5.3,
       "instance_key": "session",
       "fingerprint": "<FINGERPRINT>",
       "check": "cookies"
@@ -129,6 +137,8 @@
         "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
         "https://cwe.mitre.org/data/definitions/548.html"
       ],
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+      "cvss_score": 5.3,
       "instance_key": "images/",
       "fingerprint": "<FINGERPRINT>",
       "check": "directory-listing"
@@ -151,6 +161,8 @@
         "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
         "https://cwe.mitre.org/data/definitions/693.html"
       ],
+      "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N",
+      "cvss_score": 4.2,
       "instance_key": "content-security-policy",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers"
@@ -173,6 +185,8 @@
         "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
         "https://cwe.mitre.org/data/definitions/1021.html"
       ],
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N",
+      "cvss_score": 4.3,
       "instance_key": "x-frame-options",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers"
@@ -192,6 +206,8 @@
         "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
         "https://cwe.mitre.org/data/definitions/200.html"
       ],
+      "cvss_vector": "",
+      "cvss_score": null,
       "instance_key": "robots.txt",
       "fingerprint": "<FINGERPRINT>",
       "check": "robots-sitemap"
@@ -213,6 +229,8 @@
         "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
         "https://cwe.mitre.org/data/definitions/200.html"
       ],
+      "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N",
+      "cvss_score": 3.1,
       "instance_key": "referrer-policy",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers"
@@ -234,6 +252,8 @@
         "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
         "https://cwe.mitre.org/data/definitions/497.html"
       ],
+      "cvss_vector": "",
+      "cvss_score": null,
       "instance_key": "server",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers"
@@ -255,6 +275,8 @@
         "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
         "https://cwe.mitre.org/data/definitions/497.html"
       ],
+      "cvss_vector": "",
+      "cvss_score": null,
       "instance_key": "x-powered-by",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers"
@@ -276,6 +298,8 @@
         "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
         "https://cwe.mitre.org/data/definitions/693.html"
       ],
+      "cvss_vector": "",
+      "cvss_score": null,
       "instance_key": "permissions-policy",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers"

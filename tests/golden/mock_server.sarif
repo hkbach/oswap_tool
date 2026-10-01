@@ -26,7 +26,7 @@
                   "A01:2021 - Broken Access Control",
                   "CWE-538"
                 ],
-                "security-severity": "9.5",
+                "security-severity": "7.5",
                 "precision": "high"
               },
               "helpUri": "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
@@ -51,7 +51,7 @@
                   "A01:2021 - Broken Access Control",
                   "CWE-527"
                 ],
-                "security-severity": "9.5",
+                "security-severity": "7.5",
                 "precision": "high"
               },
               "helpUri": "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
@@ -76,7 +76,7 @@
                   "A02:2021 - Cryptographic Failures",
                   "CWE-319"
                 ],
-                "security-severity": "8.0",
+                "security-severity": "6.8",
                 "precision": "high"
               },
               "helpUri": "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html",
@@ -101,7 +101,7 @@
                   "A05:2021 - Security Misconfiguration",
                   "CWE-614"
                 ],
-                "security-severity": "5.5",
+                "security-severity": "5.3",
                 "precision": "high"
               },
               "helpUri": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html",
@@ -126,7 +126,7 @@
                   "A05:2021 - Security Misconfiguration",
                   "CWE-548"
                 ],
-                "security-severity": "5.5",
+                "security-severity": "5.3",
                 "precision": "high"
               },
               "helpUri": "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/",
@@ -151,7 +151,7 @@
                   "A05:2021 - Security Misconfiguration",
                   "CWE-693"
                 ],
-                "security-severity": "5.5",
+                "security-severity": "4.2",
                 "precision": "high"
               },
               "helpUri": "https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html",
@@ -176,7 +176,7 @@
                   "A05:2021 - Security Misconfiguration",
                   "CWE-1021"
                 ],
-                "security-severity": "5.5",
+                "security-severity": "4.3",
                 "precision": "high"
               },
               "helpUri": "https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html",
@@ -226,7 +226,7 @@
                   "A05:2021 - Security Misconfiguration",
                   "CWE-200"
                 ],
-                "security-severity": "3.0",
+                "security-severity": "3.1",
                 "precision": "high"
               },
               "helpUri": "https://owasp.org/www-project-secure-headers/",
@@ -624,7 +624,7 @@
         "target": "http://127.0.0.1:<PORT>/",
         "final_url": "http://127.0.0.1:<PORT>/",
         "scan_id": "<SCAN_ID>",
-        "schema_version": "1.5",
+        "schema_version": "1.6",
         "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1",
         "scan_groups": [
           "headers",

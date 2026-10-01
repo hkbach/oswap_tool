@@ -19,9 +19,16 @@ TOOL_URI = "https://github.com/hkbach/oswap_tool"
 FINGERPRINT_KEY = "websecScannerFingerprint/v1"
 
 _LEVEL = {"CRITICAL": "error", "HIGH": "error", "MEDIUM": "warning", "LOW": "note", "INFO": "note"}
-# GitHub code scanning reads "security-severity" (0.0-10.0) to rank security results.
+# GitHub code scanning reads "security-severity" (0.0-10.0) to rank security results. It is the
+# estimated CVSS base score (FR-MODEL-03) when the finding has one; findings that are not a
+# scorable weakness (catalog.NO_CVSS) fall back to this table, derived from our own severity.
 _SECURITY_SEVERITY = {"CRITICAL": "9.5", "HIGH": "8.0", "MEDIUM": "5.5", "LOW": "3.0", "INFO": "0.0"}
 _RANK = {sev: i for i, sev in enumerate(SEVERITY_ORDER)}
+
+
+def _security_severity(finding: dict, severity: str) -> str:
+    score = finding.get("cvss_score")
+    return f"{score:.1f}" if score is not None else _SECURITY_SEVERITY.get(severity, "0.0")
 
 
 def _rule(finding: dict, severity: str) -> dict:
@@ -33,7 +40,7 @@ def _rule(finding: dict, severity: str) -> dict:
         "defaultConfiguration": {"level": _LEVEL.get(severity, "note")},
         "properties": {
             "tags": tags,
-            "security-severity": _SECURITY_SEVERITY.get(severity, "0.0"),
+            "security-severity": _security_severity(finding, severity),
             "precision": finding.get("confidence") or "medium",
         },
     }

@@ -25,7 +25,7 @@
     "errors"
   ],
   "properties": {
-    "schema_version": { "const": "1.5" },
+    "schema_version": { "const": "1.6" },
     "scanner_version": { "type": "string", "minLength": 1 },
     "rules_version": { "type": "string", "minLength": 1 },
     "scan_id": {
@@ -134,6 +134,8 @@
         "recommendation",
         "url",
         "references",
+        "cvss_vector",
+        "cvss_score",
         "instance_key",
         "fingerprint",
         "check"
@@ -156,6 +158,17 @@
         "references": {
           "type": "array",
           "items": { "type": "string", "pattern": "^https://" }
+        },
+        "cvss_vector": {
+          "description": "CVSS v3.1 base vector estimated for this finding type (FR-MODEL-03); empty for ids that are not a weakness",
+          "type": "string",
+          "pattern": "^(CVSS:3\\.1/AV:[NALP]/AC:[LH]/PR:[NLH]/UI:[NR]/S:[UC]/C:[NLH]/I:[NLH]/A:[NLH])?$"
+        },
+        "cvss_score": {
+          "description": "CVSS v3.1 base score computed from cvss_vector; null when cvss_vector is empty",
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 10
         },
         "instance_key": { "type": "string", "minLength": 1 },
         "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{32}$" },

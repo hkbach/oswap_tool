@@ -7,7 +7,7 @@ import textwrap
 
 from .catalog import CHECK_GROUPS
 from .models import SEVERITY_ORDER
-from .output import SCOPE_NOTE
+from .output import CVSS_NOTE, SCOPE_NOTE
 
 _SEVERITIES = SEVERITY_ORDER
 _SEVERITY_COLOR = {
@@ -50,7 +50,8 @@ def print_report(report: dict, use_color: bool = True) -> None:
             tag = _colorize(f"[{f['severity']}]", f["severity"], use_color)
             print(f" {tag} {f['title']}")
             confidence = f"confidence: {f['confidence']}" if f["confidence"] else ""
-            classification = " | ".join(filter(None, (f["cwe"], confidence)))
+            cvss_text = f"CVSS 3.1 base: {f['cvss_score']} (estimated)" if f.get("cvss_vector") else ""
+            classification = " | ".join(filter(None, (f["cwe"], confidence, cvss_text)))
             print(f"     OWASP: {f['owasp_category']}" + (f" | {classification}" if classification else ""))
             print(f"     {f['description']}")
             if f["evidence"]:
@@ -68,6 +69,9 @@ def print_report(report: dict, use_color: bool = True) -> None:
             print(f"  - {e}")
 
     print("=" * 72)
+    if any(f.get("cvss_vector") for f in report["findings"]):
+        print(textwrap.fill(CVSS_NOTE, width=72, initial_indent=" ", subsequent_indent=" "))
+        print()
     print(textwrap.fill(SCOPE_NOTE, width=72, initial_indent=" ", subsequent_indent=" "))
 
 

@@ -7,11 +7,15 @@ from __future__ import annotations
 
 import re
 
+from ..catalog import CVSS_COOKIE_READABLE_BY_SCRIPT, CVSS_COOKIE_SENT_CROSS_SITE
 from ..models import Finding, Severity
 from ..redact import cookie_redaction
 
 # CWE for the most important missing attribute (they are listed Secure, HttpOnly, SameSite).
 _CWE_BY_ATTRIBUTE = {"Secure": "CWE-614", "HttpOnly": "CWE-1004", "SameSite": "CWE-1275"}
+# Same order: a cookie without Secure is the catalog's worst case, so it keeps the catalog
+# vector; the other two are milder and override it per cookie (FR-MODEL-03).
+_CVSS_BY_ATTRIBUTE = {"Secure": "", "HttpOnly": CVSS_COOKIE_READABLE_BY_SCRIPT, "SameSite": CVSS_COOKIE_SENT_CROSS_SITE}
 # RFC 6265 cookie-name (an HTTP token).
 _COOKIE_NAME = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
 
@@ -70,6 +74,7 @@ def check_cookies(url: str, set_cookie_headers: list[str]) -> list[Finding]:
                     url=url,
                     instance_key=name,
                     cwe=_CWE_BY_ATTRIBUTE[missing[0].split("(")[0]],
+                    cvss_vector=_CVSS_BY_ATTRIBUTE[missing[0].split("(")[0]],
                     redactions=[pair] if (pair := cookie_redaction(raw)) else [],
                 )
             )

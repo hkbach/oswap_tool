@@ -28,12 +28,76 @@ from dataclasses import replace
 
 from cryptography import x509
 
+from ..catalog import CVSS_TLS_CIPHER_BROKEN_BUT_ENCRYPTING
 from ..http_utils import url_host
 from ..models import Finding, Severity
 from ..rule_loader import is_interceptor_issuer
 
 _WEAK_PROTOCOLS = {"SSLv2", "SSLv3", "TLSv1", "TLSv1.1"}
 _CERT_EXPIRY_WARN_DAYS = 30
+
+# FR-DET-17. Markers as they appear in OpenSSL suite names (what ssl.cipher() returns),
+# most serious reason first: a suite is reported under the first reason that matches, so
+# EXP-RC2-CBC-MD5 is reported as export grade rather than as RC2.
+# "no-encryption" and "unauthenticated" leave an on-path attacker a free hand, so they keep
+# the catalog's worst case; "broken" suites still encrypt, so they score lower (FR-MODEL-03).
+_WEAK_CIPHER_MARKERS: tuple[tuple[str, str, str], ...] = (
+    ("NULL", "no-encryption", "does not encrypt the traffic at all"),
+    # OpenSSL spells export suites EXP-RC4-MD5 / EXP1024-DES-CBC-SHA; IANA names carry EXPORT.
+    ("EXP-", "no-encryption", "is export grade, so its key is 40-56 bits by design"),
+    ("EXP1024", "no-encryption", "is export grade, so its key is 40-56 bits by design"),
+    ("EXPORT", "no-encryption", "is export grade, so its key is 40-56 bits by design"),
+    ("ADH-", "unauthenticated", "authenticates neither side, so an on-path attacker can take over the session"),
+    ("AECDH-", "unauthenticated", "authenticates neither side, so an on-path attacker can take over the session"),
+    ("RC4", "broken", "uses RC4, a stream cipher with practical plaintext-recovery attacks (RFC 7465)"),
+    ("RC2", "broken", "uses RC2, a 64-bit block cipher no longer considered safe"),
+    # Matches single DES (DES-CBC-SHA, 56-bit) and 3DES (DES-CBC3-SHA, 64-bit block, SWEET32).
+    ("DES", "broken", "uses DES/3DES: a 56-bit key or a 64-bit block (SWEET32)"),
+    ("IDEA", "broken", "uses IDEA, a 64-bit block cipher dropped from TLS 1.2 onwards"),
+    ("MD5", "broken", "authenticates records with MD5, which is no longer collision resistant"),
+)
+_WORST_CASE_REASONS = ("no-encryption", "unauthenticated")
+
+
+def weak_cipher_reason(cipher_name: str) -> str | None:
+    """``"no-encryption"``, ``"unauthenticated"``, ``"broken"``, or None if the suite is fine."""
+    return next((reason for marker, reason, _ in _WEAK_CIPHER_MARKERS if marker in cipher_name), None)
+
+
+def _weak_cipher_explanation(cipher_name: str) -> str:
+    return next(text for marker, _, text in _WEAK_CIPHER_MARKERS if marker in cipher_name)
+
+
+def cipher_cvss_vector(cipher_name: str) -> str:
+    """Per-instance CVSS vector for a weak cipher (FR-MODEL-03).
+
+    Empty means "keep the catalog's worst case": nothing left to break (no encryption, or
+    nobody authenticated). Suites that are broken but still encrypting score lower.
+    """
+    if weak_cipher_reason(cipher_name) in _WORST_CASE_REASONS:
+        return ""
+    return CVSS_TLS_CIPHER_BROKEN_BUT_ENCRYPTING
+
+
+def _weak_cipher_findings(url: str, hostname: str, port: int, cipher) -> list[Finding]:
+    """FR-TLS-04: one finding when the negotiated suite is weak, saying why it is weak."""
+    name = cipher[0] if cipher else ""
+    if not name or not weak_cipher_reason(name):
+        return []
+    return [
+        Finding(
+            id="TLS-WEAK-CIPHER",
+            title=f"Weak cipher suite negotiated: {name}",
+            severity=Severity.HIGH,
+            owasp_category="A02:2021 - Cryptographic Failures",
+            description=f"The negotiated cipher suite {_weak_cipher_explanation(name)}.",
+            recommendation="Restrict the server's cipher list to modern AEAD suites (e.g. AES-GCM, ChaCha20).",
+            evidence=f"Negotiated cipher suite: {name}",
+            url=url,
+            instance_key=f"{hostname}:{port}",
+            cvss_vector=cipher_cvss_vector(name),
+        )
+    ]
 
 
 def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int):
@@ -115,19 +179,7 @@ def check_tls(
             )
         )
 
-    if cipher and cipher[0] and any(weak in cipher[0] for weak in ("RC4", "3DES", "MD5", "NULL", "EXPORT")):
-        findings.append(
-            Finding(
-                id="TLS-WEAK-CIPHER",
-                title=f"Weak cipher suite negotiated: {cipher[0]}",
-                severity=Severity.HIGH,
-                owasp_category="A02:2021 - Cryptographic Failures",
-                description=f"Negotiated cipher suite '{cipher[0]}' is considered weak.",
-                recommendation="Restrict the server's cipher list to modern AEAD suites (e.g. AES-GCM, ChaCha20).",
-                url=url,
-                instance_key=f"{hostname}:{port}",
-            )
-        )
+    findings.extend(_weak_cipher_findings(url, hostname, port, cipher))
 
     issuer = ""
     cert_time_problem = False  # tracks whether an expiry/not-yet-valid finding already explains any trust failure

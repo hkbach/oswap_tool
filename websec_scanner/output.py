@@ -31,6 +31,15 @@ SCOPE_NOTE = (
     "issues. A clean report does not mean the target is secure: it means these checks found "
     "nothing. Only scan systems you own or are explicitly authorized to test."
 )
+# FR-MODEL-03: one wording for what a CVSS score in this report does and does not mean,
+# shared by the console and HTML reports. Shown only when a report actually carries scores.
+CVSS_NOTE = (
+    "CVSS 3.1 base scores in this report are estimated for the type of finding, not assessed for "
+    "this target, and they are a separate scale from the severity column: a finding can be CRITICAL "
+    "here and still score below 9.0, because severity also weighs how directly the issue was "
+    "observed and how easily it can be abused in context. Findings that are not a scorable "
+    "weakness (early warnings, hints, informational observations) carry no score at all."
+)
 _REDACTED_FINDING_FIELDS = ("title", "description", "evidence", "url", "instance_key")
 
 
