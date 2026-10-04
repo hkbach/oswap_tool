@@ -115,12 +115,18 @@ def test_html_report_warns_when_secrets_are_shown(http_server):
     assert "not redacted" in render_html(output.build_report(result, show_secrets=True))
 
 
-def test_web_ui_always_redacts_even_if_asked_not_to(http_server):
+def test_web_ui_refuses_show_secrets_and_always_redacts(http_server):
+    # D2 + D8: asking the Web UI not to redact is refused outright (FR-WEB-07), not quietly
+    # ignored, and a normal Web UI scan is redacted in both the JSON and the HTML report.
     server = web.build_server("127.0.0.1", 0, timeout=5)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     ui = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        payload = {"target": _target(http_server), "authorized": True, "show_secrets": True, "showSecrets": True}
+        for flag in ("show_secrets", "showSecrets"):
+            asked = {"target": _target(http_server), "authorized": True, flag: True}
+            refused = requests.post(f"{ui}/api/scan", json=asked, timeout=60)
+            assert refused.status_code == 400 and refused.json()["code"] == "credential_not_accepted"
+        payload = {"target": _target(http_server), "authorized": True}
         resp = requests.post(f"{ui}/api/scan", json=payload, timeout=60)
         _assert_no_secrets(resp.text, "web JSON")
         assert resp.json()["secrets_redacted"] is True

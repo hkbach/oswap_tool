@@ -452,7 +452,7 @@ Theo D1: Web UI chạy chung tiến trình với scanner. Các mục dưới đ�
   AC: khởi động lại server vẫn mở được báo cáo đã lưu; `report_id` không đoán được (chuỗi ngẫu nhiên ≥ 128 bit, hiện là `secrets.token_urlsafe(16)`) và không cho path traversal.
 - [ ] **FR-WEB-05** (P1 · all) Web UI hỗ trợ các tùy chọn đã có ở CLI: ngưỡng `fail_on`, timeout, workers (có giới hạn trên), tải JSON/HTML/SARIF.
 - [ ] **FR-WEB-06** (P1 · all) Nếu Web UI được bind ra mạng: áp dụng FR-AUTHZ-04 (chặn target IP nội bộ/loopback/metadata) trừ khi có cờ cho phép tường minh.
-- [ ] **FR-WEB-07** (P0) *(D8, Sprint 16)* `POST /api/scan` từ chối (HTTP 400, mã lỗi rõ ràng) mọi body có trường thuộc nhóm credential: `auth`, `auth_profile_value`, `password`, `token`, `cookie`, `headers`, `authorization`, `api_key`, `show_secrets` (danh sách khai báo). Quét có đăng nhập (E8) là tính năng CLI/CI, không phải Web UI.
+- [x] **FR-WEB-07** (P0) *(xong ở Sprint 16, v1.19.0: allowlist `target`/`authorized`/`checks`, 400 `credential_not_accepted`/`unknown_field`, từ chối cả `user:pass@` trong target; SRS FR-UI-13, AT-80)* *(D8)* `POST /api/scan` từ chối (HTTP 400, mã lỗi rõ ràng) mọi body có trường thuộc nhóm credential: `auth`, `auth_profile_value`, `password`, `token`, `cookie`, `headers`, `authorization`, `api_key`, `show_secrets` (danh sách khai báo). Quét có đăng nhập (E8) là tính năng CLI/CI, không phải Web UI.
   AC: test cho từng trường; log không in giá trị của trường bị từ chối.
 - [ ] **FR-WEB-08** (P1, tùy chọn sau) Cho phép chọn **tên** auth profile đã khai báo trong config khởi động server (`--auth-profiles scanner.toml`); giá trị bí mật đọc từ biến môi trường; UI chỉ thấy tên.
   AC: response API và HTML không chứa giá trị secret; test quét toàn bộ output.
@@ -662,7 +662,7 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 
 | Thứ tự | Sprint | Nội dung | FR | Trạng thái |
 |---|---|---|---|---|
-| 1 | 16 | Web UI không nhận credential (D8): `/api/scan` từ chối mọi trường credential | FR-WEB-07 (+ FR-WEB-08 tùy chọn) | Chưa làm |
+| 1 | 16 | Web UI không nhận credential (D8): `/api/scan` từ chối mọi trường credential | FR-WEB-07 (+ FR-WEB-08 tùy chọn, chưa làm) | Xong (v1.19.0) trên branch `feat/sprint-16`, chờ review |
 | 2 | 14 | Benchmark độ chính xác (D6): Juice Shop/VAmPI/badssl trong Docker, ground truth, precision/recall, CI theo lịch | FR-QA-03a…e | Chưa làm |
 | 3 | 15 | Dò chủ động phiên bản TLS và cipher (D7): tự viết, không sslyze/testssl.sh; giới hạn số handshake | FR-DET-04a…e | Chưa làm |
 | 4 | 17 | Parse OpenAPI/Swagger bằng PyYAML + tự resolve `$ref` nội bộ, chặn SSRF/path traversal/bomb (D9) | FR-API-01a…d | Chưa làm |
@@ -746,7 +746,7 @@ Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên l�
 | E9 | – | ☐ | ☐ | |
 | E10 | – | ☐ | ☐ | |
 | E11 | – | ☐ | ☐ | |
-| E12a | ☑ | ☐ | – | Web UI cục bộ; WEB-01 xong (Sprint 3), WEB-02 xong (Sprint 9) |
+| E12a | ☑ | ☐ | – | Web UI cục bộ; WEB-01 xong (Sprint 3), WEB-02 xong (Sprint 9), WEB-07 xong (Sprint 16) |
 | E12–E14, E16–E20 | ☐ | ☐ | ☐ | E15 (UI) đã loại; E12 chỉ khi SaaS |
 | E21–E22 | ☐ | ☐ | – | QA-01, QA-02 xong (Sprint 6); QA-05 xong (Sprint 11); QA-07 chờ branch protection; README tiếng Anh (Sprint 7); DOC-01 xong (Sprint 9) |
 
