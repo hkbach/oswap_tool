@@ -101,6 +101,14 @@ Còn tồn đọng (xem **E0**, **E1**, **E2**, **E8**): TLS chỉ xét giao th�
 | **D3** | Severity CORS | **Hạ theo khả năng khai thác**: `*`+credentials → MEDIUM; phản xạ origin + credentials → HIGH; phản xạ origin không credentials → MEDIUM; `*` đơn lẻ → INFO. | Thay FR-CORS-02 (CRITICAL→MEDIUM); FR-CORS-03/04 giữ mức nhưng ghi rõ lý do. Chi tiết ở FR-FIX-07. |
 | **D4** | Phạm vi (scope) khi theo redirect | Chỉ theo redirect tới **cùng host**, hoặc host chỉ khác tiền tố `www.`. Ra ngoài phạm vi thì không gửi request tới host đó, dừng và ghi vào `errors`. Không dùng Public Suffix List. | Dùng cho FR-FIX-09, FR-FIX-10; là phần tối thiểu của FR-AUTHZ-03. |
 | **D5** | Cookie xét trên response nào | **Cookie xét trên toàn chuỗi redirect** (giữ hành vi hiện có, vì session cookie hay được đặt trên response 302); header xét trên response cuối. | Dùng cho FR-FIX-10. |
+| **D6** | Benchmark dùng app nào, chạy ở đâu? | Mock server + Juice Shop + VAmPI + badssl.com (tự host, ghim digest); crAPI để sau; DVWA tùy chọn. PR chỉ chạy mock; benchmark Docker chạy theo lịch + thủ công trước release. | Dùng cho FR-QA-03a..e. |
+| **D7** | Dò chủ động phiên bản TLS còn "non-intrusive"? | **Có**, nếu chỉ dùng handshake chuẩn, số kết nối có giới hạn, không gửi bản tin dị dạng. Tự viết bộ dò, **không** dùng sslyze (AGPL-3.0) hay testssl.sh (GPL-2.0). | Dùng cho FR-DET-04a..e; cập nhật SRS mục 1.2/4.5/NFR-SEC-01. |
+| **D8** | Web UI có nhận credential? | **Không.** Quét có đăng nhập chỉ ở CLI/CI; secret chỉ qua biến môi trường/config. | Dùng cho FR-WEB-07/08. |
+| **D9** | Parse OpenAPI bằng thư viện hay tự viết? | PyYAML (`safe_load`) + `json` chuẩn + tự xử lý `$ref` nội bộ. Không dùng prance. Chặn `$ref` ra ngoài (URL, path tuyệt đối, `..`). | Dùng cho FR-API-01a..d. |
+| **D10** | Điều khoản NVD/OSV/KEV? `[CONFIRM-LEGAL]` | Dùng được, kèm nghĩa vụ ghi chú/attribution; không nhúng API key NVD vào bản cài; loại nguồn OSV CC-BY-SA. | Dùng cho FR-CVE-06..11. |
+| **D11** | Gói/giá, license key, khách thử nghiệm? `[CONFIRM]` + duyệt thương mại | 2 dòng sản phẩm; license file ký Ed25519 kiểm tra offline; token chỉ cho khách kích hoạt online; 3-5 khách thử nghiệm có ủy quyền bằng văn bản. | Dùng cho FR-BILL-05a..g, FR-DOC-07..09. |
+
+D6-D11 chốt ngày 2026-10-04; chi tiết đầy đủ (bảng app/license, mẫu prompt, Definition of Done riêng) ở `docs/DECISIONS-S14-S20.md`. **Thứ tự thực hiện:** D8 → D6 → D7 → D9 → D10 → D11. Các gói này gọi theo tên quyết định, không theo số sprint, vì `docs/PHASE-B-ROADMAP.md` đã dùng Sprint 14–20 theo nghĩa khác (xem mục 9.1).
 
 ---
 
@@ -239,8 +247,15 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
   AC: mock server trả 200 hoặc 302→/login cho mọi path → không có finding lộ file; hành vi FR-EXP-02/03 vẫn đúng.
 - [x] **FR-DET-03** (P0 · Pro) *(xong ở Sprint 4: SRS 6.1, AT-41)* Đánh dấu `confidence` (high/medium/low) cho mỗi finding; finding chỉ dựa trên tín hiệu gián tiếp (robots, banner) mặc định là low/medium.
   AC: trường `confidence` có trong JSON; finding có xác thực nội dung (FR-DET-01) là high.
-- [ ] **FR-DET-04** (P0 · all) TLS: **dò chủ động** các phiên bản (SSLv3, TLS1.0, 1.1, 1.2, 1.3) và cipher server hỗ trợ, không chỉ giao thức được thương lượng (sửa FR-TLS-04/05).
-  AC: mock TLS server bật TLS1.0/1.1 → finding `TLS-WEAK-PROTOCOL` dù client thương lượng được 1.3. Nếu môi trường Python/OpenSSL không cho phép dò bản cũ, ghi rõ trong `errors` là "không kiểm tra được", không im lặng bỏ qua. `[REC]` đánh giá dùng thư viện chuyên dụng (sslyze) nếu license phù hợp.
+- [ ] **FR-DET-04** (P0 · all) *(D7)* TLS: **dò chủ động** các phiên bản (SSLv3, TLS1.0, 1.1, 1.2, 1.3) và nhóm cipher server hỗ trợ, không chỉ giao thức được thương lượng (sửa FR-TLS-04/05). Tự viết bộ dò (`checks/tls_probe.py`); **không** dùng sslyze (AGPL-3.0) hay testssl.sh (GPL-2.0) — chi tiết `docs/DECISIONS-S14-S20.md` mục 2.
+  AC: mock TLS server bật TLS1.0/1.1 → finding `TLS-WEAK-PROTOCOL` dù client thương lượng được 1.3. Nếu môi trường Python/OpenSSL không cho phép dò bản cũ, ghi rõ trong `errors` là "không kiểm tra được", không im lặng bỏ qua.
+- [ ] **FR-DET-04a** (P0) Module `checks/tls_probe.py`: ClientHello chuẩn cho mỗi phiên bản, đọc phiên bản trong ServerHello/alert, không hoàn tất trao đổi dữ liệu ứng dụng. OpenSSL 3 qua `ssl` không bắt tay được SSLv3/TLS1.0 mặc định → tự dựng ClientHello tối thiểu bằng `socket`+`struct` (ưu tiên), hoặc chứng minh `SECLEVEL=0` hoạt động trên các nền tảng hỗ trợ.
+  AC: phát hiện đúng phiên bản bật/tắt trên badssl tự host và mock TLS server; không dò được một phiên bản thì ghi vào `errors`, không im lặng.
+- [ ] **FR-DET-04b** (P0) Dò nhóm cipher yếu với danh sách khai báo (dữ liệu, không hard-code); mỗi nhóm tối đa 1 kết nối.
+- [ ] **FR-DET-04c** (P0) Giới hạn tổng số handshake mỗi target (hằng số cấu hình, mặc định ≤ 30) + khoảng nghỉ giữa các kết nối; tôn trọng `--rate-limit`.
+  AC: test đếm số kết nối tới mock TLS server không vượt giới hạn.
+- [ ] **FR-DET-04d** (P0) Cập nhật mô tả `CheckGroup("tls")` (hiện ghi "2 TLS handshakes") thành con số tối đa mới; cập nhật consent banner và SRS mục 1.2, 4.5, NFR-SEC-01.
+- [ ] **FR-DET-04e** (P1) README: ghi rõ IDS/WAF có thể ghi log các handshake phiên bản cũ. Cập nhật `THIRD_PARTY_LICENSES`/ADR với lý do không dùng sslyze/testssl.sh.
 - [x] **FR-DET-16** (P1 · all) *(xong ở Sprint 4 theo danh sách issuer: `rules/tls_interceptors.json`, SRS FR-TLS-11, AT-41)* `[REC]` **Phát hiện TLS bị chặn giữa đường** (phần mềm diệt virus, proxy TLS inspection): so issuer/chuỗi chứng chỉ thấy được với dấu hiệu đã biết, hoặc so với kết quả từ môi trường tham chiếu; khi phát hiện thì ghi cảnh báo vào `errors` và đánh dấu kết quả nhóm TLS là không đáng tin (hạ `confidence`). Phát hiện ngày 2026-09-30: Avast Web/Mail Shield ký lại cả TLS tới `127.0.0.1`.
   AC: mock mô phỏng chứng chỉ bị ký lại → có cảnh báo, finding TLS có `confidence` thấp; không chặn → không cảnh báo.
 - [x] **FR-DET-17** (P1 · all) *(xong ở Sprint 10: `tls_check._WEAK_CIPHER_MARKERS`, `weak_cipher_reason()`, SRS FR-TLS-04, AT-62. Phát hiện khi làm FR-MODEL-03: danh sách cũ `{RC4,3DES,MD5,NULL,EXPORT}` khớp chuỗi con trên tên suite của **OpenSSL** (`ssl.cipher()` trả về), mà các dấu hiệu lại viết theo kiểu tên IANA, nên bỏ lọt: **3DES** — tên OpenSSL là `DES-CBC3-SHA`, không chứa chuỗi `3DES`, nên SWEET32 thực tế chưa bao giờ bị phát hiện; **DES đơn 56-bit** (`DES-CBC-SHA`); **suite ẩn danh** không xác thực hai bên (`ADH-`, `AECDH-`); và `EXPORT` chỉ khớp tên IANA chứ không khớp `EXP-RC4-MD5`/`EXP1024-…` của OpenSSL nên suite export bị xếp nhầm mức nhẹ)* **Nhận diện cipher yếu cho đủ**: bảng khai báo theo dấu hiệu trong tên suite của OpenSSL, mỗi dấu hiệu kèm **lý do** (không mã hoá / không xác thực / đã bị phá nhưng vẫn mã hoá) và lý do đó quyết định luôn mức CVSS theo FR-MODEL-03.
@@ -348,8 +363,15 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 ### E7. Quét API
 
-- [ ] **FR-API-01** (P0 · Pro) Nạp định nghĩa API: OpenAPI 3.x/Swagger 2.0 (file hoặc URL), Postman Collection v2.1, và GraphQL (introspection nếu được phép).
+- [ ] **FR-API-01** (P0 · Pro) Nạp định nghĩa API: OpenAPI 3.x/Swagger 2.0 (file hoặc URL), Postman Collection v2.1, và GraphQL (introspection nếu được phép). **Gói D9 chỉ làm phần OpenAPI 3.0/3.1 + Swagger 2.0 từ file** (FR-API-01a..d, dùng PyYAML + tự resolve `$ref` nội bộ, không prance); nạp từ URL, Postman và GraphQL để sau, có thể tách FR riêng khi tới lượt.
   AC: parse lỗi → thông báo rõ, không crash; danh sách endpoint/method/tham số hiển thị trong báo cáo.
+- [ ] **FR-API-01a** (P0) `api/spec_loader.py`: nhận file `.json`/`.yaml`/`.yml`; YAML dùng `yaml.safe_load` (test: tag `!!python/object` bị từ chối).
+- [ ] **FR-API-01b** (P0) Tự resolve `$ref` **nội bộ** (`#/components/...`) và file tương đối trong cùng thư mục spec. **Cấm:** `$ref` tới URL, đường dẫn tuyệt đối, hoặc `..` thoát khỏi thư mục spec → báo lỗi rõ ràng (chống SSRF và đọc file trái phép).
+  AC: test với `$ref` trỏ `http://169.254.169.254/`, `/etc/passwd`, `../../secret.yaml` → đều bị từ chối, không có request mạng.
+- [ ] **FR-API-01c** (P0) Giới hạn an toàn: kích thước file (≤ 5 MB), độ sâu lồng/`$ref` (≤ 32), `$ref` vòng lặp, số endpoint tối đa (cấu hình).
+  AC: test YAML "billion laughs"/alias bomb và `$ref` vòng tròn → lỗi có kiểm soát, không treo.
+- [ ] **FR-API-01d** (P0) Hỗ trợ OpenAPI 3.0/3.1 và Swagger 2.0 đủ để liệt kê server, path, method, tham số, security scheme; lỗi spec không crash tool.
+  AC: parse thành công spec của VAmPI (benchmark gói D6). Thêm PyYAML vào `pyproject.toml`, `THIRD_PARTY_LICENSES`, pip-audit. Web UI: nếu cho tải spec lên thì áp cùng giới hạn; không nhận URL spec từ xa ở Web UI.
 - [ ] **FR-API-02** (P0 · Pro) Kiểm tra không xâm lấn trên từng endpoint GET/HEAD/OPTIONS: header bảo mật trên response API, CORS, `Content-Type` sai/thiếu, lộ thông báo lỗi chi tiết, method được quảng bá.
 - [ ] **FR-API-03** (P0 · Pro) **Thiếu xác thực**: gọi endpoint mà spec yêu cầu auth khi không gửi credential; nếu trả 2xx kèm dữ liệu → finding (OWASP API2/API5). Chỉ với method an toàn.
   AC: mock API có endpoint bảo vệ đúng/sai → đúng/không finding.
@@ -401,6 +423,15 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [ ] **FR-CVE-04** (P2 · Business) Phát hiện JS library lỗi thời (ví dụ jQuery/Angular phiên bản cũ) từ file tĩnh với `retire`-style signatures.
 - [ ] **FR-CVE-05** (P2 · Business) *(thêm 2026-09-30, theo yêu cầu chủ sản phẩm; roadmap Phase B Sprint 17)* **Quét lỗ hổng riêng của CMS phổ biến** (WordPress, Joomla, Drupal): nhận diện CMS và phiên bản plugin/theme qua đường dẫn tĩnh/README/changelog công khai, đối chiếu CSDL lỗ hổng công khai của từng CMS (ví dụ WPScan Vulnerability Database). Quy tắc dạng dữ liệu như `rules/sensitive_paths.json`; `[CONFIRM]` điều khoản sử dụng CSDL lỗ hổng CMS trước khi tích hợp.
   AC: là một **test target chọn được** trong `catalog.CHECK_GROUPS`, xuất hiện ở CLI (`--checks`, `--list-checks`) và Web UI (danh sách nhóm kiểm thử trước khi quét, kết quả nhóm theo test target) giống 8 nhóm hiện có (Sprint 8); không chọn thì không gửi request nào của nhóm này; finding ghi rõ **phiên bản quan sát được là suy đoán**, không khẳng định "bị khai thác được", confidence tương ứng.
+- [ ] **FR-CVE-06** (P0) *(D10)* Module `vulndb/` với một lớp nguồn dữ liệu duy nhất; mỗi bản ghi lưu `source`, `source_license`, `retrieved_at`.
+- [ ] **FR-CVE-07** (P0) Danh sách nguồn OSV được phép là **dữ liệu khai báo** (allowlist theo license); mặc định loại `CC-BY-SA-4.0` (Ubuntu).
+  AC: test bản ghi từ nguồn bị loại không bao giờ xuất hiện trong finding/report.
+- [ ] **FR-CVE-08** (P0) Attribution: báo cáo HTML/PDF + README + `--version`/About mang câu thông báo NVD nguyên văn ("This product uses the NVD API but is not endorsed or certified by the NVD."), danh sách nguồn OSV đã dùng kèm license, ghi nguồn KEV; `docs/DATA_SOURCES.md` liệt kê nguồn/license/link.
+  AC: test báo cáo có câu thông báo NVD khi có dùng dữ liệu NVD.
+- [ ] **FR-CVE-09** (P0) API key NVD đọc từ biến môi trường `NVD_API_KEY` của **chính khách**; không có key → giới hạn công khai hoặc snapshot offline. Không có key nào trong repo/image/gói phát hành (secret scan CI).
+- [ ] **FR-CVE-10** (P1) Snapshot dữ liệu offline cho Enterprise/không internet: lệnh `vulndb update` tạo gói có ngày, chữ ký, metadata license; cảnh báo khi snapshot quá cũ.
+- [ ] **FR-CVE-11** (P1) OSV cho thư viện JS phát hiện ở trang (FR-CVE-04); NVD/CPE cho phần mềm máy chủ (nginx, Apache, PHP...). Finding ghi rõ phiên bản là **suy đoán** từ banner, confidence tương ứng.
+  `[CONFIRM-LEGAL]` điều khoản NVD/OSV/KEV trước khi phát hành thương mại; chi tiết `docs/DECISIONS-S14-S20.md` mục 5.
 
 ### E11. Khám phá tài sản (asset discovery)
 
@@ -423,6 +454,10 @@ Theo D1: Web UI chạy chung tiến trình với scanner. Các mục dưới đ�
   AC: khởi động lại server vẫn mở được báo cáo đã lưu; `report_id` không đoán được (chuỗi ngẫu nhiên ≥ 128 bit, hiện là `secrets.token_urlsafe(16)`) và không cho path traversal.
 - [ ] **FR-WEB-05** (P1 · all) Web UI hỗ trợ các tùy chọn đã có ở CLI: ngưỡng `fail_on`, timeout, workers (có giới hạn trên), tải JSON/HTML/SARIF.
 - [ ] **FR-WEB-06** (P1 · all) Nếu Web UI được bind ra mạng: áp dụng FR-AUTHZ-04 (chặn target IP nội bộ/loopback/metadata) trừ khi có cờ cho phép tường minh.
+- [x] **FR-WEB-07** (P0) *(xong ở gói D8, v1.19.0, branch `feat/sprint-16`: allowlist `target`/`authorized`/`checks`, 400 `credential_not_accepted`/`unknown_field`, từ chối cả `user:pass@` trong target; SRS FR-UI-13, AT-80)* *(D8)* `POST /api/scan` từ chối (HTTP 400, mã lỗi rõ ràng) mọi body có trường thuộc nhóm credential: `auth`, `auth_profile_value`, `password`, `token`, `cookie`, `headers`, `authorization`, `api_key`, `show_secrets` (danh sách khai báo). Quét có đăng nhập (E8) là tính năng CLI/CI, không phải Web UI.
+  AC: test cho từng trường; log không in giá trị của trường bị từ chối.
+- [ ] **FR-WEB-08** (P1, tùy chọn sau) Cho phép chọn **tên** auth profile đã khai báo trong config khởi động server (`--auth-profiles scanner.toml`); giá trị bí mật đọc từ biến môi trường; UI chỉ thấy tên.
+  AC: response API và HTML không chứa giá trị secret; test quét toàn bộ output.
 
 ### E12. Nền tảng backend (server, job, API) – Stage 2 (chỉ khi chọn SaaS – D1)
 
@@ -486,7 +521,16 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 - [ ] **FR-BILL-02** (P0 · Business) Tích hợp nhà cung cấp thanh toán (Stripe hoặc tương đương): checkout, subscription, nâng/hạ gói, hủy, hóa đơn; **không lưu dữ liệu thẻ**. `[CONFIRM]` nhà cung cấp và quy định hóa đơn điện tử tại Việt Nam.
 - [ ] **FR-BILL-03** (P0 · Business) Dùng thử (trial) có giới hạn (target đã xác minh, số scan, hết hạn); chống lạm dụng (một org/miền một lần trial, giới hạn tạo tài khoản).
 - [ ] **FR-BILL-04** (P1 · Business) **Metering**: đếm target/scan/request thực tế, hiển thị mức dùng và cảnh báo sắp chạm giới hạn; hành vi khi vượt (chặn mềm, mua thêm add-on).
-- [ ] **FR-BILL-05** (P1 · Business) Quản lý **license key** cho bản CLI Pro/on-premise (ký số, kiểm tra offline, thời hạn, số máy/target); không làm tool ngừng hoạt động bất ngờ trên pipeline khách (cơ chế grace period).
+- [ ] **FR-BILL-05** (P1 · Business) *(D11)* Quản lý **license key** cho bản CLI Pro/on-premise (ký số, kiểm tra offline, thời hạn, số máy/target); không làm tool ngừng hoạt động bất ngờ trên pipeline khách (cơ chế grace period). Mô hình gói và giá: `docs/DECISIONS-S14-S20.md` mục 6.1 `[CONFIRM]` + duyệt thương mại.
+- [ ] **FR-BILL-05a** (P0) Định dạng license: file `license.toml` (dữ liệu + chữ ký **Ed25519**): `license_id`, `customer_id`, `plan`, `max_targets`, `domains` (tùy chọn, Enterprise), `features`, `issued_at`, `expires_at`, `grace_days`.
+- [ ] **FR-BILL-05b** (P0) Tool nhúng **khóa công khai**; kiểm tra chữ ký **offline**, không gọi về máy chủ.
+  AC: sửa 1 byte dữ liệu → chữ ký sai → chạy chế độ Free + cảnh báo; test license hợp lệ/hết hạn/sai chữ ký/sai định dạng.
+- [ ] **FR-BILL-05c** (P0) Công cụ phát hành license **nội bộ** (`tools/issue_license.py`) dùng khóa bí mật lưu **ngoài repo**. Khóa bí mật không bao giờ nằm trong repo, image, CI log.
+- [ ] **FR-BILL-05d** (P0) Hết hạn: `grace_days` 14-30 ngày `[CONFIRM]`, sau đó quay về Free + cảnh báo rõ. **Không bao giờ** làm hỏng pipeline của khách; `--fail-on`/exit code chạy như bình thường.
+- [ ] **FR-BILL-05e** (P0) Entitlement: một điểm kiểm tra duy nhất (`entitlements.py`) quyết định tính năng/số target theo license; check và reporter chỉ hỏi qua module này.
+- [ ] **FR-BILL-05f** (P1) Thu hồi license: danh sách thu hồi đi kèm bản cập nhật tool/snapshot dữ liệu (không cần online).
+- [ ] **FR-BILL-05g** (P2) Token online: dịch vụ kích hoạt đếm lượt quét; chỉ làm khi có khách cần.
+  Giới hạn chấp nhận `[REC]`: Python có thể bị sửa mã để bỏ qua license; chống lạm dụng dựa vào hợp đồng, không đầu tư obfuscation. Dependency `cryptography` (Apache-2.0/BSD) → `pyproject.toml`, `THIRD_PARTY_LICENSES`, pip-audit.
 - [ ] **FR-BILL-06** (P2 · Enterprise) Báo giá/hợp đồng thủ công: gói tùy chỉnh, hóa đơn theo PO, SLA hỗ trợ, thời hạn nhiều năm.
 
 ### E19. Bảo mật và quyền riêng tư của chính nền tảng
@@ -517,7 +561,14 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 
 - [x] **FR-QA-01** (P0 · all) *(xong ở Sprint 6: đo trên cả suite, 47/47 finding ID trong catalog được test tạo ra (trước đó 33/47); mọi rule path chạy qua HTTP; SRS AT-49. FR mới phải kèm test như cũ)* Bộ kiểm thử tự động chạy **offline** bằng mock server (headers, cookies, TLS giả lập, redirect, CORS, path, directory listing, soft-404, robots); bao phủ tất cả FR đang có + FR mới.
 - [x] **FR-QA-02** (P0 · all) *(test không-lộ-secret có từ Sprint 3; golden file JSON/SARIF/HTML ở Sprint 6: `tests/golden/`, SRS AT-48)* Test **golden file** cho JSON/SARIF/HTML (snapshot) và test không-lộ-secret (FR-AUTH-02).
-- [ ] **FR-QA-03** (P1 · Pro) **Benchmark độ chính xác** trên ứng dụng cố ý dễ tổn thương chạy **local/nội bộ** (ví dụ OWASP Juice Shop, DVWA, crAPI, VAmPI – kiểm tra license và điều khoản từng dự án): đo precision/recall theo từng loại lỗi, lưu kết quả theo phiên bản scanner để phát hiện hồi quy.
+- [ ] **FR-QA-03** (P1 · Pro) *(D6)* **Benchmark độ chính xác** trên ứng dụng cố ý dễ tổn thương chạy **local/nội bộ** trong Docker, ghim theo digest: mock server + Juice Shop (MIT) + VAmPI (MIT) + badssl.com (Apache-2.0) bắt buộc; crAPI (Apache-2.0) để sau; DVWA (GPL-3.0) tùy chọn, chỉ chạy làm mục tiêu quét (không vendor mã) để không phát sinh nghĩa vụ GPL. Đo precision/recall theo từng loại lỗi, lưu kết quả theo phiên bản scanner để phát hiện hồi quy.
+- [ ] **FR-QA-03a** (P1) `benchmarks/docker-compose.yml` dựng Juice Shop, VAmPI, badssl trên network nội bộ; image ghim theo digest (`image: name@sha256:...`).
+  AC: `docker compose up` không publish cổng ra host ngoài `127.0.0.1`; README ghi lệnh chạy.
+- [ ] **FR-QA-03b** (P1) File ground truth cho từng app: `benchmarks/expected/<app>@<digest>.toml` liệt kê finding ID + instance_key mong đợi, và danh sách "không được báo".
+  AC: đổi digest mà chưa cập nhật expected → job báo lỗi rõ ràng, không im lặng.
+- [ ] **FR-QA-03c** (P1) Script `benchmarks/run.py`: chạy scanner trên từng app, so với expected, tính precision/recall theo nhóm check, xuất `benchmarks/results/<date>.json` + bảng Markdown.
+- [ ] **FR-QA-03d** (P1) CI: mỗi PR chỉ test mock server (đã có); workflow theo lịch + `workflow_dispatch` chạy benchmark Docker, lưu artifact, **fail khi precision hoặc recall giảm** so với lần trước (ngưỡng `[CONFIRM]`); trước release chạy thủ công, người phụ trách duyệt.
+- [ ] **FR-QA-03e** (P2) Thêm DVWA/crAPI khi cần; ghi license vào `benchmarks/README.md`.
 - [ ] **FR-QA-04** (P1 · Pro) **Corpus false positive**: mỗi false positive khách báo → thêm test hồi quy; mục tiêu độ chính xác đặt sau khi có số đo baseline `[CONFIRM]` (không hứa con số khi chưa đo).
 - [x] **FR-QA-05** (P1 · Pro) *(xong ở Sprint 11: đo trên mock server theo thời điểm request đến nơi — tốc độ trung bình và không cửa sổ 1 giây nào vượt mức, cho cả nhóm tuần tự và nhóm chạy 5 luồng; AT-63)* Kiểm thử tải/an toàn: chứng minh scanner tuân thủ giới hạn tốc độ và không gây tải bất thường lên mock server.
 - [ ] **FR-QA-08** (P1 · all) *(mở ở đợt audit 2026-10-04)* Giữ cho "mọi finding id đều được test sinh ra" (FR-QA-01) luôn đúng bằng máy, không bằng phép đo thủ công: thu thập id của mọi `Finding` mà suite tạo ra trong một lần chạy đầy đủ rồi đối chiếu với `catalog.FINDING_CATALOG`. Hiện AT-49 ghi 47/47 theo số đo ngày 2026-09-30 và con số đó sẽ âm thầm sai khi thêm finding mới. Cần chạy có điều kiện (chỉ khi chạy toàn bộ suite) để `pytest <một file>` không fail oan.
@@ -534,6 +585,9 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 - [ ] **FR-DOC-04** (P1 · Pro) Tài liệu người dùng: bắt đầu nhanh, danh mục check (mỗi check: mô tả, vì sao quan trọng, cách sửa), FAQ false positive, cách cấu hình auth/exclusion.
 - [ ] **FR-DOC-05** (P1 · Business) Changelog + chính sách phiên bản (SemVer) + thông báo thay đổi schema.
 - [ ] **FR-DOC-06** (P1 · Pro) Tài liệu **catalog check** tự sinh từ rules (ID, severity mặc định, OWASP/CWE, tier).
+- [ ] **FR-DOC-07** (P0) *(D11)* Mẫu văn bản ủy quyền quét (scope: domain/IP, khung giờ, loại check, đầu mối khẩn cấp, chữ ký) – `[CONFIRM-LEGAL]`.
+- [ ] **FR-DOC-08** (P0) Mẫu thỏa thuận pilot (thời hạn, giá, xử lý dữ liệu, giới hạn trách nhiệm) – `[CONFIRM-LEGAL]`.
+- [ ] **FR-DOC-09** (P1) Biểu mẫu phản hồi pilot + bảng theo dõi chỉ số pilot (tỷ lệ false positive, thời gian khách sửa lỗi, tính năng dùng nhiều nhất, mức giá sẵn sàng trả). 3-5 khách thử nghiệm: dogfooding TECHVIFY (1) + khách hiện có (1-2, văn bản ủy quyền, không vi phạm NDA) + SME qua mạng lưới (1-2); chi tiết `docs/DECISIONS-S14-S20.md` mục 6.3.
 
 ---
 
@@ -605,6 +659,17 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 12 | CI với nợ cũ: baseline (chỉ fail vì finding mới), so sánh hai lần quét, suppression có hạn, CSV và JUnit; sửa fingerprint không ổn định | FR-CI-02, FR-RPT-06, FR-MODEL-06, FR-RPT-03, FR-MODEL-07 | Xong (v1.15.0) trên branch `feat/sprint-12`, chờ review; CI xanh trên GitHub |
 | 13 | File cấu hình, nhiều target, tham số vận hành (proxy, header, cookie, User-Agent, quiet/verbose) | FR-CI-06, FR-CI-05, FR-CI-07 (+ mở FR-CI-11) | Xong (v1.16.0) trên branch `feat/sprint-13`, chờ review; CI xanh trên GitHub |
 | 13b | Audit chất lượng toàn hệ thống (không thêm tính năng): 4 lỗi ở v1.17.0; rà độ chặt assertion của AT-02…AT-77 và đối chiếu từng mục `[x]` của backlog ở v1.18.0, kèm mutation test 18/18 bất biến lõi | — | Xong (v1.18.0) trên branch `feat/sprint-13`, chờ review |
+
+**Các gói việc từ quyết định D6-D11 (chốt 2026-10-04).** Gọi theo tên quyết định, không theo số sprint, vì `docs/PHASE-B-ROADMAP.md` đã dùng Sprint 14-20 theo nghĩa khác (14 crawler, 15 chiều sâu check thụ động, 16 quét có đăng nhập, 17 quét API, 18 A06) và "Phase A/B/C/D" ở mục 9.2 là các giai đoạn lộ trình rộng hơn. Bản nháp đầu của `docs/DECISIONS-S14-S20.md` gọi chúng là Sprint 16, 14, 15, 17, 18, 20. Tên branch `feat/sprint-16` của gói D8 giữ nguyên vì đã push. **Thứ tự chạy:** D8 → D6 → D7 → D9 → D10 → D11 (bảng dưới liệt kê đúng thứ tự này).
+
+| Thứ tự | Gói | Nội dung | FR | Trạng thái |
+|---|---|---|---|---|
+| 1 | D8 | Web UI không nhận credential (D8): `/api/scan` từ chối mọi trường credential | FR-WEB-07 (+ FR-WEB-08 tùy chọn, chưa làm) | Xong (v1.19.0) trên branch `feat/sprint-16`, chờ review |
+| 2 | D6 | Benchmark độ chính xác (D6): Juice Shop/VAmPI/badssl trong Docker, ground truth, precision/recall, CI theo lịch | FR-QA-03a…e | Chưa làm |
+| 3 | D7 | Dò chủ động phiên bản TLS và cipher (D7): tự viết, không sslyze/testssl.sh; giới hạn số handshake | FR-DET-04a…e | Chưa làm |
+| 4 | D9 | Parse OpenAPI/Swagger bằng PyYAML + tự resolve `$ref` nội bộ, chặn SSRF/path traversal/bomb (D9) | FR-API-01a…d | Chưa làm |
+| 5 | D10 | Dữ liệu lỗ hổng NVD/OSV/KEV: attribution, loại nguồn CC-BY-SA, không nhúng API key (D10) | FR-CVE-06…11 | Chưa làm |
+| 6 | D11 | Gói/giá, license key Ed25519 offline, khách thử nghiệm (D11) | FR-BILL-05a…g, FR-DOC-07…09 | Chưa làm |
 
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
 
@@ -685,7 +750,7 @@ Thứ tự sprint chi tiết của Phase B (Sprint 9 trở đi): `docs/PHASE-B-R
 | E9 | – | ☐ | ☐ | |
 | E10 | – | ☐ | ☐ | |
 | E11 | – | ☐ | ☐ | |
-| E12a | ☑ | ☐ | – | Web UI cục bộ; WEB-01 xong (Sprint 3), WEB-02 xong (Sprint 9) |
+| E12a | ☑ | ☐ | – | Web UI cục bộ; WEB-01 xong (Sprint 3), WEB-02 xong (Sprint 9), WEB-07 xong (gói D8) |
 | E12–E14, E16–E20 | ☐ | ☐ | ☐ | E15 (UI) đã loại; E12 chỉ khi SaaS |
 | E21–E22 | ☐ | ☐ | – | QA-01, QA-02 xong (Sprint 6); QA-05 xong (Sprint 11); QA-07 chờ branch protection; README tiếng Anh (Sprint 7); DOC-01 xong (Sprint 9) |
 

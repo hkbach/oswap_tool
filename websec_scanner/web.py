@@ -33,7 +33,7 @@ from . import catalog
 from .cli import _ca_bundle, _normalize_target, _positive_float, _positive_int, run_scan
 from .html_report import render_html
 from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, gate_message, group_findings, owasp_groups
-from .redact import redact
+from .redact import SENSITIVE_PARAM_WORDS, redact
 
 _STATIC_DIR = Path(__file__).with_name("static")
 _STATIC_FILES = {
@@ -54,6 +54,23 @@ WEB_ONLY_FIELDS = (
     "owasp_groups",
     "report_id",
     "report_url",
+)
+# FR-WEB-07 (decision D8): the only fields POST /api/scan accepts. Anything else is refused
+# rather than ignored, so a caller can never believe an option it sent was honoured.
+ALLOWED_SCAN_FIELDS = frozenset({"target", "authorized", "checks"})
+# Fields that carry a credential. The local Web UI never accepts one in any form: authenticated
+# scanning is a CLI/CI feature, with secrets in environment variables or a config file. Names
+# are compared without case, '_' or '-', so showSecrets and show-secrets match show_secrets.
+CREDENTIAL_FIELDS = (
+    "auth",
+    "auth_profile_value",
+    "password",
+    "token",
+    "cookie",
+    "headers",
+    "authorization",
+    "api_key",
+    "show_secrets",
 )
 _REPORT_PATH = re.compile(r"^/api/report/([A-Za-z0-9_-]{16,64})\.html$")
 _SECURITY_HEADERS = {
@@ -81,6 +98,68 @@ def _is_loopback(host: str) -> bool:
         return ipaddress.ip_address(host.strip("[]")).is_loopback
     except ValueError:
         return False
+
+
+def _field_key(name: str) -> str:
+    return name.lower().replace("_", "").replace("-", "")
+
+
+_CREDENTIAL_KEYS = frozenset(_field_key(f) for f in CREDENTIAL_FIELDS)
+_ALLOWED_KEYS = frozenset(_field_key(f) for f in ALLOWED_SCAN_FIELDS)
+
+
+def _looks_like_credential(name: str) -> bool:
+    key = _field_key(name)
+    if key in _CREDENTIAL_KEYS:
+        return True
+    if key in _ALLOWED_KEYS:
+        return False  # "Authorized" is a mis-cased known field, not a credential (it contains "auth")
+    # Beyond the declared list, the same words redaction treats as secret (token, key, session,
+    # secret, jwt...): access_token or x-api-key get the credential answer, not "unknown field".
+    return any(word in key for word in SENSITIVE_PARAM_WORDS)
+
+
+def _target_has_userinfo(raw_target: str) -> bool:
+    """True for ``user:password@host`` or ``token@host``, with or without a scheme."""
+    text = raw_target.strip()
+    if "://" not in text:
+        text = "https://" + text  # the same default _normalize_target() applies
+    try:
+        return "@" in urlsplit(text).netloc
+    except ValueError:
+        return False  # unparsable: _normalize_target() rejects it with its own message
+
+
+def _rejected_field(payload: dict) -> tuple[str, str, str] | None:
+    """FR-WEB-07: ``(code, field, message)`` for the first field the API refuses, or None.
+
+    A credential wins over an unknown field, so the answer names the more important problem.
+    Only the field's name is ever returned, never its value.
+    """
+    extra = [name for name in payload if name not in ALLOWED_SCAN_FIELDS]
+    credential = next((name for name in extra if _looks_like_credential(name)), None)
+    if credential is not None:
+        return (
+            "credential_not_accepted",
+            credential,
+            f"'{credential[:100]}' carries a credential, and the local web UI never accepts credentials. "
+            "Run authenticated scans from the CLI, with secrets in environment variables or a config file.",
+        )
+    raw_target = payload.get("target")
+    if isinstance(raw_target, str) and _target_has_userinfo(raw_target):
+        return (
+            "credential_not_accepted",
+            "target",
+            "The target contains a user name or password, and the local web UI never accepts credentials. "
+            "Remove them from the URL, or run the scan from the CLI.",
+        )
+    if extra:
+        return (
+            "unknown_field",
+            extra[0],
+            f"Unknown field '{extra[0][:100]}'. Accepted fields: {', '.join(sorted(ALLOWED_SCAN_FIELDS))}.",
+        )
+    return None
 
 
 def _report_filename(report: dict) -> str:
@@ -117,8 +196,14 @@ class ScanUIHandler(BaseHTTPRequestHandler):
     def _json(self, status: int, payload: dict) -> None:
         self._send(status, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
 
-    def _error(self, status: int, message: str) -> None:
-        self._json(status, {"error": message})
+    def _error(self, status: int, message: str, code: str | None = None, field: str | None = None) -> None:
+        # code/field only on the FR-WEB-07 rejections; every other error keeps its {"error": ...} shape.
+        body = {"error": message}
+        if code is not None:
+            body["code"] = code
+        if field is not None:
+            body["field"] = field[:100]
+        self._json(status, body)
 
     def _host_allowed(self) -> bool:
         # When bound to loopback, only loopback Host names are valid; anything else
@@ -206,6 +291,12 @@ class ScanUIHandler(BaseHTTPRequestHandler):
             return self._error(400, "Body is not valid JSON")
         if not isinstance(payload, dict):
             return self._error(400, "Body must be a JSON object")
+        # FR-WEB-07: checked before anything else, so the answer about a credential never depends
+        # on whether the rest of the request was valid.
+        rejected = _rejected_field(payload)
+        if rejected is not None:
+            code, field, message = rejected
+            return self._error(400, message, code=code, field=field)
 
         if payload.get("authorized") is not True:
             return self._error(400, "Authorization not confirmed: only scan systems you own or are authorized to test.")

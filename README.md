@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.18.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.19.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.18.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.19.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -306,7 +306,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.18.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.19.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -452,6 +452,13 @@ them:
 | `--rate-limit N` | At most N requests per second per scan (default: no limit) |
 | `--max-requests N` / `--max-duration SECONDS` | Stop a scan after this many requests / seconds |
 
+The web UI never accepts credentials. A scan request may only carry `target`,
+`authorized` and `checks`; a request with a password, token, cookie, header,
+`authorization`, API key or `show_secrets` field, or with a `user:password@` in the
+target, is refused with HTTP 400 (`credential_not_accepted`), and so is any other
+field (`unknown_field`). Run authenticated scans from the CLI, with secrets in
+environment variables or a config file.
+
 The CLI's `--baseline`, `--suppressions`, `--config`, `--csv`, `--junit` and
 the multi-target options have no web UI equivalent: they belong to a CI run,
 not to a browser session. The JSON the web UI returns still carries their
@@ -509,7 +516,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-79 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-80 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -675,6 +682,23 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog
+
+- **v1.19.0** (web UI). The local web UI no longer accepts credentials in any form.
+  What changes for you:
+  - `POST /api/scan` now **refuses** a request that carries a credential field
+    (`auth`, `password`, `token`, `cookie`, `headers`, `authorization`, `api_key`,
+    `show_secrets`, and spellings such as `showSecrets` or `x-api-key`) with HTTP 400,
+    `"code": "credential_not_accepted"` and the field's name. Before, such fields were
+    silently ignored, so a caller could believe a credential, or `show_secrets`, had been
+    honoured. The value is never echoed back or logged.
+  - A target with a user name or password in the URL (`https://user:pass@host/`) is
+    refused the same way. The CLI still accepts it and masks it in every report.
+  - **Any other unknown field is refused too** (`"code": "unknown_field"`). A script that
+    posted extra fields to `/api/scan` and relied on them being ignored must stop sending
+    them. The page itself is unaffected: it only sends `target`, `authorized` and
+    `checks`.
+  - Other errors keep their `{"error": ...}` shape; only these refusals add `code` and
+    `field`. The scan results, JSON schema and exit codes are unchanged.
 
 - **v1.18.0** (quality audit, part two). The acceptance table and the backlog were
   checked claim by claim against the tests that are supposed to prove them, and the
