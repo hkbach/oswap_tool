@@ -12,6 +12,7 @@ dependencies = [
     "requests>=2.32.3",  # _TrustAdapter relies on build_connection_pool_key_attributes() behaviour of 2.32.3
     "urllib3>=2.0.0",
     "cryptography>=42.0.0",  # not_valid_before_utc / not_valid_after_utc
+    "pyyaml>=6.0.1",  # API specs (--api-spec): yaml safe loader, the C one when libyaml is bundled
 ]
 
 [project.optional-dependencies]

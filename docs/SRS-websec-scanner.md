@@ -4,10 +4,10 @@
 |---|---|
 | **Tài liệu** | Software Requirements Specification (SRS) |
 | **Sản phẩm** | Non-intrusive Web Security Scanner (CLI + Web UI cục bộ) |
-| **Phiên bản tài liệu** | 1.23 |
-| **Ngày** | 2026-10-01 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.13: 2026-09-30 · v1.14–v1.18: 2026-10-01 · v1.19–v1.23: 2026-10-04) |
+| **Phiên bản tài liệu** | 1.24 |
+| **Ngày** | 2026-10-01 (v1.0: 2026-09-22 · v1.1: 2026-09-23 · v1.2–v1.13: 2026-09-30 · v1.14–v1.18: 2026-10-01 · v1.19–v1.24: 2026-10-04) |
 | **Chuẩn tham chiếu** | IEEE 830-1998 (rút gọn) |
-| **Trạng thái** | Mô tả lại (as-built) mã nguồn `websec_scanner` `v1.20.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 13 và đợt audit chất lượng toàn hệ thống ngày 2026-10-04). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
+| **Trạng thái** | Mô tả lại (as-built) mã nguồn `websec_scanner` `v1.21.0` trong repo `hkbach/oswap_tool` (CLI + Web UI cục bộ, sau Sprint 13 và đợt audit chất lượng toàn hệ thống ngày 2026-10-04). Đây là **tài liệu requirement duy nhất**; các bản SRS gửi rời trước đây không còn hiệu lực. |
 | **Tài liệu liên quan** | `docs/PRODUCT-BACKLOG.md` (backlog, quyết định, sprint) · `CLAUDE.md` (quy tắc làm việc) · `docs/srs-feedback.md` (review 2026-09-23) |
 
 **Quy ước trong tài liệu này**
@@ -46,6 +46,7 @@
 | 1.21 | 2026-10-04 | Theo code v1.19.0 (gói D8, FR-WEB-07; branch `feat/sprint-16`): Web UI không nhận credential — `POST /api/scan` chỉ nhận `target`/`authorized`/`checks`, từ chối 400 mọi trường credential, trường lạ và target có `user:pass@` (FR-UI-13, AT-80); lỗi mới có `code`/`field` (mục 6.3); `show_secrets` gửi tới Web UI nay bị từ chối thay vì bỏ qua (AT-32). **Thay đổi hành vi:** script gửi trường thừa tới `/api/scan` trước đây được bỏ qua, nay nhận 400. |
 | 1.22 | 2026-10-04 | Theo code v1.19.0 (gói D6, FR-QA-03a–d; branch `feat/d6-benchmark`): thêm công cụ benchmark độ chính xác `benchmarks/` (chấm điểm, cổng hồi quy nghiêm theo baseline, `docker-compose.yml` ghim digest chỉ bind loopback, workflow `benchmark.yml`) và AT-81. **Không đổi hành vi sản phẩm và không đổi `websec_scanner/`**, nên không nâng version. FR-QA-03a–d chưa được tick trong backlog: còn chờ CI chạy thật và duyệt ground truth. |
 | 1.23 | 2026-10-04 | Theo code v1.20.0 (gói D7, FR-DET-04; branch `feat/d7-d9-tls-openapi`): TLS dò chủ động phiên bản giao thức và nhóm cipher yếu bằng ClientHello tự dựng (FR-TLS-12…16, AT-82), mặc định bật, tắt bằng `--no-tls-probe`; định nghĩa non-intrusive cập nhật (mục 1.2, NFR-SEC-01); `TLS-WEAK-PROTOCOL` và `TLS-WEAK-CIPHER` thành một finding cho mỗi giao thức/nhóm với `instance_key` `host:port:<tên>` (FR-TLS-03, FR-TLS-04). **Thay đổi hành vi:** server bật cả TLS cũ lẫn TLS 1.2 nay bị báo HIGH nên gate `--fail-on high` có thể đổi kết quả; fingerprint của hai finding này đổi một lần; tối đa 13 kết nối TLS thay vì 2. |
+| 1.24 | 2026-10-04 | Theo code v1.21.0 (gói D9, FR-API-01a–d; branch `feat/d7-d9-tls-openapi`): `--api-spec FILE` đọc file OpenAPI 3.0/3.1 hoặc Swagger 2.0 và liệt kê server, endpoint, parameter, security scheme (mục 4.15, FR-SPEC-01…06, AT-83): đọc an toàn (safe loader, ngân sách alias, giới hạn độ sâu và kích thước, `$ref` chỉ trong thư mục của spec); `schema_version` 1.9 (khoá `api`, mục 6.2); dependency mới `pyyaml` (MIT). Không đổi hành vi hiện có: tool không gửi request nào tới thứ spec nêu, Web UI không nhận spec. |
 
 ### 0.1 Thay đổi trong bản 1.2
 
@@ -141,7 +142,7 @@ Tool chạy độc lập, không có server hay service riêng (quyết định 
 
 - Người vận hành **có quyền hợp pháp** để quét target (sở hữu hệ thống hoặc có văn bản uỷ quyền). Đây là ràng buộc bắt buộc — xem FR-CONSENT-01 và FR-UI-02.
 - Target phản hồi HTTP(S) tiêu chuẩn; tool không hỗ trợ site yêu cầu đăng nhập/OAuth để vào trang chủ.
-- Môi trường chạy có Python ≥ 3.12 và cài được các package `requests` ≥ 2.32.3, `urllib3` ≥ 2.0.0, `cryptography` ≥ 42 (mức tối thiểu được CI kiểm tra, job `min-deps`). `cryptography` dùng để đọc ngày hiệu lực của chứng chỉ độc lập với bước xác thực trust chain (mục 4.5).
+- Môi trường chạy có Python ≥ 3.12 và cài được các package `requests` ≥ 2.32.3, `urllib3` ≥ 2.0.0, `cryptography` ≥ 42, `pyyaml` ≥ 6.0.1 (mức tối thiểu được CI kiểm tra, job `min-deps`). `cryptography` dùng để đọc ngày hiệu lực của chứng chỉ độc lập với bước xác thực trust chain (mục 4.5).
 - Web UI cục bộ là lối vào thứ hai của cùng lõi quét. Tài liệu này không đặc tả chi tiết giao diện màn hình.
 
 ### 2.4 Ngoài phạm vi (Out of scope)
@@ -463,6 +464,19 @@ Chỉ có ở CLI. Không đổi cấu trúc báo cáo JSON (`schema_version` v�
 | FR-OPT-04 | `--user-agent PREFIX` PHẢI được ghép **trước** User-Agent của scanner, không bao giờ thay thế (NFR-SEC-03). | M |
 | FR-OPT-05 | `--quiet` PHẢI in đúng một dòng cho mỗi target ra stdout (bỏ banner nếu đã có `--yes`), giữ nguyên exit code, và vẫn in `errors` của từng target ra stderr — exit code `3` mà không kèm lý do thì vô dụng trong log CI; `--verbose` PHẢI in mỗi request thực sự gửi đi ra stderr dạng `[request] METHOD URL -> status`, đã che secret. Hai cờ loại trừ nhau. `--version` in phiên bản rồi thoát. | S |
 
+### 4.15 API inventory từ file spec (`api/`, từ v1.21.0)
+
+Quyết định D9 (2026-10-04). Gói này chỉ **đọc** một mô tả API và liệt kê nó; việc kiểm tra từng endpoint (FR-API-02 trong backlog) chưa có. Chỉ có ở CLI.
+
+| ID | Yêu cầu | Priority |
+|---|---|---|
+| FR-SPEC-01 | `--api-spec FILE` (khoá config `api_spec`, đường dẫn tính từ file config) PHẢI đọc file OpenAPI 3.0.x/3.1.x hoặc Swagger 2.0 dạng `.json`, `.yaml`, `.yml` (không phân biệt hoa/thường), tối đa 5 MB, UTF-8 (chấp nhận BOM). File được đọc và kiểm tra **ngay khi phân tích tham số**: lỗi → argparse exit 2, thông báo nêu tên file và lý do, **trước khi gửi request nào**. Tool CHỈ đọc file: KHÔNG gửi request tới endpoint hay server nào spec nêu. | M |
+| FR-SPEC-02 | **Đọc an toàn.** (1) Không dùng mạng: module không import `socket`. (2) YAML chỉ dùng safe loader (loader C khi có, vì nhanh gấp ~5 lần với file 5 MB), nên tag như `!!python/object` bị từ chối; `yes`/`no`/`on`/`off` là chuỗi (YAML 1.2, đúng với OpenAPI); khoá lặp bị từ chối cả ở JSON lẫn YAML; khoá số (mã response `200`) và ngày tháng thành chuỗi. (3) **Ngân sách mở rộng:** trước khi dựng dữ liệu, đồ thị YAML được duyệt với tối đa 500.000 giá trị, mỗi lần dùng một alias đếm một lần, nên file vài trăm byte "billion laughs" bị từ chối dù nhỏ; giới hạn kích thước một mình không đủ. (4) Lồng tối đa 64 tầng, kể cả alias tự tham chiếu; lồng sâu hơn, kể cả hàng chục nghìn tầng, là lỗi có kiểm soát, không treo hay crash. (5) Tổng dung lượng spec + mọi file include tối đa 10 MB. | M |
+| FR-SPEC-03 | **`$ref`.** Chỉ theo `#/json/pointer` trong cùng file, hoặc đường dẫn tương đối tới file `.json`/`.yaml`/`.yml` **nằm trong thư mục của spec** sau khi `..` và symlink đã được giải. PHẢI từ chối, với thông báo "not allowed" và không đọc file đích: URL (`http://`, `https://`, `file://`, `ftp://`, `//host`), đường dẫn tuyệt đối, ổ đĩa, UNC, dấu `\`, ký tự `%`, NUL, `..` thoát khỏi thư mục, symlink trỏ ra ngoài; đuôi file khác `.json`/`.yaml`/`.yml` bị từ chối riêng. Giới hạn: chuỗi `$ref` tối đa 32 bậc, tối đa 10.000 lần theo `$ref`, tối đa 20 file được include; vòng `$ref` (kể cả tự tham chiếu) là lỗi "circular"; `$ref: "#"` (cả tài liệu) bị từ chối. Mỗi file được include chịu đúng các giới hạn của FR-SPEC-02. Chỉ resolve phần inventory cần (path item, parameter, security scheme, server); **schema không bao giờ được resolve**. | M |
+| FR-SPEC-04 | **Nội dung inventory** (`api.inventory.ApiInventory`): `source` (chỉ tên file, không bao giờ đường dẫn cục bộ), `format` (`openapi`/`swagger`), `version`, `title`; `servers` (OpenAPI 3: `servers[].url` với biến thay bằng giá trị mặc định, hoặc `/`; Swagger 2: `schemes` × `host` + `basePath`, mặc định `https`); `endpoints` mỗi cái gồm method (chữ hoa; chỉ `get`, `put`, `post`, `delete`, `options`, `head`, `patch`, `trace`; khoá `x-` bị bỏ), path, `operationId`, parameter (gộp mức path và mức operation, mức operation thắng; `name`, `in`, `required`), tên các security scheme áp dụng (mức operation ghi đè mức toàn cục, `[]` nghĩa là không cần), `deprecated`; `security_schemes` (tên, `type`, chi tiết như `header X-API-Key`, `bearer`, các flow OAuth). Sắp xếp theo path rồi method, không phụ thuộc thứ tự trong file. **Chỉ lấy tên và cấu trúc**: không bao giờ example, default, description hay schema. Tối đa 2.000 endpoint và 100 parameter cho một operation; vượt là lỗi, không cắt âm thầm. Spec sai cấu trúc → lỗi nêu chỗ sai và tên file. | M |
+| FR-SPEC-05 | **Báo cáo.** JSON có khoá `api` ở cấp gốc (`null` khi không dùng `--api-spec`; `schema_version` 1.9, mục 6.2) gồm `endpoint_count` và đủ mọi endpoint. Mọi chữ lấy từ spec đi qua `redact()` (credential trong URL server bị che; không che khi `--show-secrets`). Console in mục "API inventory" sau các finding, tối đa 100 endpoint rồi "... and N more"; mọi chữ từ spec đi qua `report.printable_text()` (FR-REPORT-08). HTML, SARIF, CSV, JUnit và exit code không đổi. | M |
+| FR-SPEC-06 | **Web UI không nhận spec.** `CLAUDE.md` cấm nới giới hạn body 4096 byte, mà spec thường lớn hơn nhiều; trường `api_spec` bị từ chối `unknown_field` (FR-UI-13) và JSON trả về có `api: null`. | M |
+
 ---
 
 ## 5. Yêu cầu phi chức năng (Non-Functional Requirements)
@@ -552,12 +566,12 @@ class ScanResult:
 
 ### 6.2 JSON Schema (mô tả phi hình thức)
 
-Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.8`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01); `1.4` (scanner 1.7.0) **thêm** `scan_groups` và `check` của mỗi finding (FR-GRP-03); `1.5` (scanner 1.10.0) **thêm** `disclaimer` (FR-RPT-08, cùng nội dung với `output.SCOPE_NOTE` hiện trên console và HTML); `1.6` (scanner 1.12.0) **thêm** `cvss_vector`/`cvss_score` của mỗi finding (FR-MODEL-03, ước tính theo loại, xem mục 6.1); `1.7` (scanner 1.14.0) **thêm** khối `limits` (FR-LIM-06, mục 4.12); `1.8` (scanner 1.15.0) **thêm** khối `baseline`, trường `baseline_state` và `suppression` của mỗi finding, và `incomplete_reason`, `basis`, `counted` trong `gate` (mục 4.13). `summary` không đổi nghĩa. Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
+Định dạng chính thức là JSON Schema draft 2020-12 tại **`docs/report.schema.json`** (bắt buộc mọi khoá, không cho khoá lạ). `schema_version` hiện là **`1.9`**. Lịch sử: bản `1.0` là định dạng chưa đánh version của scanner v1.1.0; `1.1` (scanner 1.2.0) **thêm** `schema_version`, `scanner_version`, `rules_version`, `scan_id` (FR-MODEL-02), `secrets_redacted` (FR-AUTH-02) và 5 trường mới của finding (FR-MODEL-01); `1.2` (scanner 1.3.0) **thêm** `final_url` và `redirect_chain` (FR-FIX-10) và tên check `hsts-start-host`; `1.3` (scanner 1.5.0) **thêm** `gate` = `{fail_on, failed, incomplete}` (FR-CI-01); `1.4` (scanner 1.7.0) **thêm** `scan_groups` và `check` của mỗi finding (FR-GRP-03); `1.5` (scanner 1.10.0) **thêm** `disclaimer` (FR-RPT-08, cùng nội dung với `output.SCOPE_NOTE` hiện trên console và HTML); `1.6` (scanner 1.12.0) **thêm** `cvss_vector`/`cvss_score` của mỗi finding (FR-MODEL-03, ước tính theo loại, xem mục 6.1); `1.7` (scanner 1.14.0) **thêm** khối `limits` (FR-LIM-06, mục 4.12); `1.8` (scanner 1.15.0) **thêm** khối `baseline`, trường `baseline_state` và `suppression` của mỗi finding, và `incomplete_reason`, `basis`, `counted` trong `gate` (mục 4.13). `1.9` (scanner 1.21.0) **thêm** khoá `api` ở cấp gốc: `null` khi không dùng `--api-spec`, hoặc một object `source`, `format`, `version`, `title`, `servers`, `security_schemes`, `endpoint_count`, `endpoints` (mục 4.15). `summary` không đổi nghĩa. Không phiên bản nào bỏ hay đổi nghĩa trường. Quy tắc: thêm trường → tăng số phụ; bỏ/đổi tên/đổi nghĩa → tăng số chính; mỗi lần đổi PHẢI ghi changelog.
 
 ```json
 {
-  "schema_version": "1.8",
-  "scanner_version": "1.16.0",
+  "schema_version": "1.9",
+  "scanner_version": "1.21.0",
   "rules_version": "1.1.0",
   "scan_id": "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
   "secrets_redacted": true,
@@ -592,7 +606,8 @@ class ScanResult:
       "check": "sensitive-paths"
     }
   ],
-  "errors": []
+  "errors": [],
+  "api": null
 }
 ```
 
@@ -639,6 +654,7 @@ python -m websec_scanner <target> [--json PATH] [--sarif PATH] [--html PATH] [--
 | `--fail-on LEVEL` | Không | `high` | Mức thấp nhất làm fail gate (exit `1`): `critical`, `high`, `medium`, `low`, hoặc `none` (không bao giờ fail, kể cả khi quét không hoàn tất). |
 | `--ca-bundle PATH` | Không | env `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE`, rồi kho OS | File PEM các CA được tin, thay cho kho mặc định, cho cả request HTTP và TLS check (FR-CLI-06). |
 | `--no-tls-probe` | Không | bật probe | Tắt các probe TLS (FR-TLS-15, từ v1.20.0): chỉ còn hai kết nối chứng chỉ. Khoá config `tls_probe = false`. |
+| `--api-spec FILE` | Không | không | Hiện API inventory đọc từ file OpenAPI 3.0/3.1 hoặc Swagger 2.0 (`.json`/`.yaml`/`.yml`, tối đa 5 MB); chỉ **đọc** file, không gửi request tới bất kỳ thứ gì nó nêu (FR-SPEC-01…06, từ v1.21.0). File lỗi → exit 2 trước khi gửi request nào. Khoá config `api_spec` (đường dẫn tính từ vị trí file config). |
 | `--checks GROUPS` | Không | tất cả | Danh sách id nhóm cách nhau bằng dấu phẩy (mục 4.11), ví dụ `headers,tls`. Id sai → exit code `2` kèm danh sách id hợp lệ (từ v1.7.0). |
 | `--list-checks` | Không | — | In id, tên và mô tả của từng nhóm rồi thoát với code `0`; không cần target, không hỏi xác nhận (từ v1.7.0). |
 | `--show-secrets` | Không | tắt | Không che giá trị cookie và tham số URL nhạy cảm (chỉ để debug cục bộ; NFR-SEC-04). |
@@ -814,6 +830,7 @@ Mọi AT chạy **offline**: test tự dựng HTTP/HTTPS server trên `127.0.0.1
 | AT-80 | Web UI không nhận credential (FR-UI-13, D8) | `POST /api/scan` với từng trường trong `CREDENTIAL_FIELDS` cùng cách viết camelCase/kebab-case/hoa; tên kiểu `access_token`, `session_id`, `x-api-key`; giá trị rỗng; `authorized: false` kèm credential; trường lạ `chekcs`; target có `user:pass@`, có và không có scheme; `?token=` trong target; payload thật của `app.js` | Credential và trường lạ: 400 với `code` và `field` đúng, **không bao giờ** có lần quét nào chạy, giá trị không xuất hiện trong response hay stderr của server; credential thắng trường lạ và thắng lỗi `authorized`; `?token=` vẫn quét được và bị che; lỗi khác giữ dạng `{error}`; mọi trường `app.js` gửi nằm trong `ALLOWED_SCAN_FIELDS` | `tests/test_web_credentials.py` (toàn bộ), `test_web_ui_refuses_show_secrets_and_always_redacts` |
 | AT-81 | Khung benchmark độ chính xác (FR-QA-03, D6) | File ground truth hợp lệ và các kiểu file sai (thiếu khóa, image theo tag hoặc digest ngắn, target ngoài loopback, khóa lạ, thiếu lý do, nhóm sai, trùng, vừa expect vừa forbid); chấm điểm TP/FP/FN/chưa phân loại; gate với baseline (mất finding đúng, finding sai mới, cải thiện, ground truth đổi, image khác); `python -m benchmarks.run` với scanner thật trên mock cục bộ ở ba chế độ (capture, update-baseline, chấm điểm) có dàn dựng hồi quy; compose, workflow và file expected trong repo | precision/recall theo nhóm, `None` (không phải 0 hay 1) khi mẫu số bằng 0; finding chưa phân loại, digest lệch, file chưa duyệt, thiếu baseline hoặc app không chạy đều exit 2; mất finding đúng hoặc có finding sai mới là hồi quy (exit 1), cải thiện vẫn exit 0; target ngoài loopback bị từ chối trước khi gửi request nào; evidence trong artifact đã che; mọi image ghim digest, mọi cổng chỉ bind `127.0.0.1`; workflow có lịch + chạy tay, quyền chỉ đọc, luôn dừng app và giữ kết quả | `tests/test_benchmark_scoring.py`, `tests/test_benchmark_run.py`, `tests/test_benchmark_guards.py` (toàn bộ) |
 | AT-82 | Dò chủ động giao thức và nhóm cipher TLS (FR-TLS-03, FR-TLS-04, FR-TLS-12…16) | Server TLS giả ở mức giao thức (SSLv3, TLS 1.0 …1.3, RC4, 3DES, NULL; trả alert, đóng, reset, im lặng, trả HTTP, trả từng mảnh); server OpenSSL thật hiện đại và chỉ TLS 1.0; qua proxy; có limiter; ngân sách thấp; host không kết nối được; chặn giữa đường; `--no-tls-probe` ở CLI, config và Web UI | Mỗi probe là một kết nối gửi đúng một bản ghi, strict parser đọc được mọi ClientHello, ClientHello tự dựng khiến OpenSSL thật trả ServerHello đúng phiên bản; đúng phiên bản và nhóm được báo, mỗi cái một finding `host:port:<tên>`, thương lượng và probe trùng chỉ là một; server hiện đại thật không bị báo yếu; tối đa 13 kết nối, qua proxy, qua limiter, `ScanLimitReached` không bị nuốt; probe không chạy được vào `errors` một dòng cho mỗi lý do và không tạo finding; không kết nối được thì dừng sau một lần thử; chặn giữa đường hạ confidence; Web UI từ chối trường `tls_probe` từ trình duyệt | `tests/test_tls_probe_rules.py`, `tests/test_tls_probe.py`, `tests/test_tls_probe_check.py` (toàn bộ) |
+| AT-83 | API inventory từ file spec (FR-SPEC-01…06, D9) | Spec JSON/YAML OpenAPI 3.0, 3.1 và Swagger 2.0; spec thật của VAmPI (thử thủ công, không commit); tag YAML nguy hiểm, billion laughs, alias tự tham chiếu, lồng 100.000 tầng, khoá lặp, file > 5 MB; 19 dạng `$ref` bị cấm (URL, `file://`, tuyệt đối, UNC, `..`, `%2e%2e`, NUL, symlink…), vòng, chuỗi > 32, quá nhiều ref/file/dung lượng, tham chiếu tới thư mục; `--api-spec` ở CLI, config, nhiều target; spec lỗi; chữ điều khiển terminal và credential trong spec; Web UI | Spec hợp lệ cho đúng servers/endpoint/parameter/security đã hợp nhất và sắp xếp ổn định, không có example/default/description; mọi spec độc hại là `SpecError` có tên file, không treo, không crash, không mạng, không đọc file ngoài thư mục (nội dung file bí mật không xuất hiện trong lỗi); spec lỗi exit 2 trước request đầu tiên; JSON có `api` (null khi không dùng), khớp schema 1.9 và schema nghiêm với khoá lạ; không request nào tới endpoint hay server trong spec; console cắt ở 100 dòng và vô hiệu hoá ký tự điều khiển; credential bị che; Web UI trả `api: null` và từ chối trường `api_spec` | `tests/test_api_spec_loader.py`, `tests/test_api_inventory.py`, `tests/test_api_cli.py` (toàn bộ) |
 
 ---
 

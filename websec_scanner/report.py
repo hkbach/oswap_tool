@@ -87,6 +87,9 @@ def print_report(report: dict, use_color: bool = True) -> None:
     if report.get("baseline"):
         _print_comparison(report["baseline"])
 
+    if report.get("api"):
+        _print_api(report["api"])
+
     if report["errors"]:
         print("-" * 72)
         print(" Non-fatal errors during scan:")
@@ -111,6 +114,41 @@ def _state_tag(finding: dict) -> str:
         s = finding["suppression"]
         tags.append(f"[SUPPRESSED until {printable_text(s['expires'])}: {printable_text(s['reason'])}]")
     return (" " + " ".join(tags)) if tags else ""
+
+
+_API_LINES = 100  # endpoints shown on the console; the JSON report has every one
+
+
+def _print_api(api: dict) -> None:
+    """FR-SPEC-05: the inventory read from --api-spec. Every text in it came from a file, so none is trusted."""
+    print("-" * 72)
+    print(
+        f" API inventory: {printable_text(api['title'])} "
+        f"({api['format']} {printable_text(api['version'])}, from {printable_text(api['source'])})"
+    )
+    print("   Read from the spec file only: no request was sent to any endpoint or server it names.")
+    if api["servers"]:
+        print("   Servers: " + ", ".join(printable_text(s) for s in api["servers"]))
+    if api["security_schemes"]:
+        schemes = (
+            f"{printable_text(s['name'])} ({s['type']}, {printable_text(s['detail'])})"
+            if s["detail"]
+            else f"{printable_text(s['name'])} ({printable_text(s['type'])})"
+            for s in api["security_schemes"]
+        )
+        print("   Security schemes: " + ", ".join(schemes))
+    print(f"   {api['endpoint_count']} endpoint(s):")
+    for endpoint in api["endpoints"][:_API_LINES]:
+        line = f"     {endpoint['method']:<7} {printable_text(endpoint['path'])}"
+        if endpoint["parameters"]:
+            line += "  params: " + ", ".join(f"{printable_text(p['name'])} ({p['in']})" for p in endpoint["parameters"])
+        if endpoint["security"]:
+            line += "  auth: " + ", ".join(printable_text(name) for name in endpoint["security"])
+        if endpoint["deprecated"]:
+            line += "  [deprecated]"
+        print(line)
+    if api["endpoint_count"] > _API_LINES:
+        print(f"     ... and {api['endpoint_count'] - _API_LINES} more (all of them are in the JSON report)")
 
 
 def _print_comparison(baseline: dict) -> None:

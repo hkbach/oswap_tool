@@ -109,6 +109,8 @@ def build_report(
         "basis": "all" if baseline is None else "new",
         "counted": counted,
     }
+    # FR-SPEC-05: every text taken from the spec is redacted too (a server URL can carry credentials).
+    report["api"] = result.api.to_dict(None if show_secrets else redact) if result.api is not None else None
     if show_secrets:
         return _scrub(report, tuple(secrets))
 

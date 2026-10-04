@@ -25,6 +25,8 @@ from urllib.parse import urlparse, urlsplit, urlunsplit
 import requests
 
 from . import __version__, catalog, request_options
+from .api.inventory import ApiInventory, build_inventory
+from .api.spec_loader import SpecError
 from .baseline import Baseline, BaselineError, load_baseline
 from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
@@ -36,7 +38,7 @@ from .limits import ScanLimiter, ScanLimitReached
 from .models import ScanResult
 from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, exit_code, gate_message, scrub_text
 from .redact import redact
-from .report import print_report, write_json
+from .report import print_report, printable_text, write_json
 from .rule_loader import load_exclusions
 from .sarif import to_sarif
 from .soft404 import build_profile
@@ -202,6 +204,14 @@ def _ca_bundle(value: str) -> str:
     return value
 
 
+def _api_spec(value: str) -> ApiInventory:
+    """argparse type for --api-spec: read and validate the spec now, so a bad file stops the run before any request."""
+    try:
+        return build_inventory(value)
+    except SpecError as exc:
+        raise argparse.ArgumentTypeError(printable_text(str(exc))) from exc
+
+
 def _confirm_authorization(assume_yes: bool, quiet: bool = False) -> bool:
     # --quiet drops the banner only when the operator has already confirmed with --yes;
     # an interactive confirmation always shows what is being agreed to.
@@ -243,6 +253,7 @@ def run_scan(
     proxy: str | None = None,
     user_agent_prefix: str | None = None,
     tls_probe: bool = True,
+    api_inventory: ApiInventory | None = None,
     on_request=None,
 ) -> ScanResult:
     """Scan ``base_url``. ``groups`` selects check groups (catalog.GROUP_IDS); None means all.
@@ -253,7 +264,7 @@ def run_scan(
     hostname = parsed.hostname or base_url
     selected = catalog.normalize_groups(groups) if groups is not None else list(catalog.GROUP_IDS)
 
-    result = ScanResult(target=base_url, started_at=_utc_timestamp(), scan_groups=selected)
+    result = ScanResult(target=base_url, started_at=_utc_timestamp(), scan_groups=selected, api=api_inventory)
     want = set(selected).__contains__
     limiter = ScanLimiter(rate_limit=rate_limit, max_requests=max_requests, max_duration=max_duration)
     exclusions = list(load_exclusions().patterns) if default_excludes else []
@@ -531,6 +542,14 @@ def build_parser() -> argparse.ArgumentParser:
         "(default: REQUESTS_CA_BUNDLE / SSL_CERT_FILE, else the OS store)",
     )
     parser.add_argument(
+        "--api-spec",
+        metavar="FILE",
+        type=_api_spec,
+        help="Show an API inventory (servers, endpoints, parameters, security schemes) read from an "
+        "OpenAPI 3.0/3.1 or Swagger 2.0 file (.json, .yaml or .yml, up to 5 MB). The file is only read: "
+        "nothing it names is requested",
+    )
+    parser.add_argument(
         "--no-tls-probe",
         action="store_true",
         help="Skip the TLS probes (FR-DET-04): about 11 extra standard handshakes that ask which "
@@ -629,6 +648,8 @@ def _apply_config(parser: argparse.ArgumentParser, argv) -> None:
                 return _suppressions(raw)
             if key == "ca_bundle":
                 return _ca_bundle(raw)
+            if key == "api_spec":
+                return _api_spec(raw)
             return raw
         except (ValueError, argparse.ArgumentTypeError) as exc:
             parser.error(f"{known.config}: '{key}': {exc}")
@@ -790,6 +811,7 @@ def main(argv=None) -> int:
             proxy=args.proxy,
             user_agent_prefix=args.user_agent,
             tls_probe=not args.no_tls_probe,
+            api_inventory=args.api_spec,
             on_request=log_request if args.verbose else None,
         )
 

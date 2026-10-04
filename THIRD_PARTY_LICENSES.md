@@ -21,6 +21,7 @@ Declared in `pyproject.toml` `[project.dependencies]`.
 | requests | Apache-2.0 | this project |
 | urllib3 | MIT | this project, requests |
 | cryptography | Apache-2.0 OR BSD-3-Clause | this project |
+| pyyaml | MIT | this project |
 | certifi | MPL-2.0 | requests (transitive) |
 | charset-normalizer | MIT | requests (transitive) |
 | idna | BSD-3-Clause | requests (transitive) |
