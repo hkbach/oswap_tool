@@ -60,10 +60,29 @@ CONSENT_BANNER = """
 
 
 def _normalize_target(target: str) -> str:
-    # urlparse() reads "host:port" as scheme "host", so test for "://" instead.
+    """``example.com`` -> ``https://example.com/``. Raises ValueError on a target we cannot scan.
+
+    The Web UI applies the same rule before accepting a scan (FR-UI-04), so both entry points
+    reject the same targets instead of the CLI running an empty scan and reporting a confusing
+    connection error.
+    """
+    target = target.strip()
+    if not target:
+        raise ValueError("the target is empty")
+    # urlparse() reads "host:port" as scheme "host", so test for "://" instead. A scheme with
+    # no "//" (javascript:, data:, mailto:) must still be refused rather than turned into
+    # "https://javascript:alert(1)/"; what follows the colon tells the two apart, because a
+    # port is all digits.
     if "://" not in target:
+        prefix = re.match(r"^([A-Za-z][A-Za-z0-9+.\-]*):(.*)$", target)
+        if prefix and not prefix.group(2).split("/")[0].isdigit():
+            raise ValueError(f"{target!r}: only http:// and https:// targets can be scanned")
         target = "https://" + target
     parts = urlsplit(target)
+    if parts.scheme.lower() not in ("http", "https"):
+        raise ValueError(f"{target!r}: only http:// and https:// targets can be scanned")
+    if not parts.hostname:
+        raise ValueError(f"{target!r}: no hostname, expected something like https://example.com")
     path = parts.path if parts.path.endswith("/") else parts.path + "/"
     return urlunsplit(parts._replace(path=path))
 
@@ -599,7 +618,7 @@ def _apply_config(parser: argparse.ArgumentParser, argv) -> None:
 
 def _collect_targets(parser: argparse.ArgumentParser, args) -> list[str]:
     """Positional targets and --targets-file, normalised, in order, without duplicates."""
-    raw = list(args.target or [])
+    raw: list[tuple[str, str | None]] = [(entry, None) for entry in (args.target or [])]
     if args.targets_file:
         try:
             with open(args.targets_file, encoding="utf-8") as fh:
@@ -609,10 +628,13 @@ def _collect_targets(parser: argparse.ArgumentParser, args) -> list[str]:
         for line in lines:
             entry = line.split("#", 1)[0].strip()
             if entry:
-                raw.append(entry)
+                raw.append((entry, args.targets_file))
     seen, targets = set(), []
-    for entry in raw:
-        target = _normalize_target(entry)
+    for entry, source in raw:
+        try:
+            target = _normalize_target(entry)
+        except ValueError as exc:
+            parser.error(f"{source}: {exc}" if source else str(exc))
         if target not in seen:
             seen.add(target)
             targets.append(target)

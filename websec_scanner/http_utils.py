@@ -126,7 +126,17 @@ class ScopedSession(requests.Session):
         location = super().get_redirect_target(resp)
         if location is None:
             return location
-        target = urljoin(resp.url, location)
+        try:
+            target = urljoin(resp.url, location)
+        except ValueError as exc:
+            # The server controls this header, and urljoin() rejects some strings outright
+            # (an unterminated IPv6 literal, for example). A redirect we cannot even parse is
+            # one we must not follow; record it instead of letting the scan die (NFR-REL-01).
+            self.blocked_redirects.setdefault(
+                f"!malformed:{location[:80]}",
+                f"Redirect not followed: {resp.url} returned a Location header that is not a usable URL ({exc})",
+            )
+            return None
         if self.is_excluded(target):
             return None
         if self.scope_host is None:

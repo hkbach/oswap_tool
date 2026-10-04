@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.16.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.17.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.16.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.17.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -306,7 +306,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.16.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.17.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -436,6 +436,27 @@ python -m websec_scanner.web --port 9000 --timeout 15 --workers 8
 python -m websec_scanner.web --fail-on medium --ca-bundle path/to/ca.pem
 ```
 
+All options are set when the server starts, so a browser user cannot change
+them:
+
+| Option | Meaning |
+|---|---|
+| `--host ADDRESS` | Address to bind (default `127.0.0.1`; anything else also needs `--allow-remote`) |
+| `--port PORT` | Port to listen on (default `8765`) |
+| `--allow-remote` | Required to bind anywhere other than loopback; the server refuses to start without it |
+| `--token TOKEN` | Access token required on every request when bound remotely (default: a random one, printed once) |
+| `--timeout SECONDS` | Per-request timeout for scans (default `10`) |
+| `--workers N` | Concurrent requests for the path checks (default `5`) |
+| `--fail-on LEVEL` | Threshold behind the page's gate status, same meaning as the CLI's (default `high`) |
+| `--ca-bundle PATH` | PEM file of CA certificates to trust instead of the OS store |
+| `--rate-limit N` | At most N requests per second per scan (default: no limit) |
+| `--max-requests N` / `--max-duration SECONDS` | Stop a scan after this many requests / seconds |
+
+The CLI's `--baseline`, `--suppressions`, `--config`, `--csv`, `--junit` and
+the multi-target options have no web UI equivalent: they belong to a CI run,
+not to a browser session. The JSON the web UI returns still carries their
+fields, set to `null`.
+
 The page has three steps: enter the target URL, choose the **test targets**
 (all are selected by default; *Select all* / *Clear*), and confirm that you are
 authorized to scan. Then click **Scan**. The results show the counts by
@@ -488,7 +509,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-74 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-77 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -654,6 +675,27 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog
+
+- **v1.17.0** (quality audit). A review of the whole system against its specification,
+  with no new features. What changes for you:
+  - **A target the scanner cannot scan is now refused** with exit code `2` and a clear
+    message, before anything is printed or requested. `ftp://host/`, `file:///x`,
+    `javascript:...`, `http://` with no host and similar used to be accepted: the scan ran,
+    found nothing, and exited `3` with a connection error from inside the HTTP library. The
+    local web UI already refused these, so the two now agree.
+  - **A scanned site can no longer control your terminal.** Response headers are quoted back
+    as evidence, and a site could put terminal escape sequences in them: on a normal
+    terminal that let it erase the findings just printed and write its own verdict instead.
+    Control characters from a target are now shown as visible `\xNN` text. The scanner's
+    own colours are unaffected, and the JSON and SARIF reports keep the real bytes.
+  - **A malformed redirect no longer crashes the scan.** `Location: http://evil[.invalid/`
+    raised an unhandled error and killed the run; such a redirect is now simply not
+    followed, and the report says so.
+  - Documentation fixes: the web UI section now lists its options (three were missing since
+    v1.14.0), and an acceptance row in the SRS named a test that had been renamed.
+  - Three new test files guard these, and a fourth keeps the documentation and the code from
+    drifting apart: every option the tools accept must appear in their option tables, and
+    every test named by an acceptance row must exist.
 
 - **v1.16.0** (config file, several targets, request options). The JSON report is
   unchanged (`schema_version` 1.8).
