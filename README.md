@@ -26,7 +26,6 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
 
 - [`docs/SRS-websec-scanner.md`](./docs/SRS-websec-scanner.md) — requirements
   specification; the single requirements document, checked against the code and tests.
-- [`docs/PRODUCT-BACKLOG.md`](./docs/PRODUCT-BACKLOG.md) — backlog, decisions, sprint order.
 - [`CLAUDE.md`](./CLAUDE.md) — working rules for this repository.
 - [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema of the `--json`
   report (`schema_version` 1.8).
@@ -729,7 +728,7 @@ websec_scanner/
 examples/ci/        # CI templates for GitHub Actions, GitLab CI, Azure Pipelines, Jenkins
 benchmarks/         # accuracy benchmark against Juice Shop and VAmPI (runs in CI, see its README)
 tests/              # offline test suite, mock servers, golden files
-docs/               # SRS, backlog, JSON Schema of the report
+docs/               # SRS, JSON Schema of the report
 Dockerfile          # official CLI image, non-root, not published to a registry yet
 .dockerignore       # keeps the Docker build context to the package itself
 THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
