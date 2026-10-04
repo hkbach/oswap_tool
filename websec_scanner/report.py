@@ -8,7 +8,7 @@ import textwrap
 
 from .catalog import CHECK_GROUPS
 from .models import SEVERITY_ORDER
-from .output import CRAWL_SKIP_TEXT, CRAWL_STOP_TEXT, CVSS_NOTE, SCOPE_NOTE
+from .output import API_LISTED_ENDPOINTS, CRAWL_SKIP_TEXT, CRAWL_STOP_TEXT, CVSS_NOTE, SCOPE_NOTE
 
 _SEVERITIES = SEVERITY_ORDER
 # Everything a terminal acts on: C0 controls except tab, DEL, and the C1 range (which includes
@@ -121,9 +121,6 @@ def _state_tag(finding: dict) -> str:
     return (" " + " ".join(tags)) if tags else ""
 
 
-_API_LINES = 100  # endpoints shown on the console; the JSON report has every one
-
-
 def _other_pages(finding: dict) -> str:
     """The pages after the finding's own URL, as many as the report lists, and how many more there were."""
     others = [url for url in finding["affected_urls"] if url != finding["url"]]
@@ -167,7 +164,7 @@ def _print_api(api: dict) -> None:
         )
         print("   Security schemes: " + ", ".join(schemes))
     print(f"   {api['endpoint_count']} endpoint(s):")
-    for endpoint in api["endpoints"][:_API_LINES]:
+    for endpoint in api["endpoints"][:API_LISTED_ENDPOINTS]:
         line = f"     {endpoint['method']:<7} {printable_text(endpoint['path'])}"
         if endpoint["parameters"]:
             line += "  params: " + ", ".join(f"{printable_text(p['name'])} ({p['in']})" for p in endpoint["parameters"])
@@ -176,8 +173,8 @@ def _print_api(api: dict) -> None:
         if endpoint["deprecated"]:
             line += "  [deprecated]"
         print(line)
-    if api["endpoint_count"] > _API_LINES:
-        print(f"     ... and {api['endpoint_count'] - _API_LINES} more (all of them are in the JSON report)")
+    if api["endpoint_count"] > API_LISTED_ENDPOINTS:
+        print(f"     ... and {api['endpoint_count'] - API_LISTED_ENDPOINTS} more (all of them are in the JSON report)")
 
 
 def _print_comparison(baseline: dict) -> None:

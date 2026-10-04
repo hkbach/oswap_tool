@@ -44,6 +44,8 @@ CVSS_NOTE = (
     "observed and how easily it can be abused in context. Findings that are not a scorable "
     "weakness (early warnings, hints, informational observations) carry no score at all."
 )
+# FR-SPEC-05: endpoints listed on the console and in the HTML report; the JSON report has every one.
+API_LISTED_ENDPOINTS = 100
 # FR-CRAWL-01: how a crawl's stop reason and skipped links are worded, shared by the console and HTML reports.
 CRAWL_STOP_TEXT = {
     "complete": "all reachable pages were visited",

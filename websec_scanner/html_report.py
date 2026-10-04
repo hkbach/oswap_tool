@@ -13,7 +13,17 @@ from html import escape
 from . import __version__
 from .catalog import CHECK_GROUPS, group_of_check
 from .models import SEVERITY_ORDER
-from .output import CRAWL_SKIP_TEXT, CRAWL_STOP_TEXT, CVSS_NOTE, SCOPE_NOTE, gate_message, group_findings, owasp_groups
+from .output import (
+    API_LISTED_ENDPOINTS,
+    CRAWL_SKIP_TEXT,
+    CRAWL_STOP_TEXT,
+    CVSS_NOTE,
+    SCOPE_NOTE,
+    gate_message,
+    group_findings,
+    owasp_groups,
+)
+from .report import printable_text
 
 _GROUP_TITLE = {g.id: g.title for g in CHECK_GROUPS}
 
@@ -89,6 +99,9 @@ h3.group { font-size:16px; margin:22px 0 4px; } h3.group .status { margin-left:8
 p.group-desc { margin:0 0 10px; }
 .finding h4 { display:inline; font-size:15px; margin:0; }
 .ids a { color:var(--muted); }
+table.api { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+table.api th, table.api td { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line, #ddd);
+  overflow-wrap:anywhere; vertical-align:top; }
 @media print { body { background:#fff; } .card { break-inside:avoid; } }
 """
 
@@ -257,6 +270,91 @@ def _groups_sections(report: dict, groups: list[dict]) -> str:
     )
 
 
+def _text(value) -> str:
+    """Text that came from a spec file or a scanned site: control characters made visible, then escaped."""
+    return _e(printable_text(value))
+
+
+def _number(value) -> str:
+    return f"{value:g}"
+
+
+def _limits_text(limits: dict) -> str:
+    parts = []
+    if limits.get("rate_limit") is not None:
+        parts.append(f"rate limit {_number(limits['rate_limit'])} requests/s")
+    if limits.get("max_requests") is not None:
+        parts.append(f"max {limits['max_requests']} requests")
+    if limits.get("max_duration") is not None:
+        parts.append(f"max {_number(limits['max_duration'])} s")
+    return ", ".join(parts) or "none set"
+
+
+_STOPPED_BY = {"max-requests": "--max-requests", "max-duration": "--max-duration"}
+
+
+def _scan_detail_rows(report: dict) -> str:
+    """FR-REPORT-09: what produced this report and what the scan was allowed to do; only what the report carries."""
+    rows = []
+    for label, key in (
+        ("Scanner version", "scanner_version"),
+        ("Rules version", "rules_version"),
+        ("Scan ID", "scan_id"),
+    ):
+        if report.get(key):
+            rows.append((label, _e(report[key])))
+    limits = report.get("limits")
+    if limits:
+        rows.append(("Requests sent", _e(limits["requests_sent"])))
+        rows.append(("Limits", _e(_limits_text(limits))))
+        if limits.get("slowdowns"):
+            rows.append(("Backed off", f"{_e(limits['slowdowns'])} time(s) after HTTP 429 or 503 answers"))
+        if limits.get("stopped_by"):
+            rows.append(("Stopped early by", _e(_STOPPED_BY.get(limits["stopped_by"], limits["stopped_by"]))))
+    return "".join(f"<tr><th>{label}</th><td>{value}</td></tr>" for label, value in rows)
+
+
+def _api(api: dict | None) -> str:
+    """FR-REPORT-09: the inventory read from --api-spec. Every text in it came from a file, so none is trusted."""
+    if not api:
+        return ""
+    head = (
+        f"<p>{_text(api['title'])} "
+        f'<span class="muted">({_text(api["format"])} {_text(api["version"])}, from {_text(api["source"])})</span></p>'
+        '<p class="muted">Read from the spec file only: no request was sent to any endpoint or server it names.</p>'
+    )
+    if api["servers"]:
+        head += "<p>Servers: " + ", ".join(f"<code>{_text(s)}</code>" for s in api["servers"]) + "</p>"
+    if api["security_schemes"]:
+        schemes = (
+            f"{_text(s['name'])} ({_text(s['type'])}, {_text(s['detail'])})"
+            if s["detail"]
+            else f"{_text(s['name'])} ({_text(s['type'])})"
+            for s in api["security_schemes"]
+        )
+        head += "<p>Security schemes: " + ", ".join(schemes) + "</p>"
+    if not api["endpoints"]:
+        return f'<h2>API inventory</h2><div class="card">{head}<p>No endpoints declared.</p></div>'
+    rows = []
+    for endpoint in api["endpoints"][:API_LISTED_ENDPOINTS]:
+        params = ", ".join(f"{_text(p['name'])} ({_text(p['in'])})" for p in endpoint["parameters"]) or "-"
+        auth = ", ".join(_text(name) for name in endpoint["security"]) or "none declared"
+        flag = ' <span class="muted">deprecated</span>' if endpoint["deprecated"] else ""
+        rows.append(
+            f'<tr class="endpoint"><td>{_text(endpoint["method"])}</td>'
+            f"<td><code>{_text(endpoint['path'])}</code>{flag}</td>"
+            f"<td>{params}</td><td>{auth}</td></tr>"
+        )
+    more = api["endpoint_count"] - API_LISTED_ENDPOINTS
+    tail = f"<p>... and {more} more endpoint(s); all of them are in the JSON report.</p>" if more > 0 else ""
+    return (
+        f'<h2>API inventory</h2><div class="card">{head}<p>{api["endpoint_count"]} endpoint(s):</p>'
+        '<table class="api"><tr><th>Method</th><th>Path</th><th>Parameters</th><th>Auth</th></tr>'
+        + "".join(rows)
+        + f"</table>{tail}</div>"
+    )
+
+
 def _crawl(crawl: dict | None) -> str:
     """FR-CRAWL-01: what the crawl covered, why it stopped, and what it left alone."""
     if not crawl:
@@ -334,13 +432,13 @@ def render_html(report: dict) -> str:
 <tr><th>Started (UTC)</th><td>{_e(report.get("started_at"))}</td></tr>
 <tr><th>Finished (UTC)</th><td>{_e(report.get("finished_at"))}</td></tr>
 {final_row}{scope_rows}<tr><th>Checks run</th><td>{_e(checks)}</td></tr>
-<tr><th>Total findings</th><td>{len(findings)}</td></tr>
+<tr><th>Total findings</th><td>{len(findings)}</td></tr>{_scan_detail_rows(report)}
 </table>
 {secrets_banner}<p class="gate {gate_class}">{_e(gate_text)}</p>
 <table class="summary"><tr>{summary_cells}</tr></table>
 </div>
 {_top_issues(findings)}
-{_comparison(report.get("baseline"))}{_crawl(report.get("crawl"))}
+{_comparison(report.get("baseline"))}{_crawl(report.get("crawl"))}{_api(report.get("api"))}
 {errors_html}
 {findings_html}
 <footer>
