@@ -147,7 +147,23 @@ def test_scan_requires_explicit_authorization(ui, monkeypatch, authorized):
     assert "Authorization not confirmed" in resp.json()["error"]
 
 
-@pytest.mark.parametrize("target", ["", "   ", None, 42, "ftp://example.com", "file:///etc/passwd"])
+# The same targets AT-75 names for the CLI: both entry points must refuse all of them.
+@pytest.mark.parametrize(
+    "target",
+    [
+        "",
+        "   ",
+        None,
+        42,
+        "ftp://example.com",
+        "gopher://example.com/",
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "data:text/html,x",
+        "http://",
+        "https:///path",
+    ],
+)
 def test_scan_rejects_invalid_targets(ui, monkeypatch, target):
     monkeypatch.setattr(web, "run_scan", lambda *a, **kw: pytest.fail("scan ran for an invalid target"))
     assert scan(ui, {"target": target, "authorized": True}).status_code == 400
@@ -249,6 +265,7 @@ def test_missing_or_wrong_token_is_rejected_on_every_route(token_ui, http_server
     assert requests.get(token_ui + "/", timeout=5).status_code == 403
     assert requests.get(token_ui + "/", headers={"X-Scanner-Token": "wrong"}, timeout=5).status_code == 403
     assert requests.get(token_ui + "/api/checks", timeout=5).status_code == 403
+    assert requests.get(token_ui + "/app.js", timeout=5).status_code == 403  # static files too
     resp = scan(token_ui, {"target": http_server(MockHandler), "authorized": True})
     assert resp.status_code == 403
 

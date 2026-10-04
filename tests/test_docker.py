@@ -42,6 +42,7 @@ def test_dockerfile_final_stage_does_not_copy_the_source_tree():
     text = _dockerfile()
     final_stage = text[text.index("FROM python:3.12-slim\n", text.index("AS build") + 1) :]
     assert "COPY websec_scanner" not in final_stage
+    assert "pyproject.toml" not in final_stage
     assert "COPY --from=build" in final_stage
 
 

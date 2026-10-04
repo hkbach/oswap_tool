@@ -75,16 +75,23 @@ def test_an_unlimited_scan_is_not_slowed_down(counting_server):
     assert arrivals[-1] - arrivals[0] < 2.0  # no artificial spacing
 
 
+def _stop_lines(result) -> int:
+    """FR-LIM-03 fixes the prefix, and a scan may only say it once."""
+    return len([e for e in result.errors if e.startswith("Scan stopped early")])
+
+
 def test_max_requests_stops_the_scan_and_says_so(http_server):
     result = cli.run_scan(http_server(MockHandler), max_requests=3)
     assert result.limits["stopped_by"] == "max-requests"
     assert result.limits["requests_sent"] == 3
+    assert _stop_lines(result) == 1, result.errors  # one line, not one per worker
     assert any("--max-requests" in e for e in result.errors), result.errors
 
 
 def test_max_duration_stops_the_scan(http_server):
     result = cli.run_scan(http_server(MockHandler), max_duration=0.001)
     assert result.limits["stopped_by"] == "max-duration"
+    assert _stop_lines(result) == 1, result.errors
     assert any("--max-duration" in e for e in result.errors), result.errors
 
 

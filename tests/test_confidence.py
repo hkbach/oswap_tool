@@ -62,6 +62,7 @@ def test_intercepted_tls_is_flagged_and_findings_are_low_confidence(https_server
     warnings: list[str] = []
     findings = tls_check.check_tls("127.0.0.1", port, timeout=5, warnings=warnings)
     assert len(warnings) == 1 and "intercepted" in warnings[0] and "Avast" in warnings[0]
+    assert f"127.0.0.1:{port}" in warnings[0]  # FR-TLS-11: say which endpoint it was
     assert findings and all(f.confidence == "low" for f in findings)
 
 

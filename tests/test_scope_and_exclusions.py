@@ -10,6 +10,7 @@ from mock_server import Handler as MockHandler
 
 from websec_scanner import cli, rule_loader
 from websec_scanner.http_utils import build_session, in_scope
+from websec_scanner.output import build_report, exit_code
 
 
 class RecordingHandler(QuietHandler):
@@ -82,6 +83,58 @@ def test_the_report_says_what_was_excluded(recording_server):
 def test_default_excludes_can_be_turned_off():
     session = build_session(scope_host="t.example", exclusions=[])
     assert not session.is_excluded("https://t.example/logout")
+
+
+def test_the_scope_flags_reach_the_session(http_server, monkeypatch):
+    # The two tests above prove what build_session() does with these arguments; this one
+    # proves argparse actually hands them over. Nothing exercised the flags themselves.
+    seen: dict = {}
+    real = cli.build_session
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "build_session", spy)
+    cli.main(
+        [
+            http_server(MockHandler),
+            "--yes",
+            "--no-color",
+            "--exclude-host",
+            "cdn.example",
+            "--no-default-excludes",
+            "--checks",
+            "headers",
+        ]
+    )
+    assert seen["excluded_hosts"] == ["cdn.example"]
+    assert seen["exclusions"] == []  # the built-in list really was dropped
+
+
+def test_an_excluded_host_is_never_requested_during_a_scan(recording_server):
+    # End to end: excluding the target's own host must stop every request.
+    url, handler = recording_server
+    cli.run_scan(url, exclude_hosts=["127.0.0.1"], groups=["directory-listing"])
+    assert handler.seen == [], "an excluded host must not be requested at all"
+
+
+def test_a_target_on_an_excluded_path_is_not_fetched_either(recording_server):
+    # The home-page fetch used to bypass the exclusions, so pointing the target at one of the
+    # built-in excluded paths (/logout, /delete, /checkout, /shutdown) sent the one GET those
+    # patterns exist to prevent. The scan now reports itself incomplete instead.
+    url, handler = recording_server
+    result = cli.run_scan(url.rstrip("/") + "/checkout/", groups=["headers"])
+    assert handler.seen == [], "the built-in exclusions must cover the target itself"
+    assert result.baseline_fetched is False
+    assert any("excluded by this scan's own configuration" in e for e in result.errors), result.errors
+
+
+def test_an_excluded_target_is_reported_as_incomplete_not_clean(recording_server):
+    url, _ = recording_server
+    report = build_report(cli.run_scan(url.rstrip("/") + "/logout", groups=["headers"]))
+    assert report["gate"]["incomplete"] is True  # exit code 3: nothing was measured
+    assert exit_code(report) == 3
 
 
 def test_an_invalid_exclusion_regex_is_rejected_before_any_request(http_server, capsys):

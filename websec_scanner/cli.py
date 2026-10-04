@@ -31,7 +31,7 @@ from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_
 from .config import CONFIG_KEYS, ConfigError, load_config
 from .exports import to_csv, to_junit
 from .html_report import render_html
-from .http_utils import build_session
+from .http_utils import build_session, excluded
 from .limits import ScanLimiter, ScanLimitReached
 from .models import ScanResult
 from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, exit_code, gate_message, scrub_text
@@ -97,6 +97,13 @@ def _fetch_baseline(session, url: str):
     ``tls_error_url`` is the URL whose TLS handshake failed — after an http -> https
     redirect that is the HTTPS hop, not the URL we started from.
     """
+    if excluded(session, url):
+        # FR-AUTHZ-06 / SRS FR-EXCL-02: every request goes through safe_get()/get_limited(), which honour
+        # the exclusions; this one used to bypass them. The built-in list is exactly the paths
+        # where one GET can log a session out, delete something or start a checkout, so a
+        # target that lands on such a path must not be fetched either. No request is sent and
+        # the scan reports itself incomplete (exit code 3) rather than looking clean.
+        return None, "it is excluded by this scan's own configuration (--exclude/--exclude-host)", None
     try:
         return session.get(url), None, None
     except requests.exceptions.SSLError as exc:

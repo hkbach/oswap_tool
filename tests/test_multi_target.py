@@ -62,6 +62,16 @@ def test_the_exit_code_is_the_worst_of_all_targets(http_server, tmp_path, closed
     assert code == 3  # one target could not be scanned and nothing failed the gate
 
 
+def test_a_failing_gate_outranks_an_unreachable_target(http_server, tmp_path, closed_port, capsys):
+    # AT-73 states the precedence 1 > 3 > 0 across targets; the two tests above only pair a
+    # clean target with a worse one, so 1-beats-3 was proven for a single target and never
+    # between targets. A CI run must not report "incomplete" when something actually failed.
+    failing, unreachable = http_server(Exposed), f"http://127.0.0.1:{closed_port}/"
+    code, _ = _main([failing, unreachable, "--yes", "--no-color", "--timeout", "2", "--output-dir", str(tmp_path),
+                     "--checks", GATE_GROUPS], capsys)  # fmt: skip
+    assert code == 1
+
+
 def test_a_targets_file_ignores_comments_and_blank_lines(http_server, tmp_path, capsys):
     a, b = http_server(Clean), http_server(Clean)
     listing = tmp_path / "targets.txt"

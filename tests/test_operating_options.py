@@ -13,6 +13,7 @@ from conftest import QuietHandler
 from mock_proxy import ProxyHandler, start_proxy
 
 from websec_scanner import __version__, cli
+from websec_scanner.checks import tls_check
 from websec_scanner.http_utils import USER_AGENT
 from websec_scanner.request_options import is_sensitive_header, parse_cookie, parse_header
 
@@ -173,6 +174,20 @@ def test_the_tls_check_tunnels_through_the_proxy_too(https_server, capsys):
     # The baseline GET fails on the self-signed certificate (expected); the TLS check must not.
     assert not [e for e in result.errors if e.startswith("Check 'tls' failed")], result.errors
     assert any(f.id == "TLS-CERT-NOT-TRUSTED" for f in result.findings)  # it measured the real server
+
+
+def test_both_tls_handshakes_are_tunnelled_not_just_one(https_server):
+    # The check opens two sockets: one to read the certificate, one to verify trust. Counting
+    # them through run_scan() is not possible (the baseline GET tunnels too, and urllib3
+    # retries), so drive the check on its own: membership alone would still hold if one of
+    # the two regressed to a direct connection, which is the whole point of --proxy.
+    url, port = https_server(QuietHandler)
+    proxy, proxy_url = start_proxy()
+    try:
+        tls_check.check_tls("127.0.0.1", port, timeout=5, proxy=proxy_url)
+    finally:
+        proxy.shutdown()
+    assert [t for m, t in ProxyHandler.seen if m == "CONNECT"] == [f"127.0.0.1:{port}"] * 2
 
 
 def test_proxy_credentials_are_sent_and_never_reported(http_server, tmp_path, capsys):

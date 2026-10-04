@@ -174,6 +174,7 @@ def test_tls_unparsable_certificate_is_reported_and_trust_is_still_checked(https
 def test_ipv6_hosts_are_bracketed_in_urls(closed_port):
     (finding,) = tls_check.check_tls("::1", closed_port, timeout=2)
     assert finding.id == "TLS-CONN-FAILED" and finding.url == f"https://[::1]:{closed_port}"
+    assert finding.instance_key == f"::1:{closed_port}"  # host:port, unbracketed: the fingerprint key
 
     class RecordingSession:
         scope_host = "::1"

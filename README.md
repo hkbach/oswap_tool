@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.17.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.18.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.17.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.18.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -306,7 +306,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.17.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.18.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -509,7 +509,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-77 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-79 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -675,6 +675,27 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog
+
+- **v1.18.0** (quality audit, part two). The acceptance table and the backlog were
+  checked claim by claim against the tests that are supposed to prove them, and the
+  core rules were checked by deliberately breaking them. What changes for you:
+  - **An excluded target is no longer scanned anyway.** Every request the scanner makes
+    honours `--exclude`, `--exclude-host` and the built-in exclusion list — except the
+    first fetch of the target itself, which went out regardless. The built-in list is
+    exactly the paths where a single GET can log a session out, delete something or
+    start a checkout, so pointing a scan at, say, `https://shop.example/checkout/` sent
+    the one request those patterns exist to prevent. Such a scan now sends nothing, says
+    why in its errors, and exits `3` (incomplete) rather than `0` (clean).
+  - No other behaviour changed. The rest of the release is test and documentation work:
+    seventeen assertions that an acceptance row claimed but did not check were
+    tightened — among them that a missing access token really is refused on the Web UI's
+    static files, that the Web UI refuses exactly the targets the CLI refuses, that both
+    TLS handshakes go through `--proxy`, and that a report says only once that a scan
+    stopped early.
+  - Two acceptance rows named the JSON `schema_version` of the sprint that wrote them
+    (`1.1` and `1.6`) rather than the current `1.8`; a backlog item delivered in sprint 9
+    had never been ticked, and three progress-table cells disagreed with the item list
+    they summarise.
 
 - **v1.17.0** (quality audit). A review of the whole system against its specification,
   with no new features. What changes for you:

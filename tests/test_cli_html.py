@@ -56,5 +56,7 @@ def test_all_outputs_in_one_run_agree(http_server, tmp_path):
     )
     report = json.loads(outs["json"].read_text(encoding="utf-8"))
     sarif_doc = json.loads(outs["sarif"].read_text(encoding="utf-8"))
+    html = outs["html"].read_text(encoding="utf-8")
     assert len(sarif_doc["runs"][0]["results"]) == len(report["findings"])
+    assert html.count('id="finding-') == len(report["findings"])  # the HTML shows the same set
     assert output.gate_failed(report) is report["gate"]["failed"]
