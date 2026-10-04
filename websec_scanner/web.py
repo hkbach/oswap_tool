@@ -30,9 +30,18 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from . import catalog
-from .cli import _ca_bundle, _normalize_target, _positive_float, _positive_int, run_scan
+from .cli import _ca_bundle, _non_negative_int, _normalize_target, _positive_float, _positive_int, run_scan
+from .crawler.crawl import CrawlOptions
 from .html_report import render_html
-from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, gate_message, group_findings, owasp_groups
+from .output import (
+    DEFAULT_FAIL_ON,
+    FAIL_ON_CHOICES,
+    build_report,
+    crawl_message,
+    gate_message,
+    group_findings,
+    owasp_groups,
+)
 from .redact import SENSITIVE_PARAM_WORDS, redact
 
 _STATIC_DIR = Path(__file__).with_name("static")
@@ -50,6 +59,7 @@ WEB_ONLY_FIELDS = (
     "gate_failed",
     "gate_status",
     "gate_message",
+    "crawl_message",
     "groups",
     "owasp_groups",
     "report_id",
@@ -57,7 +67,7 @@ WEB_ONLY_FIELDS = (
 )
 # FR-WEB-07 (decision D8): the only fields POST /api/scan accepts. Anything else is refused
 # rather than ignored, so a caller can never believe an option it sent was honoured.
-ALLOWED_SCAN_FIELDS = frozenset({"target", "authorized", "checks"})
+ALLOWED_SCAN_FIELDS = frozenset({"target", "authorized", "checks", "crawl"})
 # Fields that carry a credential. The local Web UI never accepts one in any form: authenticated
 # scanning is a CLI/CI feature, with secrets in environment variables or a config file. Names
 # are compared without case, '_' or '-', so showSecrets and show-secrets match show_secrets.
@@ -250,7 +260,9 @@ class ScanUIHandler(BaseHTTPRequestHandler):
             return self._error(403, "Missing or invalid access token")
         if self.path.split("?", 1)[0] == "/api/checks":
             groups = [{"id": g.id, "title": g.title, "description": g.description} for g in catalog.CHECK_GROUPS]
-            return self._json(200, {"groups": groups})
+            crawl = self.server.scan_crawl_options  # so the page can state the limits a crawl will run under
+            limits = {"max_depth": crawl.max_depth, "max_pages": crawl.max_pages, "max_duration": crawl.max_duration}
+            return self._json(200, {"groups": groups, "crawl": limits})
         report_match = _REPORT_PATH.match(self.path)
         if report_match:
             return self._send_report(report_match.group(1))
@@ -318,6 +330,12 @@ class ScanUIHandler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 return self._error(400, str(exc))
 
+        crawl = False  # FR-UI-14: a single boolean; the limits are the operator's, set at server start
+        if "crawl" in payload:
+            crawl = payload["crawl"]
+            if not isinstance(crawl, bool):
+                return self._error(400, "crawl must be true or false")
+
         # One scan at a time keeps the load on the target bounded (NFR-PERF-02).
         if not self.server.scan_lock.acquire(blocking=False):
             return self._error(429, "A scan is already running; wait for it to finish")
@@ -332,6 +350,7 @@ class ScanUIHandler(BaseHTTPRequestHandler):
                 ca_bundle=self.server.scan_ca_bundle,
                 tls_probe=self.server.scan_tls_probe,
                 groups=groups,
+                crawl=self.server.scan_crawl_options if crawl else None,
             )
             report = build_report(result, fail_on=self.server.scan_fail_on)  # same pipeline as the CLI (FR-WEB-01)
         except Exception as exc:  # a bug must still answer the browser instead of dropping the connection
@@ -345,6 +364,7 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         data = dict(report, report_id=report_id, report_url=f"/api/report/{report_id}.html")
         data["gate_failed"] = report["gate"]["failed"]
         data["gate_status"], data["gate_message"] = gate_message(report["gate"])  # same text as the HTML report
+        data["crawl_message"] = crawl_message(report["crawl"]) if report["crawl"] else None
         data["groups"], data["owasp_groups"] = group_findings(report), owasp_groups(report)  # same as the HTML report
         self._json(200, data)
 
@@ -386,6 +406,7 @@ def build_server(
     max_requests: int | None = None,
     max_duration: float | None = None,
     tls_probe: bool = True,
+    crawl_options: CrawlOptions | None = None,
 ) -> ThreadingHTTPServer:
     """``access_token``, if set, is required (header/query/cookie) on every request (FR-WEB-02).
 
@@ -406,12 +427,14 @@ def build_server(
     server.scan_max_requests = max_requests
     server.scan_max_duration = max_duration
     server.scan_tls_probe = tls_probe  # set by the operator, like the limits: a browser cannot change it
+    # What a crawl may do when the user ticks the box (FR-UI-14); robots.txt is always followed.
+    server.scan_crawl_options = crawl_options or CrawlOptions()
     server.reports = OrderedDict()
     server.reports_lock = threading.Lock()
     return server
 
 
-def main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="websec-scanner-web",
         description="Local web UI for the non-intrusive web security scanner.",
@@ -424,6 +447,21 @@ def main(argv=None) -> int:
     limits.add_argument("--rate-limit", type=_positive_float, metavar="N", help="At most N requests per second")
     limits.add_argument("--max-requests", type=_positive_int, metavar="N", help="Stop a scan after N requests")
     limits.add_argument("--max-duration", type=_positive_float, metavar="SECONDS", help="Stop a scan after SECONDS")
+    crawl = parser.add_argument_group(
+        "crawl limits (FR-UI-14; for scans where the user ticks the crawl box, which always follows robots.txt)"
+    )
+    crawl.add_argument(
+        "--crawl-depth", type=_non_negative_int, metavar="N", help="Links to follow from the home page (default: 2)"
+    )
+    crawl.add_argument(
+        "--crawl-max-pages", type=_positive_int, metavar="N", help="Pages in all, the home page included (default: 50)"
+    )
+    crawl.add_argument(
+        "--crawl-max-duration",
+        type=_positive_float,
+        metavar="SECONDS",
+        help="Stop crawling after SECONDS (default: 60)",
+    )
     parser.add_argument(
         "--fail-on",
         choices=FAIL_ON_CHOICES,
@@ -454,6 +492,21 @@ def main(argv=None) -> int:
         help="Access token to require when --allow-remote is set (default: a random token, "
         "generated and printed once). Ignored when --host is loopback.",
     )
+    return parser
+
+
+def _crawl_options_from(args) -> CrawlOptions:
+    """The limits of a crawl started from the page: the CLI's defaults unless the operator set them."""
+    defaults = CrawlOptions()
+    return CrawlOptions(
+        max_depth=defaults.max_depth if args.crawl_depth is None else args.crawl_depth,
+        max_pages=defaults.max_pages if args.crawl_max_pages is None else args.crawl_max_pages,
+        max_duration=defaults.max_duration if args.crawl_max_duration is None else args.crawl_max_duration,
+    )
+
+
+def main(argv=None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     if not _is_loopback(args.host) and not args.allow_remote:
@@ -475,6 +528,7 @@ def main(argv=None) -> int:
         max_requests=args.max_requests,
         max_duration=args.max_duration,
         tls_probe=not args.no_tls_probe,
+        crawl_options=_crawl_options_from(args),
     )
     if not server.loopback_only:
         print(

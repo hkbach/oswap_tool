@@ -13,7 +13,7 @@ from html import escape
 from . import __version__
 from .catalog import CHECK_GROUPS, group_of_check
 from .models import SEVERITY_ORDER
-from .output import CRAWL_SKIP_TEXT, CRAWL_STOP_TEXT, CVSS_NOTE, SCOPE_NOTE, gate_message, group_findings, owasp_groups
+from .output import CRAWL_SKIP_TEXT, CVSS_NOTE, SCOPE_NOTE, crawl_message, gate_message, group_findings, owasp_groups
 
 _GROUP_TITLE = {g.id: g.title for g in CHECK_GROUPS}
 
@@ -268,8 +268,7 @@ def _crawl(crawl: dict | None) -> str:
     )
     return (
         "<h2>Crawl</h2>"
-        f'<div class="card"><p>{crawl["pages_visited"]} page(s) visited: '
-        f"{_e(CRAWL_STOP_TEXT[crawl['stopped_reason']])}.</p>"
+        f'<div class="card"><p>{_e(crawl_message(crawl))}.</p>'
         f'<p class="muted">Limits: depth {crawl["max_depth"]}, {crawl["max_pages"]} pages, '
         f"{crawl['max_duration']:g} s; robots.txt {_e(robots)}.</p>"
         + (f'<p>Links not followed:</p><ul class="errors">{skipped}</ul>' if skipped else "")

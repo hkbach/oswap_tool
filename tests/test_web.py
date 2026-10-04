@@ -328,7 +328,9 @@ def test_checks_endpoint_lists_the_groups(ui):
     resp = requests.get(f"{ui}/api/checks", timeout=5)
     assert resp.status_code == 200 and resp.headers["Content-Type"].startswith("application/json")
     assert resp.json() == {
-        "groups": [{"id": g.id, "title": g.title, "description": g.description} for g in catalog.CHECK_GROUPS]
+        "groups": [{"id": g.id, "title": g.title, "description": g.description} for g in catalog.CHECK_GROUPS],
+        # FR-UI-14: the limits a crawl runs under, so the page can state them (the CLI defaults here)
+        "crawl": {"max_depth": 2, "max_pages": 50, "max_duration": 60.0},
     }
 
 

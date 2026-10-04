@@ -250,6 +250,7 @@ button.link:disabled { opacity: 0.55; }
 .group-option-text { display: flex; flex-direction: column; }
 .group-option-title { font-weight: 600; }
 .group-option-desc { color: var(--muted); font-size: 13px; }
+.crawl-list { grid-template-columns: 1fr; margin-top: 12px; }
 .form-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 
 /* --- grouped findings --- */

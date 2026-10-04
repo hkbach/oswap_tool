@@ -130,10 +130,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.22.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.24.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.22.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.24.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -355,7 +355,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.22.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.24.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -501,9 +501,10 @@ them:
 | `--no-tls-probe` | Skip the TLS probes for every scan this server runs |
 | `--rate-limit N` | At most N requests per second per scan (default: no limit) |
 | `--max-requests N` / `--max-duration SECONDS` | Stop a scan after this many requests / seconds |
+| `--crawl-depth N` / `--crawl-max-pages N` / `--crawl-max-duration SECONDS` | Limits of a crawl started from the page (defaults 2 levels, 50 pages, 60 s) |
 
 The web UI never accepts credentials. A scan request may only carry `target`,
-`authorized` and `checks`; a request with a password, token, cookie, header,
+`authorized`, `checks` and `crawl` (a true/false value); a request with a password, token, cookie, header,
 `authorization`, API key or `show_secrets` field, or with a `user:password@` in the
 target, is refused with HTTP 400 (`credential_not_accepted`), and so is any other
 field (`unknown_field`). Run authenticated scans from the CLI, with secrets in
@@ -516,7 +517,16 @@ fields, set to `null`.
 
 The page has three steps: enter the target URL, choose the **test targets**
 (all are selected by default; *Select all* / *Clear*), and confirm that you are
-authorized to scan. Then click **Scan**. The results show the counts by
+authorized to scan.
+Under the test targets, **Also crawl the site and check the pages it links to** is
+off by default: the scan then covers only the target page, as before. Ticked, the scan
+follows the links of the page on the same origin and runs the headers and cookies
+checks on each page it finds, within the limits the server was started with
+(`--crawl-depth`, `--crawl-max-pages`, `--crawl-max-duration`; the page states them).
+`robots.txt` is always followed, and the box cannot raise a limit or turn that off.
+The box is disabled when neither the Security headers nor the Cookies test target is
+selected. The result then shows what the crawl covered and, for a finding seen on several
+pages, the other pages. Then click **Scan**. The results show the counts by
 severity, the gate status (the same decision as the CLI exit code), which test
 targets were not tested, non-fatal errors, and the findings:
 
@@ -566,7 +576,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-84 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-86 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -766,9 +776,22 @@ python -m websec_scanner https://example.com --crawl --crawl-depth 2 --crawl-max
 - **Not covered:** pages that only exist after JavaScript runs (single-page apps), forms, and
   links in iframes or sitemaps. A clean crawl means these checks found nothing on the pages that were
   visited, not that the site has no other pages.
-- The local web UI does not crawl: it refuses a `crawl` field like any other it does not send.
+- The local web UI crawls only when its checkbox is ticked, within the limits the server was started with (see "Local web UI").
 
 ## Changelog
+
+- **v1.24.0** (crawl from the web UI). The page you enter the target URL on has a checkbox,
+  **Also crawl the site and check the pages it links to**. What changes for you:
+  - **Off by default.** Without the tick, a scan covers only the target page, exactly as before.
+    Ticked, it crawls (see "Crawling several pages") and checks every page it finds.
+  - **The limits are the operator's.** `python -m websec_scanner.web` gets
+    `--crawl-depth`, `--crawl-max-pages` and `--crawl-max-duration` (defaults 2, 50, 60). The page
+    only sends true/false; it cannot raise a limit, and `robots.txt` is always followed.
+    `--rate-limit`, `--max-requests` and `--max-duration` of the server apply to the crawl too.
+  - **The request body accepts one new field, `crawl`** (true/false). Any other crawl field
+    (`crawl_depth`, `ignore_robots`...) is still refused with `unknown_field`, and credentials are
+    still refused. `GET /api/checks` also returns `crawl` (the limits), and a scan response has
+    `crawl_message` (a sentence on what the crawl covered, `null` without one). The JSON report and its `schema_version` (1.10) are unchanged.
 
 - **v1.22.0** (crawler). `--crawl` follows same-origin links and runs the headers and cookies
   checks on each page. What changes for you:

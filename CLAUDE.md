@@ -71,7 +71,7 @@ python -m websec_scanner.web
 
 - Giữ bind `127.0.0.1` mặc định.
 - Giữ các kiểm tra Host/Origin/Content-Type/kích thước body. Không nới lỏng các kiểm tra này.
-- Web UI không nhận credential dưới bất kỳ hình thức nào (D8, FR-WEB-07): `POST /api/scan` chỉ nhận `target`, `authorized`, `checks`; trường credential hay trường lạ bị từ chối 400. Quét có đăng nhập chỉ ở CLI/CI.
+- Web UI không nhận credential dưới bất kỳ hình thức nào (D8, FR-WEB-07): `POST /api/scan` chỉ nhận `target`, `authorized`, `checks`, `crawl` (boolean, chủ sản phẩm duyệt ngày 2026-10-04, FR-UI-14); trường credential hay trường lạ bị từ chối 400. Giới hạn crawl do người vận hành đặt lúc khởi động server, trình duyệt không đổi được, và Web UI luôn theo robots.txt. Quét có đăng nhập chỉ ở CLI/CI.
 
 **Ngôn ngữ**
 

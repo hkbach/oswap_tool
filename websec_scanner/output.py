@@ -63,6 +63,13 @@ CRAWL_SKIP_TEXT = {
     "queue-full": "too many links found",
     "fetch-failed": "request failed",
 }
+
+
+def crawl_message(crawl: dict) -> str:
+    """One sentence on what a crawl covered and why it stopped (console, HTML report and web UI)."""
+    return f"{crawl['pages_visited']} page(s) visited: {CRAWL_STOP_TEXT[crawl['stopped_reason']]}"
+
+
 _REDACTED_FINDING_FIELDS = ("title", "description", "evidence", "url", "instance_key")
 
 
