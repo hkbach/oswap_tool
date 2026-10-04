@@ -1,4 +1,6 @@
-# DECISIONS S14–S20 – Quyết định và việc cần làm cho các sprint 14–20
+# DECISIONS D6–D11 – Quyết định và việc cần làm cho các gói việc tiếp theo
+
+> Tên file giữ `S14-S20` vì lý do lịch sử. **Tài liệu này gọi các gói việc theo tên quyết định (D6…D11), không theo số sprint**, vì `docs/PHASE-B-ROADMAP.md` đã dùng Sprint 14–20 theo nghĩa khác (14 crawler, 15 chiều sâu check thụ động, 16 quét có đăng nhập, 17 quét API, 18 A06).
 
 > Dùng khi vibe-code cùng Claude trong VS Code: `@docs/DECISIONS-S14-S20.md @docs/PRODUCT-BACKLOG.md @CLAUDE.md`.
 > Nối tiếp quyết định D1–D5 trong `docs/PRODUCT-BACKLOG.md` mục 1.4 (D1–D5 đã chốt ngày 2026-09-30; D6–D11 dưới đây chốt ngày 2026-10-04). Ngày lập: 2026-10-04.
@@ -6,24 +8,24 @@
 
 **Nhãn:** `[FACT]` đã tra cứu · `[REC]` khuyến nghị · `[CONFIRM]` chủ sản phẩm chốt · `[CONFIRM-LEGAL]` pháp lý chốt.
 
-**Thứ tự thực hiện đã chốt (2026-10-04):** S16 → S14 → S15 → S17 → S18 → S20 (số sprint là nhãn chủ đề kế thừa từ bản nháp ban đầu, không phải thứ tự chạy — xem mục 7 và `docs/PRODUCT-BACKLOG.md` mục 9.1).
+**Thứ tự thực hiện đã chốt (2026-10-04):** D8 → D6 → D7 → D9 → D10 → D11 (xem mục 7 và `docs/PRODUCT-BACKLOG.md` mục 9.1). Bản nháp đầu gọi các gói này là Sprint 16 → 14 → 15 → 17 → 18 → 20.
 
 ---
 
 ## 0. Bảng quyết định
 
-| ID | Sprint | Câu hỏi | Quyết định đề xuất | Trạng thái |
+| ID | Thứ tự chạy | Câu hỏi | Quyết định đề xuất | Trạng thái |
 |---|---|---|---|---|
-| **D6** | 14 | Benchmark dùng app nào, chạy ở đâu? | Mock server + Juice Shop + VAmPI + badssl.com (tự host); crAPI để sau; DVWA tùy chọn. PR chạy mock; benchmark Docker chạy theo lịch + thủ công trước release. | `[CONFIRM]` |
-| **D7** | 15 | Dò chủ động phiên bản TLS còn "non-intrusive"? | **Có**, nếu chỉ dùng handshake chuẩn, số kết nối có giới hạn, không gửi bản tin dị dạng. Tự viết bộ dò, **không** dùng sslyze (AGPL-3.0). | `[CONFIRM]` |
-| **D8** | 16 | Web UI có nhận credential? | **Không.** Quét có đăng nhập chỉ ở CLI/CI; secret chỉ qua biến môi trường/config. | Đã đồng ý |
-| **D9** | 17 | Parse OpenAPI bằng thư viện hay tự viết? | PyYAML (`safe_load`) + `json` chuẩn + tự xử lý `$ref` nội bộ. Không dùng prance. Chặn `$ref` ra ngoài. | `[CONFIRM]` |
-| **D10** | 18 | Điều khoản NVD/OSV/KEV? | Dùng được, kèm nghĩa vụ ghi chú/attribution; không nhúng API key NVD vào bản cài; loại nguồn OSV CC-BY-SA. | `[CONFIRM-LEGAL]` |
-| **D11** | 20 | Gói/giá, license key, khách thử nghiệm? | 2 dòng sản phẩm; license file ký Ed25519 kiểm tra offline; token chỉ cho khách kích hoạt online; 3–5 khách thử nghiệm có ủy quyền bằng văn bản. | `[CONFIRM]` + duyệt thương mại |
+| **D6** | 2 | Benchmark dùng app nào, chạy ở đâu? | Mock server + Juice Shop + VAmPI + badssl.com (tự host); crAPI để sau; DVWA tùy chọn. PR chạy mock; benchmark Docker chạy theo lịch + thủ công trước release. | `[CONFIRM]` |
+| **D7** | 3 | Dò chủ động phiên bản TLS còn "non-intrusive"? | **Có**, nếu chỉ dùng handshake chuẩn, số kết nối có giới hạn, không gửi bản tin dị dạng. Tự viết bộ dò, **không** dùng sslyze (AGPL-3.0). | `[CONFIRM]` |
+| **D8** | 1 | Web UI có nhận credential? | **Không.** Quét có đăng nhập chỉ ở CLI/CI; secret chỉ qua biến môi trường/config. | Đã đồng ý |
+| **D9** | 4 | Parse OpenAPI bằng thư viện hay tự viết? | PyYAML (`safe_load`) + `json` chuẩn + tự xử lý `$ref` nội bộ. Không dùng prance. Chặn `$ref` ra ngoài. | `[CONFIRM]` |
+| **D10** | 5 | Điều khoản NVD/OSV/KEV? | Dùng được, kèm nghĩa vụ ghi chú/attribution; không nhúng API key NVD vào bản cài; loại nguồn OSV CC-BY-SA. | `[CONFIRM-LEGAL]` |
+| **D11** | 6 | Gói/giá, license key, khách thử nghiệm? | 2 dòng sản phẩm; license file ký Ed25519 kiểm tra offline; token chỉ cho khách kích hoạt online; 3–5 khách thử nghiệm có ủy quyền bằng văn bản. | `[CONFIRM]` + duyệt thương mại |
 
 ---
 
-## 1. Sprint 14 – Benchmark độ chính xác (D6)
+## 1. Gói D6 – Benchmark độ chính xác
 
 ### 1.1 App benchmark `[FACT – license tra ngày 2026-10-04]`
 
@@ -31,7 +33,7 @@
 |---|---|---|---|
 | Mock server trong repo | Của mình | Kết quả mong đợi tuyệt đối, nhanh, ổn định | Bắt buộc |
 | OWASP Juice Shop | MIT | Header, cookie, file lộ, SPA crawl | Bắt buộc |
-| VAmPI | MIT | Quét API (có OpenAPI 3 + Postman) – dùng cho Sprint 17 | Bắt buộc |
+| VAmPI | MIT | Quét API (có OpenAPI 3 + Postman) – dùng cho gói D9 | Bắt buộc |
 | badssl.com (tự host Docker) | Apache-2.0 | TLS/chứng chỉ: hết hạn, tự ký, cipher yếu | Bắt buộc |
 | OWASP crAPI | Apache-2.0 | OWASP API Top 10 (nhiều container, nặng) | Sau |
 | DVWA | GPL-3.0 | Ứng dụng PHP cổ điển | Tùy chọn |
@@ -55,7 +57,7 @@
 
 ---
 
-## 2. Sprint 15 – Dò chủ động phiên bản TLS (D7)
+## 2. Gói D7 – Dò chủ động phiên bản TLS
 
 ### 2.1 Định nghĩa "non-intrusive" mới (cập nhật SRS mục 1.2 và NFR-SEC-01)
 
@@ -87,7 +89,7 @@
 
 ---
 
-## 3. Sprint 16 – Web UI không nhận credential (D8)
+## 3. Gói D8 – Web UI không nhận credential
 
 ### 3.1 Quyết định
 
@@ -103,7 +105,7 @@ Web UI **không** nhận, không hiển thị, không lưu credential dưới b�
 
 ---
 
-## 4. Sprint 17 – Parse OpenAPI (D9)
+## 4. Gói D9 – Parse OpenAPI
 
 ### 4.1 Lựa chọn thư viện `[FACT – license từ metadata PyPI 2026-10-04]`
 
@@ -123,13 +125,13 @@ Web UI **không** nhận, không hiển thị, không lưu credential dưới b�
 - [ ] **FR-API-01c** (P0) Giới hạn an toàn: kích thước file (ví dụ ≤ 5 MB), độ sâu lồng/`$ref` (ví dụ ≤ 32), phát hiện `$ref` vòng lặp, số endpoint tối đa (cấu hình).
   AC: test YAML "billion laughs"/alias bomb và `$ref` vòng tròn → lỗi có kiểm soát, không treo.
 - [ ] **FR-API-01d** (P0) Hỗ trợ OpenAPI 3.0/3.1 và Swagger 2.0 ở mức đủ để liệt kê server, path, method, tham số, security scheme; lỗi spec không làm crash tool.
-  AC: parse thành công spec của VAmPI (benchmark Sprint 14).
+  AC: parse thành công spec của VAmPI (benchmark gói D6).
 - [ ] Thêm PyYAML vào `pyproject.toml`, `THIRD_PARTY_LICENSES`, pip-audit.
 - [ ] Web UI: nếu cho tải spec lên thì áp dụng cùng giới hạn; không nhận URL spec từ xa ở Web UI (giữ đơn giản).
 
 ---
 
-## 5. Sprint 18 – Dữ liệu lỗ hổng NVD / OSV / KEV (D10)
+## 5. Gói D10 – Dữ liệu lỗ hổng NVD / OSV / KEV
 
 ### 5.1 Điều khoản `[FACT – tra ngày 2026-10-04]` `[CONFIRM-LEGAL]`
 
@@ -156,7 +158,7 @@ Web UI **không** nhận, không hiển thị, không lưu credential dưới b�
 
 ---
 
-## 6. Sprint 20 – Gói, giá, license key, khách thử nghiệm (D11)
+## 6. Gói D11 – Gói, giá, license key, khách thử nghiệm
 
 ### 6.1 Mô hình gói khi ra mắt `[CONFIRM]` – cần người có thẩm quyền duyệt giá
 
@@ -206,28 +208,28 @@ Web UI **không** nhận, không hiển thị, không lưu credential dưới b�
 
 ## 7. Thứ tự làm và mẫu prompt
 
-Thứ tự gợi ý: S16 (nhỏ, chặn rủi ro) → S14 (cần benchmark trước khi đo S15/S17) → S15 → S17 → S18 → S20.
+Thứ tự chạy: D8 (nhỏ, chặn rủi ro) → D6 (cần benchmark trước khi đo D7/D9) → D7 → D9 → D10 → D11.
 
 ```text
 @docs/DECISIONS-S14-S20.md @CLAUDE.md
-Làm Sprint 16 (FR-WEB-07). Lập kế hoạch trước: file sẽ sửa, test sẽ viết. Chờ tôi duyệt.
+Làm gói D8 (FR-WEB-07). Lập kế hoạch trước: file sẽ sửa, test sẽ viết. Chờ tôi duyệt.
 ```
 
 ```text
 @docs/DECISIONS-S14-S20.md
-Làm Sprint 14 (FR-QA-03a..d). Chỉ dùng image upstream ghim theo digest, không vendor mã các app.
+Làm gói D6 (FR-QA-03a..d). Chỉ dùng image upstream ghim theo digest, không vendor mã các app.
 Mọi container chỉ trên network nội bộ. Viết expected cho VAmPI trước. Chưa động vào scanner.
 ```
 
 ```text
 @docs/DECISIONS-S14-S20.md @websec_scanner/checks/tls_check.py
-Làm Sprint 15 (FR-DET-04a..d). Không thêm sslyze/testssl.sh. Tự dựng ClientHello tối thiểu.
+Làm gói D7 (FR-DET-04a..d). Không thêm sslyze/testssl.sh. Tự dựng ClientHello tối thiểu.
 Viết test với mock TLS server, chứng minh số handshake không vượt giới hạn.
 ```
 
 ```text
 @docs/DECISIONS-S14-S20.md
-Làm Sprint 17 (FR-API-01a..d). Viết test chặn $ref ra ngoài, YAML bomb và $ref vòng lặp trước khi code.
+Làm gói D9 (FR-API-01a..d). Viết test chặn $ref ra ngoài, YAML bomb và $ref vòng lặp trước khi code.
 ```
 
 ## 8. Definition of Done chung
