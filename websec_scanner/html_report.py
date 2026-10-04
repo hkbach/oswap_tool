@@ -13,7 +13,7 @@ from html import escape
 from . import __version__
 from .catalog import CHECK_GROUPS, group_of_check
 from .models import SEVERITY_ORDER
-from .output import CVSS_NOTE, SCOPE_NOTE, gate_message, group_findings, owasp_groups
+from .output import CRAWL_SKIP_TEXT, CRAWL_STOP_TEXT, CVSS_NOTE, SCOPE_NOTE, gate_message, group_findings, owasp_groups
 
 _GROUP_TITLE = {g.id: g.title for g in CHECK_GROUPS}
 
@@ -146,6 +146,12 @@ def _finding(f: dict, index: int) -> str:
         rows.append(f"<dt>Recommendation</dt><dd>{_e(f['recommendation'])}</dd>")
     if f.get("url"):
         rows.append(f"<dt>URL</dt><dd><code>{_e(f['url'])}</code></dd>")
+    if f.get("affected_count", 1) > 1:
+        others = [url for url in f["affected_urls"] if url != f["url"]]
+        more = f["affected_count"] - 1 - len(others)
+        listing = "".join(f"<li><code>{_e(url)}</code></li>" for url in others)
+        tail = f"<li>and {more} more page(s)</li>" if more > 0 else ""
+        rows.append(f"<dt>Also seen on</dt><dd><ul>{listing}{tail}</ul></dd>")
     if f.get("suppression"):
         s = f["suppression"]
         rows.append(f"<dt>Suppressed</dt><dd>until {_e(s['expires'])}: {_e(s['reason'])}</dd>")
@@ -251,6 +257,26 @@ def _groups_sections(report: dict, groups: list[dict]) -> str:
     )
 
 
+def _crawl(crawl: dict | None) -> str:
+    """FR-CRAWL-01: what the crawl covered, why it stopped, and what it left alone."""
+    if not crawl:
+        return ""
+    robots = "followed" if crawl["respect_robots"] else "ignored (--ignore-robots)"
+    skipped = "".join(
+        f"<li>{count} &times; {_e(CRAWL_SKIP_TEXT.get(reason, reason))}</li>"
+        for reason, count in crawl["skipped"].items()
+    )
+    return (
+        "<h2>Crawl</h2>"
+        f'<div class="card"><p>{crawl["pages_visited"]} page(s) visited: '
+        f"{_e(CRAWL_STOP_TEXT[crawl['stopped_reason']])}.</p>"
+        f'<p class="muted">Limits: depth {crawl["max_depth"]}, {crawl["max_pages"]} pages, '
+        f"{crawl['max_duration']:g} s; robots.txt {_e(robots)}.</p>"
+        + (f'<p>Links not followed:</p><ul class="errors">{skipped}</ul>' if skipped else "")
+        + "</div>"
+    )
+
+
 def render_html(report: dict) -> str:
     """Render a report dict of output.build_report() as a standalone HTML document."""
     counts = report.get("summary", {})
@@ -314,7 +340,7 @@ def render_html(report: dict) -> str:
 <table class="summary"><tr>{summary_cells}</tr></table>
 </div>
 {_top_issues(findings)}
-{_comparison(report.get("baseline"))}
+{_comparison(report.get("baseline"))}{_crawl(report.get("crawl"))}
 {errors_html}
 {findings_html}
 <footer>

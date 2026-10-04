@@ -130,10 +130,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.21.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.22.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.21.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.22.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -217,6 +217,11 @@ Every option below can also be set in a [config file](#config-file), except
 | `--ca-bundle PATH` | PEM file of CA certificates to trust instead of the OS store, for the HTTP requests and the TLS check |
 | `--no-tls-probe` | Skip the TLS probes: about 11 extra standard handshakes that ask which protocol versions and weak cipher suites the server accepts (config key `tls_probe = false`) |
 | `--api-spec FILE` | Show an API inventory read from an OpenAPI 3.0/3.1 or Swagger 2.0 file (`.json`, `.yaml`, `.yml`, up to 5 MB). The file is only read: nothing it names is requested (config key `api_spec`) |
+| `--crawl` | Follow links on the target's own origin and run the headers and cookies checks on each page. Off by default; every request counts toward `--max-requests` and `--rate-limit` |
+| `--crawl-depth N` | Links to follow from the home page (default 2; 0 = the home page only). Needs `--crawl` |
+| `--crawl-max-pages N` | Pages to visit in all, the home page included (default 50). Needs `--crawl` |
+| `--crawl-max-duration SECONDS` | Stop crawling after SECONDS (default 60). Needs `--crawl` |
+| `--ignore-robots` | Crawl without reading `robots.txt`. Needs `--crawl` |
 | `--timeout SECONDS` | Per-request timeout (default `10`) |
 | `--workers N` | Concurrent requests for the path checks (default `5`) |
 | `--rate-limit N` | At most N requests per second, overall and per host (default: no limit) |
@@ -350,7 +355,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.21.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.22.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -561,7 +566,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-83 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-84 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -715,6 +720,7 @@ websec_scanner/
   rule_loader.py    # loads and validates rules/*.json
   rules/            # sensitive paths and content signatures, known TLS interceptors, TLS probes
   api/              # --api-spec: a safe OpenAPI/Swagger loader and the inventory built from it
+  crawler/          # --crawl: link extraction and the same-origin crawl
   web.py            # local web UI server (python -m websec_scanner.web)
   static/           # index.html, app.js, app.css of the web UI
   checks/
@@ -734,7 +740,49 @@ Dockerfile          # official CLI image, non-root, not published to a registry 
 THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
+### Crawling several pages
+
+By default only the home page is checked for security headers and cookies. `--crawl` follows the
+links of the page (`<a>` and `<area>`) on the target's own origin and runs the same two checks on
+each HTML page it finds, so a missing header on `/login` is no longer invisible.
+
+```bash
+python -m websec_scanner https://example.com --crawl --crawl-depth 2 --crawl-max-pages 50 --yes
+```
+
+- **The same issue on many pages is one finding.** It lists the pages it was seen on
+  (`affected_urls`, at most 20) and how many there were (`affected_count`). Its fingerprint is the
+  same as without a crawl, so `--baseline` and `--suppressions` keep working. The evidence shown is
+  the first page's.
+- **It stays polite and inside the scope.** Only `GET`; the same session as the rest of the scan,
+  so `--exclude`, the default exclusions (logout, delete, ...), `--rate-limit`, `--max-requests`,
+  `--proxy`, `--header` and `--cookie` all apply. It never requests another origin, follows a
+  redirect that leaves the origin, or follows a link that carries credentials.
+- **`robots.txt` is read first and followed.** If it cannot be read (a server error), the crawl stops
+  and says so instead of guessing; `--ignore-robots` crawls without it, for a site you own.
+- **Limits, so a crawl stays small:** 2 levels, 50 pages, 60 seconds by default; at most 5 query
+  variants of one path. The report says why the crawl stopped (`crawl.stopped_reason`) and how many
+  links it left alone.
+- **Not covered:** pages that only exist after JavaScript runs (single-page apps), forms, and
+  links in iframes or sitemaps. A clean crawl means these checks found nothing on the pages that were
+  visited, not that the site has no other pages.
+- The local web UI does not crawl: it refuses a `crawl` field like any other it does not send.
+
 ## Changelog
+
+- **v1.22.0** (crawler). `--crawl` follows same-origin links and runs the headers and cookies
+  checks on each page. What changes for you:
+  - **Off unless you ask.** Without `--crawl` the requests, the findings and the exit code are the
+    same as in 1.21.0. New options: `--crawl`, `--crawl-depth`, `--crawl-max-pages`,
+    `--crawl-max-duration`, `--ignore-robots`, and the matching config keys.
+  - **Two new fields in every finding and a new top-level `crawl` field.** `schema_version` becomes
+    `1.10`: each finding has `affected_urls` and `affected_count` (one URL and 1 without a crawl),
+    and the report has `crawl` (`null` without `--crawl`). Nothing was removed or renamed; a
+    consumer that validates against the schema needs the new `docs/report.schema.json`. The CSV has
+    a new column, `affected_count`, right after `url`.
+  - **Findings are merged per issue, not per page.** With `--crawl` the same missing header on ten
+    pages is one finding that lists them, so the summary counts it once.
+  - See "Crawling several pages" above for what it does not cover.
 
 - **v1.21.0** (API inventory). `--api-spec FILE` lists the servers, endpoints and security schemes
   of an OpenAPI 3.0/3.1 or Swagger 2.0 file. What changes for you:

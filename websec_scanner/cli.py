@@ -31,9 +31,11 @@ from .baseline import Baseline, BaselineError, load_baseline
 from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
 from .config import CONFIG_KEYS, ConfigError, load_config
+from .crawler import crawl as crawl_module
+from .crawler.crawl import CrawlOptions
 from .exports import to_csv, to_junit
 from .html_report import render_html
-from .http_utils import build_session, excluded
+from .http_utils import build_session, decode_body, excluded
 from .limits import ScanLimiter, ScanLimitReached
 from .models import ScanResult
 from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, exit_code, gate_message, scrub_text
@@ -157,6 +159,17 @@ def _positive_int(value: str) -> int:
     return number
 
 
+def _non_negative_int(value: str) -> int:
+    """argparse type for --crawl-depth: 0 is allowed (the home page only)."""
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a whole number") from exc
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"must be 0 or more, got {number}")
+    return number
+
+
 def _regex(value: str) -> str:
     """argparse type for --exclude: validate here so a typo fails before any request."""
     try:
@@ -212,6 +225,20 @@ def _api_spec(value: str) -> ApiInventory:
         raise argparse.ArgumentTypeError(printable_text(str(exc))) from exc
 
 
+def _crawl_notice(options: CrawlOptions) -> str:
+    """What a crawl asks of the target, shown before the operator confirms (FR-CRAWL-01)."""
+    robots = (
+        "robots.txt is ignored (--ignore-robots)."
+        if not options.respect_robots
+        else "robots.txt is read first and its rules are followed."
+    )
+    return (
+        f" Crawl enabled (--crawl): up to {options.max_pages} pages, {options.max_depth} link level(s) deep,\n"
+        f" at most {options.max_duration:g} s, same origin only. {robots}\n"
+        " Only GET requests, through the same limits and exclusions as the rest of the scan."
+    )
+
+
 def _confirm_authorization(assume_yes: bool, quiet: bool = False) -> bool:
     # --quiet drops the banner only when the operator has already confirmed with --yes;
     # an interactive confirmation always shows what is being agreed to.
@@ -254,6 +281,7 @@ def run_scan(
     user_agent_prefix: str | None = None,
     tls_probe: bool = True,
     api_inventory: ApiInventory | None = None,
+    crawl: CrawlOptions | None = None,
     on_request=None,
 ) -> ScanResult:
     """Scan ``base_url``. ``groups`` selects check groups (catalog.GROUP_IDS); None means all.
@@ -381,6 +409,11 @@ def run_scan(
         if want("robots-sitemap"):
             _run_check(result, "robots-sitemap", exposure.check_robots_and_sitemap, session, base_url)
 
+        # FR-CRAWL-01/03: last, so a --max-requests / --max-duration cap takes pages from the
+        # crawl before it takes anything from the checks above.
+        if crawl is not None:
+            _run_crawl(session, result, resp, crawl, want)
+
     except ScanLimitReached as exc:
         # A cap was hit: stop here rather than let every remaining check hit it too.
         result.errors.append(f"Scan stopped early: {exc}")
@@ -395,6 +428,61 @@ def run_scan(
         result.limits = limiter.snapshot()
         result.finished_at = _utc_timestamp()
     return result
+
+
+_MAX_CRAWL_ERRORS = 10  # a site that fails on every page must not fill the error list
+
+
+def _run_crawl(session, result: ScanResult, resp, options: CrawlOptions, want) -> None:
+    """Crawl from the page the baseline GET ended on and run the page checks on what it finds (FR-CRAWL-03)."""
+    if not (want("headers") or want("cookies")):
+        result.errors.append(
+            "--crawl was ignored: it only adds pages to the security-headers and cookies checks, "
+            "and neither of them is selected."
+        )
+        return
+    start_html = decode_body(resp, resp.content[: crawl_module.MAX_PAGE_BYTES])
+    crawled = crawl_module.crawl(session, resp.url, start_html, options)
+    result.crawl = crawled
+    for page in crawled.pages:
+        if not page.checkable:
+            continue
+        seen: set[str] = set()  # fingerprints: one finding per issue per page, whatever the check returns
+        if want("headers"):
+            _run_page_check(
+                result,
+                seen,
+                page.url,
+                "security-headers",
+                headers.check_security_headers,
+                page.url,
+                page.headers,
+                is_https=page.url.lower().startswith("https://"),
+            )
+        if want("cookies"):
+            _run_page_check(result, seen, page.url, "cookies", cookies.check_cookies, page.url, page.set_cookies)
+    result.errors.extend(crawled.errors[:_MAX_CRAWL_ERRORS])
+    if len(crawled.errors) > _MAX_CRAWL_ERRORS:
+        result.errors.append(f"... and {len(crawled.errors) - _MAX_CRAWL_ERRORS} more crawler error(s)")
+    if crawled.stopped_reason == crawl_module.SCAN_LIMIT:
+        result.errors.append(f"Scan stopped early: {crawled.limit_message}")
+
+
+def _run_page_check(result: ScanResult, seen: set, page_url: str, name: str, check, *args, **kwargs) -> None:
+    """Run ``check`` on one crawled page; a finding already reported elsewhere gains this page's URL instead."""
+    try:
+        for f in check(*args, **kwargs):
+            finding = replace(enrich(f, result.target), check=name)
+            if finding.fingerprint in seen:  # a fingerprint includes the finding id
+                continue
+            seen.add(finding.fingerprint)
+            existing = next((x for x in result.findings if x.fingerprint == finding.fingerprint), None)
+            if existing is None:
+                result.add(finding)
+            else:
+                existing.record_url(finding.url or page_url)
+    except Exception as exc:  # one broken check must not abort the scan (FR-REPORT-05)
+        result.errors.append(f"Check '{name}' failed on {page_url}: {exc!r}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -556,6 +644,38 @@ def build_parser() -> argparse.ArgumentParser:
         "protocol versions and weak cipher suites the server accepts, never completed. "
         "Only the certificate connections remain",
     )
+    crawler = parser.add_argument_group("crawler (FR-CRAWL-01, FR-CRAWL-04; off unless --crawl)")
+    crawler.add_argument(
+        "--crawl",
+        action="store_true",
+        help="Follow links on the target's own origin and run the headers and cookies checks on each page, "
+        "merging the same issue into one finding that lists its pages. GET only; every request counts toward "
+        "--max-requests and --rate-limit",
+    )
+    crawler.add_argument(
+        "--crawl-depth",
+        type=_non_negative_int,
+        metavar="N",
+        help="Links to follow from the home page (default: 2; 0 = the home page only)",
+    )
+    crawler.add_argument(
+        "--crawl-max-pages",
+        type=_positive_int,
+        metavar="N",
+        help="Pages to visit in all, the home page included (default: 50)",
+    )
+    crawler.add_argument(
+        "--crawl-max-duration",
+        type=_positive_float,
+        metavar="SECONDS",
+        help="Stop crawling after SECONDS (default: 60)",
+    )
+    crawler.add_argument(
+        "--ignore-robots",
+        action="store_true",
+        help="Crawl without reading robots.txt (default: robots.txt is read and its rules are followed). "
+        "Only for a site you own or may test without those limits",
+    )
     parser.add_argument(
         "--checks",
         metavar="GROUPS",
@@ -634,10 +754,12 @@ def _apply_config(parser: argparse.ArgumentParser, argv) -> None:
                 return request_options.validate_proxy(raw)
             if key == "user_agent":
                 return request_options.user_agent_prefix(raw)
-            if key in ("rate_limit", "max_duration"):
+            if key in ("rate_limit", "max_duration", "crawl_max_duration"):
                 return _positive_float(str(raw))
-            if key == "max_requests":
+            if key in ("max_requests", "crawl_max_pages"):
                 return _positive_int(str(raw))
+            if key == "crawl_depth":
+                return _non_negative_int(str(raw))
             if key == "parallel":
                 return _parallel(str(raw))
             if key == "fail_on" and raw not in FAIL_ON_CHOICES:
@@ -711,6 +833,31 @@ def _check_run_options(parser: argparse.ArgumentParser, args, targets: list[str]
         )
 
 
+def _crawl_options(parser: argparse.ArgumentParser, args) -> CrawlOptions | None:
+    """The crawl settings, or None without --crawl. A setting given without --crawl is an error: it would do nothing."""
+    given = [
+        flag
+        for flag, value in (
+            ("--crawl-depth", args.crawl_depth),
+            ("--crawl-max-pages", args.crawl_max_pages),
+            ("--crawl-max-duration", args.crawl_max_duration),
+            ("--ignore-robots", args.ignore_robots or None),
+        )
+        if value is not None
+    ]
+    if not args.crawl:
+        if given:
+            parser.error(f"{', '.join(given)} only takes effect with --crawl (or crawl = true in the config file)")
+        return None
+    defaults = CrawlOptions()
+    return CrawlOptions(
+        max_depth=defaults.max_depth if args.crawl_depth is None else args.crawl_depth,
+        max_pages=defaults.max_pages if args.crawl_max_pages is None else args.crawl_max_pages,
+        max_duration=defaults.max_duration if args.crawl_max_duration is None else args.crawl_max_duration,
+        respect_robots=not args.ignore_robots,
+    )
+
+
 def _baseline_for(parser: argparse.ArgumentParser, args, target: str):
     """--baseline, or this target's own report in --baseline-dir (None when it has none yet)."""
     if args.baseline:
@@ -773,8 +920,11 @@ def main(argv=None) -> int:
         parser.error("the following arguments are required: target (or --targets-file, or targets in --config)")
     headers, cookies = dict(args.header), dict(args.cookie)
     _check_run_options(parser, args, targets, headers, cookies)
+    crawl_options = _crawl_options(parser, args)
     baselines = {target: _baseline_for(parser, args, target) for target in targets}  # fail on a bad file now
 
+    if crawl_options is not None and not (args.quiet and args.assume_yes):
+        print(_crawl_notice(crawl_options))
     if not _confirm_authorization(args.assume_yes, args.quiet):
         print("Authorization not confirmed. Aborting.")
         return 2
@@ -812,6 +962,7 @@ def main(argv=None) -> int:
             user_agent_prefix=args.user_agent,
             tls_probe=not args.no_tls_probe,
             api_inventory=args.api_spec,
+            crawl=crawl_options,
             on_request=log_request if args.verbose else None,
         )
 

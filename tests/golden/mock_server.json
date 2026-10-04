@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.9",
+  "schema_version": "1.10",
   "scanner_version": "<VERSION>",
   "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1;exclusions=2026.10.01.1;tls_probe=2026.10.04.1",
   "scan_id": "<SCAN_ID>",
@@ -63,6 +63,10 @@
       "instance_key": ".env",
       "fingerprint": "<FINGERPRINT>",
       "check": "sensitive-paths",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/.env"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -86,6 +90,10 @@
       "instance_key": ".git/HEAD",
       "fingerprint": "<FINGERPRINT>",
       "check": "sensitive-paths",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/.git/HEAD"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -111,6 +119,10 @@
       "instance_key": "http://127.0.0.1:<PORT>/",
       "fingerprint": "<FINGERPRINT>",
       "check": "http-to-https-redirect",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -135,6 +147,10 @@
       "instance_key": "session",
       "fingerprint": "<FINGERPRINT>",
       "check": "cookies",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -158,6 +174,10 @@
       "instance_key": "images/",
       "fingerprint": "<FINGERPRINT>",
       "check": "directory-listing",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/images/"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -184,6 +204,10 @@
       "instance_key": "content-security-policy",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -210,6 +234,10 @@
       "instance_key": "x-frame-options",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -233,6 +261,10 @@
       "instance_key": "robots.txt",
       "fingerprint": "<FINGERPRINT>",
       "check": "robots-sitemap",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/robots.txt"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -258,6 +290,10 @@
       "instance_key": "referrer-policy",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -283,6 +319,10 @@
       "instance_key": "server",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -308,6 +348,10 @@
       "instance_key": "x-powered-by",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     },
@@ -333,6 +377,10 @@
       "instance_key": "permissions-policy",
       "fingerprint": "<FINGERPRINT>",
       "check": "security-headers",
+      "affected_urls": [
+        "http://127.0.0.1:<PORT>/"
+      ],
+      "affected_count": 1,
       "suppression": null,
       "baseline_state": null
     }
@@ -355,5 +403,6 @@
     }
   },
   "baseline": null,
-  "api": null
+  "api": null,
+  "crawl": null
 }

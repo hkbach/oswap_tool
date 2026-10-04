@@ -8,7 +8,7 @@ import textwrap
 
 from .catalog import CHECK_GROUPS
 from .models import SEVERITY_ORDER
-from .output import CVSS_NOTE, SCOPE_NOTE
+from .output import CRAWL_SKIP_TEXT, CRAWL_STOP_TEXT, CVSS_NOTE, SCOPE_NOTE
 
 _SEVERITIES = SEVERITY_ORDER
 # Everything a terminal acts on: C0 controls except tab, DEL, and the C1 range (which includes
@@ -82,10 +82,15 @@ def print_report(report: dict, use_color: bool = True) -> None:
                 print(f"     Fix: {printable_text(f['recommendation'])}")
             if f["url"]:
                 print(f"     URL: {printable_text(f['url'])}")
+            if f["affected_count"] > 1:
+                print(f"     Seen on {f['affected_count']} pages: {_other_pages(f)}")
             print()
 
     if report.get("baseline"):
         _print_comparison(report["baseline"])
+
+    if report.get("crawl"):
+        _print_crawl(report["crawl"])
 
     if report.get("api"):
         _print_api(report["api"])
@@ -117,6 +122,30 @@ def _state_tag(finding: dict) -> str:
 
 
 _API_LINES = 100  # endpoints shown on the console; the JSON report has every one
+
+
+def _other_pages(finding: dict) -> str:
+    """The pages after the finding's own URL, as many as the report lists, and how many more there were."""
+    others = [url for url in finding["affected_urls"] if url != finding["url"]]
+    text = ", ".join(printable_text(url) for url in others[:5])
+    left = finding["affected_count"] - 1 - min(len(others), 5)
+    return f"{text}" + (f" and {left} other page(s)" if left > 0 else "")
+
+
+def _print_crawl(crawl: dict) -> None:
+    """FR-CRAWL-01: what the crawl covered and why it stopped."""
+    print("-" * 72)
+    print(f" Crawl: {crawl['pages_visited']} page(s) visited ({CRAWL_STOP_TEXT[crawl['stopped_reason']]})")
+    robots = "followed" if crawl["respect_robots"] else "ignored (--ignore-robots)"
+    print(
+        f"   Limits: depth {crawl['max_depth']}, {crawl['max_pages']} pages, {crawl['max_duration']:g} s; "
+        f"robots.txt {robots}"
+    )
+    if crawl["skipped"]:
+        parts = ", ".join(
+            f"{count} {CRAWL_SKIP_TEXT.get(reason, reason)}" for reason, count in crawl["skipped"].items()
+        )
+        print(f"   Links not followed: {parts}")
 
 
 def _print_api(api: dict) -> None:
