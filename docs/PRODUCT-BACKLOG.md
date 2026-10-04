@@ -105,7 +105,7 @@ Còn tồn đọng (xem **E0**, **E1**, **E2**, **E8**): TLS chỉ xét giao th�
 | **D7** | Dò chủ động phiên bản TLS còn "non-intrusive"? (Sprint 15) | **Có**, nếu chỉ dùng handshake chuẩn, số kết nối có giới hạn, không gửi bản tin dị dạng. Tự viết bộ dò, **không** dùng sslyze (AGPL-3.0) hay testssl.sh (GPL-2.0). | Dùng cho FR-DET-04a..e; cập nhật SRS mục 1.2/4.5/NFR-SEC-01. |
 | **D8** | Web UI có nhận credential? (Sprint 16) | **Không.** Quét có đăng nhập chỉ ở CLI/CI; secret chỉ qua biến môi trường/config. | Dùng cho FR-WEB-07/08. |
 | **D9** | Parse OpenAPI bằng thư viện hay tự viết? (Sprint 17) | PyYAML (`safe_load`) + `json` chuẩn + tự xử lý `$ref` nội bộ. Không dùng prance. Chặn `$ref` ra ngoài (URL, path tuyệt đối, `..`). | Dùng cho FR-API-01a..d. |
-| **D10** | Điều khoản NVD/OSV/KEV? (Sprint 18) `[CONFIRM-LEGAL]` | Dùng được, kèm nghĩa vụ ghi chú/attribution; không nhúng API key NVD vào bản cài; loại nguồn OSV CC-BY-SA. | Dùng cho FR-CVE-05..10. |
+| **D10** | Điều khoản NVD/OSV/KEV? (Sprint 18) `[CONFIRM-LEGAL]` | Dùng được, kèm nghĩa vụ ghi chú/attribution; không nhúng API key NVD vào bản cài; loại nguồn OSV CC-BY-SA. | Dùng cho FR-CVE-06..11. |
 | **D11** | Gói/giá, license key, khách thử nghiệm? (Sprint 20) `[CONFIRM]` + duyệt thương mại | 2 dòng sản phẩm; license file ký Ed25519 kiểm tra offline; token chỉ cho khách kích hoạt online; 3-5 khách thử nghiệm có ủy quyền bằng văn bản. | Dùng cho FR-BILL-05a..g, FR-DOC-07..09. |
 
 D6-D11 chốt ngày 2026-10-04; chi tiết đầy đủ (bảng app/license, mẫu prompt, Definition of Done riêng) ở `docs/DECISIONS-S14-S20.md`. **Thứ tự thực hiện:** S16 → S14 → S15 → S17 → S18 → S20 (số sprint là nhãn chủ đề, không phải thứ tự chạy — xem mục 9.1).
@@ -421,14 +421,16 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
   AC: finding ghi rõ **phiên bản quan sát được là suy đoán** (banner có thể bị che/giả); confidence tương ứng; không khẳng định "bị khai thác được".
 - [ ] **FR-CVE-03** (P2 · Business) Ưu tiên hóa bằng **EPSS**/KEV, gợi ý bản vá tối thiểu.
 - [ ] **FR-CVE-04** (P2 · Business) Phát hiện JS library lỗi thời (ví dụ jQuery/Angular phiên bản cũ) từ file tĩnh với `retire`-style signatures.
-- [ ] **FR-CVE-05** (P0) *(D10, Sprint 18)* Module `vulndb/` với một lớp nguồn dữ liệu duy nhất; mỗi bản ghi lưu `source`, `source_license`, `retrieved_at`.
-- [ ] **FR-CVE-06** (P0) Danh sách nguồn OSV được phép là **dữ liệu khai báo** (allowlist theo license); mặc định loại `CC-BY-SA-4.0` (Ubuntu).
+- [ ] **FR-CVE-05** (P2 · Business) *(thêm 2026-09-30, theo yêu cầu chủ sản phẩm; roadmap Phase B Sprint 17)* **Quét lỗ hổng riêng của CMS phổ biến** (WordPress, Joomla, Drupal): nhận diện CMS và phiên bản plugin/theme qua đường dẫn tĩnh/README/changelog công khai, đối chiếu CSDL lỗ hổng công khai của từng CMS (ví dụ WPScan Vulnerability Database). Quy tắc dạng dữ liệu như `rules/sensitive_paths.json`; `[CONFIRM]` điều khoản sử dụng CSDL lỗ hổng CMS trước khi tích hợp.
+  AC: là một **test target chọn được** trong `catalog.CHECK_GROUPS`, xuất hiện ở CLI (`--checks`, `--list-checks`) và Web UI (danh sách nhóm kiểm thử trước khi quét, kết quả nhóm theo test target) giống 8 nhóm hiện có (Sprint 8); không chọn thì không gửi request nào của nhóm này; finding ghi rõ **phiên bản quan sát được là suy đoán**, không khẳng định "bị khai thác được", confidence tương ứng.
+- [ ] **FR-CVE-06** (P0) *(D10, Sprint 18)* Module `vulndb/` với một lớp nguồn dữ liệu duy nhất; mỗi bản ghi lưu `source`, `source_license`, `retrieved_at`.
+- [ ] **FR-CVE-07** (P0) Danh sách nguồn OSV được phép là **dữ liệu khai báo** (allowlist theo license); mặc định loại `CC-BY-SA-4.0` (Ubuntu).
   AC: test bản ghi từ nguồn bị loại không bao giờ xuất hiện trong finding/report.
-- [ ] **FR-CVE-07** (P0) Attribution: báo cáo HTML/PDF + README + `--version`/About mang câu thông báo NVD nguyên văn ("This product uses the NVD API but is not endorsed or certified by the NVD."), danh sách nguồn OSV đã dùng kèm license, ghi nguồn KEV; `docs/DATA_SOURCES.md` liệt kê nguồn/license/link.
+- [ ] **FR-CVE-08** (P0) Attribution: báo cáo HTML/PDF + README + `--version`/About mang câu thông báo NVD nguyên văn ("This product uses the NVD API but is not endorsed or certified by the NVD."), danh sách nguồn OSV đã dùng kèm license, ghi nguồn KEV; `docs/DATA_SOURCES.md` liệt kê nguồn/license/link.
   AC: test báo cáo có câu thông báo NVD khi có dùng dữ liệu NVD.
-- [ ] **FR-CVE-08** (P0) API key NVD đọc từ biến môi trường `NVD_API_KEY` của **chính khách**; không có key → giới hạn công khai hoặc snapshot offline. Không có key nào trong repo/image/gói phát hành (secret scan CI).
-- [ ] **FR-CVE-09** (P1) Snapshot dữ liệu offline cho Enterprise/không internet: lệnh `vulndb update` tạo gói có ngày, chữ ký, metadata license; cảnh báo khi snapshot quá cũ.
-- [ ] **FR-CVE-10** (P1) OSV cho thư viện JS phát hiện ở trang (FR-CVE-04); NVD/CPE cho phần mềm máy chủ (nginx, Apache, PHP...). Finding ghi rõ phiên bản là **suy đoán** từ banner, confidence tương ứng.
+- [ ] **FR-CVE-09** (P0) API key NVD đọc từ biến môi trường `NVD_API_KEY` của **chính khách**; không có key → giới hạn công khai hoặc snapshot offline. Không có key nào trong repo/image/gói phát hành (secret scan CI).
+- [ ] **FR-CVE-10** (P1) Snapshot dữ liệu offline cho Enterprise/không internet: lệnh `vulndb update` tạo gói có ngày, chữ ký, metadata license; cảnh báo khi snapshot quá cũ.
+- [ ] **FR-CVE-11** (P1) OSV cho thư viện JS phát hiện ở trang (FR-CVE-04); NVD/CPE cho phần mềm máy chủ (nginx, Apache, PHP...). Finding ghi rõ phiên bản là **suy đoán** từ banner, confidence tương ứng.
   `[CONFIRM-LEGAL]` điều khoản NVD/OSV/KEV trước khi phát hành thương mại; chi tiết `docs/DECISIONS-S14-S20.md` mục 5.
 
 ### E11. Khám phá tài sản (asset discovery)
@@ -666,12 +668,14 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 2 | 14 | Benchmark độ chính xác (D6): Juice Shop/VAmPI/badssl trong Docker, ground truth, precision/recall, CI theo lịch | FR-QA-03a…e | Chưa làm |
 | 3 | 15 | Dò chủ động phiên bản TLS và cipher (D7): tự viết, không sslyze/testssl.sh; giới hạn số handshake | FR-DET-04a…e | Chưa làm |
 | 4 | 17 | Parse OpenAPI/Swagger bằng PyYAML + tự resolve `$ref` nội bộ, chặn SSRF/path traversal/bomb (D9) | FR-API-01a…d | Chưa làm |
-| 5 | 18 | Dữ liệu lỗ hổng NVD/OSV/KEV: attribution, loại nguồn CC-BY-SA, không nhúng API key (D10) | FR-CVE-05…10 | Chưa làm |
+| 5 | 18 | Dữ liệu lỗ hổng NVD/OSV/KEV: attribution, loại nguồn CC-BY-SA, không nhúng API key (D10) | FR-CVE-06…11 | Chưa làm |
 | 6 | 20 | Gói/giá, license key Ed25519 offline, khách thử nghiệm (D11) | FR-BILL-05a…g, FR-DOC-07…09 | Chưa làm |
 
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
 
 ### 9.2 Các phase
+
+Thứ tự sprint chi tiết của Phase B (Sprint 9 trở đi): `docs/PHASE-B-ROADMAP.md`.
 
 > Ước lượng công sức/thời gian và giá bán thuộc quyết định thương mại, cần người có thẩm quyền xác nhận sau khi có thông tin về đội ngũ và thị trường.
 

@@ -142,16 +142,16 @@ Web UI **không** nhận, không hiển thị, không lưu credential dưới b�
 
 ### 5.2 Việc cần làm
 
-- [ ] **FR-CVE-05** (P0) Module `vulndb/` với một lớp nguồn dữ liệu duy nhất; mỗi bản ghi lưu `source`, `source_license`, `retrieved_at`.
-- [ ] **FR-CVE-06** (P0) Danh sách nguồn OSV được phép là **dữ liệu khai báo** (allowlist theo license); mặc định loại `CC-BY-SA-4.0`.
+- [ ] **FR-CVE-06** (P0) Module `vulndb/` với một lớp nguồn dữ liệu duy nhất; mỗi bản ghi lưu `source`, `source_license`, `retrieved_at`.
+- [ ] **FR-CVE-07** (P0) Danh sách nguồn OSV được phép là **dữ liệu khai báo** (allowlist theo license); mặc định loại `CC-BY-SA-4.0`.
   AC: test bản ghi từ nguồn bị loại không bao giờ xuất hiện trong finding/report.
-- [ ] **FR-CVE-07** (P0) Attribution:
+- [ ] **FR-CVE-08** (P0) Attribution:
   - Báo cáo HTML/PDF + README + `--version`/About: câu thông báo NVD nguyên văn, danh sách nguồn OSV đã dùng kèm license, ghi nguồn KEV.
   - File `docs/DATA_SOURCES.md` liệt kê nguồn, license, link.
   AC: test báo cáo có câu thông báo NVD khi có dùng dữ liệu NVD.
-- [ ] **FR-CVE-08** (P0) API key NVD: đọc từ biến môi trường `NVD_API_KEY` của **chính khách**; không có key → chạy theo giới hạn công khai hoặc dùng snapshot offline. Không có key nào trong repo, image, gói phát hành (secret scan trong CI).
-- [ ] **FR-CVE-09** (P1) Snapshot dữ liệu offline cho bản Enterprise/không internet: lệnh `vulndb update` tạo gói dữ liệu có ngày, chữ ký, và metadata license; tool cảnh báo khi snapshot quá cũ (ngưỡng cấu hình).
-- [ ] **FR-CVE-10** (P1) Dùng OSV chủ yếu cho thư viện JavaScript phát hiện ở trang (FR-CVE-04); dùng NVD/CPE cho phần mềm máy chủ (nginx, Apache, PHP...). Finding ghi rõ phiên bản là **suy đoán** từ banner, confidence tương ứng.
+- [ ] **FR-CVE-09** (P0) API key NVD: đọc từ biến môi trường `NVD_API_KEY` của **chính khách**; không có key → chạy theo giới hạn công khai hoặc dùng snapshot offline. Không có key nào trong repo, image, gói phát hành (secret scan trong CI).
+- [ ] **FR-CVE-10** (P1) Snapshot dữ liệu offline cho bản Enterprise/không internet: lệnh `vulndb update` tạo gói dữ liệu có ngày, chữ ký, và metadata license; tool cảnh báo khi snapshot quá cũ (ngưỡng cấu hình).
+- [ ] **FR-CVE-11** (P1) Dùng OSV chủ yếu cho thư viện JavaScript phát hiện ở trang (FR-CVE-04); dùng NVD/CPE cho phần mềm máy chủ (nginx, Apache, PHP...). Finding ghi rõ phiên bản là **suy đoán** từ banner, confidence tương ứng.
 - [ ] Kiểm tra lại điều khoản từng nguồn tại thời điểm tích hợp và ghi ngày kiểm tra vào `docs/DATA_SOURCES.md`.
 
 ---
