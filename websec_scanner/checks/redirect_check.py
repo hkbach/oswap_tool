@@ -48,7 +48,7 @@ def check_http_to_https_redirect(session, hostname: str) -> list[Finding]:
         next_url = urljoin(url, location)
         if _is_https(next_url):
             return []
-        if not in_scope(next_url, scope):
+        if not in_scope(next_url, scope, getattr(session, "allowed_hosts", ())):
             if hasattr(session, "note_blocked"):
                 session.note_blocked(next_url, url)
             return []  # D4: do not follow; no verdict

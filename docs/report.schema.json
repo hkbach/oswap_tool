@@ -20,12 +20,13 @@
     "finished_at",
     "scan_groups",
     "checks_run",
+    "limits",
     "summary",
     "findings",
     "errors"
   ],
   "properties": {
-    "schema_version": { "const": "1.6" },
+    "schema_version": { "const": "1.7" },
     "scanner_version": { "type": "string", "minLength": 1 },
     "rules_version": { "type": "string", "minLength": 1 },
     "scan_id": {
@@ -81,6 +82,7 @@
       "uniqueItems": true,
       "items": { "enum": ["headers", "cookies", "tls", "https-redirect", "cors", "exposed-files", "directory-listing", "robots-sitemap"] }
     },
+    "limits": { "$ref": "#/$defs/limits" },
     "checks_run": {
       "type": "array",
       "items": {
@@ -119,6 +121,20 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
     },
     "count": { "type": "integer", "minimum": 0 },
+    "limits": {
+      "description": "Traffic limits this scan ran under (FR-AUTHZ-05); nulls mean the limit was not set",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rate_limit", "max_requests", "max_duration", "requests_sent", "slowdowns", "stopped_by"],
+      "properties": {
+        "rate_limit": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "max_requests": { "type": ["integer", "null"], "exclusiveMinimum": 0 },
+        "max_duration": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "requests_sent": { "type": "integer", "minimum": 0 },
+        "slowdowns": { "type": "integer", "minimum": 0 },
+        "stopped_by": { "enum": ["max-requests", "max-duration", null] }
+      }
+    },
     "finding": {
       "type": "object",
       "additionalProperties": false,

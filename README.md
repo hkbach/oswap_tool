@@ -29,7 +29,7 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
 - [`docs/PRODUCT-BACKLOG.md`](./docs/PRODUCT-BACKLOG.md) — backlog, decisions, sprint order.
 - [`CLAUDE.md`](./CLAUDE.md) — working rules for this repository.
 - [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema of the `--json`
-  report (`schema_version` 1.6).
+  report (`schema_version` 1.7).
 - [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md) — license of every
   runtime and dev dependency, direct and transitive.
 
@@ -124,10 +124,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.13.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.14.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.13.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.14.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -241,7 +241,7 @@ CI systems themselves.** Try them on a non-production target first.
    direct connections and does not use a proxy. Proxy setups have not been
    tested in this repository.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.13.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.14.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -379,7 +379,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-62 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-66 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -545,6 +545,26 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog
+
+- **v1.14.0** (scan safety controls). Everything here is **off unless you turn it on**, so
+  an upgrade changes nothing you have not asked for:
+  - **Traffic limits**: `--rate-limit N` (requests per second, applied globally and per
+    host), `--max-requests N` and `--max-duration SECONDS`. Reaching a cap stops the scan,
+    adds one `Scan stopped early` line to `errors` and marks the report incomplete, so the
+    CLI exits 3 — the findings so far are not the whole picture. The scanner also backs off
+    on its own when a target answers 429 or 503, honouring `Retry-After` when it is a plain
+    number of seconds. The same three options exist on `websec-scanner-web`, where they are
+    set when the server starts so a browser user cannot lift them.
+  - **JSON `limits` block** (`schema_version` 1.7, fields added only): the limits the scan
+    ran under, how many requests it sent, how often it backed off, and which cap stopped it.
+  - **Exclusions**: `--exclude REGEX`, `--exclude-host HOST`, and a built-in list in
+    `websec_scanner/rules/exclusions.json` covering paths where even a GET can change
+    something: logout, delete, checkout, password reset, shutdown. Turn the built-ins off
+    with `--no-default-excludes`. Redirects into an excluded path are not followed either.
+  - **Declared scope**: `--scope-host HOST` (repeatable) marks extra hosts as in scope.
+    Anything else is still refused and reported, as before.
+  - **`--scan-id-header`** sends `X-Scanner-Scan-Id` so a target can filter your scan out of
+    its own logs and WAF rules.
 
 - **v1.13.0** (CVSS scores revised). A review of the per-type CVSS vectors on 2026-10-01
   corrected several of them, so **scores change for findings you may already have on

@@ -100,8 +100,10 @@ def _weak_cipher_findings(url: str, hostname: str, port: int, cipher) -> list[Fi
     ]
 
 
-def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int):
+def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int, limiter=None):
     """Step 1: non-verifying connection. Returns (der_cert, protocol, cipher, error)."""
+    if limiter is not None:
+        limiter.acquire(f"https://{hostname}:{port}/")  # a handshake is traffic too (FR-AUTHZ-05)
     insecure_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     insecure_ctx.check_hostname = False
     insecure_ctx.verify_mode = ssl.CERT_NONE
@@ -123,9 +125,11 @@ def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int):
         return None, None, None, exc
 
 
-def _verify_trust(hostname: str, port: int, timeout: int, trust: ssl.SSLContext | None = None):
+def _verify_trust(hostname: str, port: int, timeout: int, trust: ssl.SSLContext | None = None, limiter=None):
     """Step 2: verifying connection. Returns None if trusted, or the raised exception."""
     verify_ctx = trust if trust is not None else ssl.create_default_context()
+    if limiter is not None:
+        limiter.acquire(f"https://{hostname}:{port}/")
     try:
         with socket.create_connection((hostname, port), timeout=timeout) as sock:
             with verify_ctx.wrap_socket(sock, server_hostname=hostname):
@@ -145,12 +149,13 @@ def check_tls(
     timeout: int = 10,
     warnings: list[str] | None = None,
     trust: ssl.SSLContext | None = None,
+    limiter=None,
 ) -> list[Finding]:
     """TLS checks; ``warnings`` receives a note when the handshake looks intercepted (FR-DET-16)."""
     findings: list[Finding] = []
     url = f"https://{url_host(hostname)}:{port}"
 
-    der_cert, protocol, cipher, conn_err = _fetch_raw_cert_and_connection_info(hostname, port, timeout)
+    der_cert, protocol, cipher, conn_err = _fetch_raw_cert_and_connection_info(hostname, port, timeout, limiter)
     if conn_err is not None:
         findings.append(
             Finding(
@@ -254,7 +259,7 @@ def check_tls(
     # period is fine — otherwise a self-signed-style verification failure
     # would just re-state the expiry/not-yet-valid finding above.
     if not cert_time_problem:
-        trust_err = _verify_trust(hostname, port, timeout, trust)
+        trust_err = _verify_trust(hostname, port, timeout, trust, limiter)
         if trust_err is not None:
             findings.append(
                 Finding(

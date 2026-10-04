@@ -151,6 +151,35 @@ def load_tls_interceptors() -> TlsInterceptorRules:
     return TlsInterceptorRules(version.strip(), tuple(k.strip().lower() for k in keywords))
 
 
+_EXCLUSIONS_FILE = RULES_DIR / "exclusions.json"
+
+
+@dataclass(frozen=True)
+class ExclusionRules:
+    version: str
+    patterns: tuple[re.Pattern, ...]  # case-insensitive, matched against the URL path
+
+
+@functools.cache
+def load_exclusions() -> ExclusionRules:
+    """Paths that are never requested by default: a GET there can still change state (FR-AUTHZ-06)."""
+    source = _EXCLUSIONS_FILE
+    data = json.loads(source.read_text(encoding="utf-8"))
+    version = data.get("version")
+    if not isinstance(version, str) or not version.strip():
+        _fail(source, "missing or empty 'version'")
+    patterns = data.get("patterns")
+    if not isinstance(patterns, list) or not patterns or not all(isinstance(p, str) and p.strip() for p in patterns):
+        _fail(source, "'patterns' must be a non-empty list of strings")
+    compiled = []
+    for pattern in patterns:
+        try:
+            compiled.append(re.compile(pattern, re.IGNORECASE))
+        except re.error as exc:
+            _fail(source, f"invalid regular expression {pattern!r}: {exc}")
+    return ExclusionRules(version.strip(), tuple(compiled))
+
+
 def is_interceptor_issuer(issuer: str) -> bool:
     """True if a certificate issuer name belongs to known TLS-intercepting software (FR-DET-16)."""
     issuer = issuer.lower()
@@ -159,4 +188,8 @@ def is_interceptor_issuer(issuer: str) -> bool:
 
 def rules_version() -> str:
     """Version of the bundled rule set, reported as ``rules_version`` (one part per rules file)."""
-    return f"sensitive_paths={load_sensitive_paths().version};tls_interceptors={load_tls_interceptors().version}"
+    return (
+        f"sensitive_paths={load_sensitive_paths().version}"
+        f";tls_interceptors={load_tls_interceptors().version}"
+        f";exclusions={load_exclusions().version}"
+    )

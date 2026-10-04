@@ -1,8 +1,8 @@
 """FR-QA-02: golden files for the JSON, SARIF and HTML reports.
 
 One CLI run against the mock server writes all three reports. Values that change
-on every run (scan id, timestamps, the mock server's port, the scanner version and
-the port-dependent fingerprints) are replaced by placeholders, then each report is
+on every run (scan id, timestamps, the mock server's port, the scanner version, the
+number of requests sent and the port-dependent fingerprints) are replaced by placeholders, then each report is
 compared with tests/golden/. Any other change in the output fails the test.
 
 After an intended output change, regenerate the files and review the diff:
@@ -65,6 +65,9 @@ def _normalise(texts: dict[str, str], report: dict, port: int) -> dict[str, str]
         replacements[finding["fingerprint"]] = "<FINGERPRINT>"
     result = {}
     for fmt, text in texts.items():
+        # How many requests a scan sent is not part of the report's shape: a single urllib3
+        # retry on a flaky local connection would change it and fail the snapshot.
+        text = re.sub(r'"requests_sent": \d+', '"requests_sent": <REQUESTS_SENT>', text)
         for old, new in replacements.items():
             text = text.replace(old, new)
         # The version changes on every release; replace it last so it cannot hit a replaced value.

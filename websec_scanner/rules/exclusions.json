@@ -1,0 +1,12 @@
+{
+  "version": "2026.10.01.1",
+  "description": "URL paths the scanner refuses to request by default (FR-AUTHZ-06). These are the places where a single GET can change state or end a session even though GET is supposed to be safe: logout links, delete links, and checkout steps. Patterns are case-insensitive regular expressions matched against the URL path. Users add their own with --exclude; --no-default-excludes drops this list.",
+  "patterns": [
+    "/(logout|log-out|signout|sign-out|logoff|log-off)(/|$|\\?)",
+    "/(delete|remove|destroy|purge|wipe)(/|$|\\?)",
+    "/(checkout|payment|pay|billing|invoice|subscribe|unsubscribe)(/|$|\\?)",
+    "/(reset-password|password-reset|forgot-password)(/|$|\\?)",
+    "/admin/(delete|remove|reset|shutdown|restart)(/|$|\\?)",
+    "/(shutdown|restart|reboot)(/|$|\\?)"
+  ]
+}

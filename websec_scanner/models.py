@@ -12,7 +12,7 @@ from . import __version__
 # report shape: minor for added fields, major for removed/renamed fields or changed meaning.
 # History: "1.0" = unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0;
 # 1.2 adds final_url and redirect_chain; 1.3 adds gate.
-SCHEMA_VERSION = "1.6"
+SCHEMA_VERSION = "1.7"
 
 
 class Severity(str, Enum):
@@ -103,6 +103,8 @@ class ScanResult:
     rules_version: str = field(default_factory=lambda: _rules_version())
     # True once the baseline GET succeeded; False means the scan is incomplete (exit code 3).
     baseline_fetched: bool = False
+    # What limits this scan ran under and whether one stopped it (FR-AUTHZ-05, limits.ScanLimiter.snapshot).
+    limits: dict = field(default_factory=lambda: _no_limits())
 
     def add(self, finding: Finding) -> None:
         self.findings.append(finding)
@@ -126,6 +128,7 @@ class ScanResult:
             "finished_at": self.finished_at,
             "scan_groups": list(self.scan_groups),
             "checks_run": self.checks_run,
+            "limits": dict(self.limits),
             "summary": self.summary_counts(),
             # Severity first (FR-REPORT-02); id and instance_key make the order deterministic,
             # since some checks collect findings from parallel requests.
@@ -134,6 +137,13 @@ class ScanResult:
             ],
             "errors": self.errors,
         }
+
+
+def _no_limits() -> dict:
+    """The limits block of a scan that was given no limits (same keys, all unset)."""
+    from .limits import ScanLimiter  # late import: limits does not depend on models
+
+    return ScanLimiter().snapshot()
 
 
 def _all_groups() -> list[str]:
