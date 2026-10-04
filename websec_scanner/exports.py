@@ -21,6 +21,7 @@ _CSV_COLUMNS = (
     "id",
     "title",
     "url",
+    "affected_count",
     "instance_key",
     "cwe",
     "cvss_score",
@@ -88,8 +89,16 @@ def to_junit(report: dict) -> str:
             classname=_xml(f"websec-scanner.{group_of_check(f['check']) if f.get('check') else 'scan'}"),
             name=_xml(f"{f['id']} {f.get('instance_key', '')}".strip()),
         )
+        others = f.get("affected_count", 1) - 1
+        also = (
+            f"Also seen on {others} other page(s): " + ", ".join(u for u in f["affected_urls"] if u != f["url"])
+            if others > 0
+            else ""
+        )
         detail = "\n".join(
-            part for part in (f.get("description"), f.get("evidence"), f.get("recommendation"), f.get("url")) if part
+            part
+            for part in (f.get("description"), f.get("evidence"), f.get("recommendation"), f.get("url"), also)
+            if part
         )
         if f.get("suppression"):
             reason = f"suppressed until {f['suppression']['expires']}: {f['suppression']['reason']}"

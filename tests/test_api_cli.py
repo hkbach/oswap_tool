@@ -21,7 +21,7 @@ from mock_server import Handler as MockHandler
 
 from websec_scanner import cli, output, web
 from websec_scanner.api import inventory
-from websec_scanner.models import ScanResult
+from websec_scanner.models import SCHEMA_VERSION, ScanResult
 from websec_scanner.redact import redact
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "docs" / "report.schema.json"
@@ -95,14 +95,14 @@ def test_without_a_spec_the_field_is_null_so_the_shape_never_changes(http_server
     assert report_of(http_server(MockHandler), tmp_path)["api"] is None
 
 
-def test_the_schema_version_is_1_9_and_the_report_validates(http_server, tmp_path, spec_file):
+def test_the_schema_version_matches_the_schema_file_and_the_report_validates(http_server, tmp_path, spec_file):
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     validator = jsonschema.Draft202012Validator(schema)
-    assert schema["properties"]["schema_version"]["const"] == "1.9"
+    assert schema["properties"]["schema_version"]["const"] == SCHEMA_VERSION
     for extra in ((), ("--api-spec", str(spec_file))):
         data = report_of(http_server(MockHandler), tmp_path, *extra)
         validator.validate(data)
-        assert data["schema_version"] == "1.9"
+        assert data["schema_version"] == SCHEMA_VERSION
 
 
 def test_the_schema_is_strict_about_the_inventory(http_server, tmp_path, spec_file):

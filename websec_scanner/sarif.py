@@ -51,6 +51,12 @@ def _rule(finding: dict, severity: str) -> dict:
     return rule
 
 
+def _locations(finding: dict, target: str) -> list[dict]:
+    """One location per page the finding was seen on (FR-CRAWL-03); the target when it has no URL."""
+    uris = finding.get("affected_urls") or [finding.get("url") or target]
+    return [{"physicalLocation": {"artifactLocation": {"uri": uri}}} for uri in uris]
+
+
 def _result(finding: dict, rule_index: int, target: str) -> dict:
     message = f"{finding['title']}: {finding['description']}"
     if finding.get("evidence"):
@@ -60,7 +66,7 @@ def _result(finding: dict, rule_index: int, target: str) -> dict:
         "ruleIndex": rule_index,
         "level": _LEVEL.get(finding["severity"], "note"),
         "message": {"text": message},
-        "locations": [{"physicalLocation": {"artifactLocation": {"uri": finding.get("url") or target}}}],
+        "locations": _locations(finding, target),
         "partialFingerprints": {FINGERPRINT_KEY: finding["fingerprint"]},
         "properties": {
             "severity": finding["severity"],

@@ -11,12 +11,15 @@ from . import __version__
 
 if TYPE_CHECKING:
     from .api.inventory import ApiInventory
+    from .crawler.crawl import CrawlResult
 
 # Version of the JSON report layout (docs/report.schema.json). Bump on any change to the
 # report shape: minor for added fields, major for removed/renamed fields or changed meaning.
 # History: "1.0" = unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0;
 # 1.2 adds final_url and redirect_chain; 1.3 adds gate.
-SCHEMA_VERSION = "1.9"
+SCHEMA_VERSION = "1.10"
+# FR-CRAWL-03: a finding found on several crawled pages lists at most this many of their URLs.
+MAX_AFFECTED_URLS = 20
 
 
 class Severity(str, Enum):
@@ -60,12 +63,26 @@ class Finding:
     cvss_vector: str = ""
     cvss_score: float | None = None
     fingerprint: str = ""  # stable across scans, see catalog.fingerprint()
+    # FR-CRAWL-03: every page this finding was seen on (at most MAX_AFFECTED_URLS) and how many
+    # there were. Empty/0 until a crawl adds a second page: to_dict() then falls back to ``url``.
+    affected_urls: list[str] = field(default_factory=list)
+    affected_count: int = 0
     check: str = ""  # name of the check that produced it (a checks_run entry), set by run_scan()
     # Exact (raw, masked) substrings that output.build_report() replaces unless --show-secrets.
     # Internal only: never serialized, never shown (FR-AUTH-02).
     redactions: list[tuple[str, str]] = field(default_factory=list, repr=False)
 
+    def record_url(self, url: str) -> None:
+        """Note that this finding was also seen at ``url`` (a crawled page), counting every page."""
+        if not self.affected_urls and self.url:
+            self.affected_urls = [self.url]
+            self.affected_count = 1
+        self.affected_count += 1
+        if len(self.affected_urls) < MAX_AFFECTED_URLS:
+            self.affected_urls.append(url)
+
     def to_dict(self) -> dict:
+        urls = list(self.affected_urls) if self.affected_urls else ([self.url] if self.url else [])
         return {
             "id": self.id,
             "title": self.title,
@@ -83,6 +100,8 @@ class Finding:
             "instance_key": self.instance_key,
             "fingerprint": self.fingerprint,
             "check": self.check,
+            "affected_urls": urls,
+            "affected_count": max(self.affected_count, len(urls)),
         }
 
 
@@ -111,6 +130,8 @@ class ScanResult:
     limits: dict = field(default_factory=lambda: _no_limits())
     # The API inventory read from --api-spec (FR-SPEC-01); build_report() turns it into the report's "api".
     api: ApiInventory | None = None
+    # What the crawl did (FR-CRAWL-01); None when --crawl was not used. build_report() turns it into "crawl".
+    crawl: CrawlResult | None = None
 
     def add(self, finding: Finding) -> None:
         self.findings.append(finding)

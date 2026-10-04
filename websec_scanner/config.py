@@ -59,6 +59,11 @@ CONFIG_KEYS: dict[str, str] = {
     "default_excludes": "no_default_excludes",
     "tls_probe": "no_tls_probe",
     "api_spec": "api_spec",
+    "crawl": "crawl",
+    "crawl_depth": "crawl_depth",
+    "crawl_max_pages": "crawl_max_pages",
+    "crawl_max_duration": "crawl_max_duration",
+    "ignore_robots": "ignore_robots",
     "scan_id_header": "scan_id_header",
     "ca_bundle": "ca_bundle",
     "proxy": "proxy",
@@ -82,9 +87,9 @@ CONFIG_KEYS: dict[str, str] = {
 
 _STR = {"targets_file", "fail_on", "ca_bundle", "proxy", "user_agent", "baseline", "baseline_dir",
         "suppressions", "output_dir", "json", "sarif", "html", "csv", "junit", "api_spec"}  # fmt: skip
-_INT = {"timeout", "workers", "parallel", "max_requests"}
-_NUMBER = {"rate_limit", "max_duration"}
-_BOOL = {"default_excludes", "tls_probe", "scan_id_header", "color", "quiet", "verbose"}
+_INT = {"timeout", "workers", "parallel", "max_requests", "crawl_depth", "crawl_max_pages"}
+_NUMBER = {"rate_limit", "max_duration", "crawl_max_duration"}
+_BOOL = {"default_excludes", "tls_probe", "scan_id_header", "color", "quiet", "verbose", "crawl", "ignore_robots"}
 _LIST = {"targets", "checks", "scope_hosts", "exclude", "exclude_hosts", "formats"}
 _TABLE = {"headers", "cookies"}
 _PATHS = {"targets_file", "ca_bundle", "baseline", "baseline_dir", "suppressions", "output_dir",

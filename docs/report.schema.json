@@ -25,10 +25,11 @@
     "findings",
     "errors",
     "baseline",
-    "api"
+    "api",
+    "crawl"
   ],
   "properties": {
-    "schema_version": { "const": "1.9" },
+    "schema_version": { "const": "1.10" },
     "scanner_version": { "type": "string", "minLength": 1 },
     "rules_version": { "type": "string", "minLength": 1 },
     "scan_id": {
@@ -97,6 +98,10 @@
     "api": {
       "description": "API inventory read from the --api-spec file (FR-SPEC-05); null without one",
       "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/api" }]
+    },
+    "crawl": {
+      "description": "What the crawl of --crawl did (FR-CRAWL-01): settings and counts, no URLs; null without --crawl",
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/crawl" }]
     },
     "baseline": {
       "description": "Comparison with the previous scan given by --baseline (FR-CI-02, FR-RPT-06); null without one",
@@ -196,6 +201,29 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
     },
     "count": { "type": "integer", "minimum": 0 },
+    "crawl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_depth", "max_pages", "max_duration", "respect_robots", "pages_visited", "skipped", "stopped_reason"],
+      "properties": {
+        "max_depth": { "type": "integer", "minimum": 0 },
+        "max_pages": { "type": "integer", "minimum": 1 },
+        "max_duration": { "type": "number", "exclusiveMinimum": 0 },
+        "respect_robots": { "type": "boolean" },
+        "pages_visited": { "description": "Pages fetched, the home page included", "type": "integer", "minimum": 1 },
+        "skipped": {
+          "description": "Links not followed, by reason: how many distinct URLs",
+          "type": "object",
+          "propertyNames": {
+            "enum": ["other-origin", "not-followable", "excluded", "robots-disallowed", "query-variants", "beyond-depth", "queue-full", "fetch-failed"]
+          },
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        },
+        "stopped_reason": {
+          "enum": ["complete", "max-depth", "max-pages", "max-duration", "scan-limit", "robots-unavailable"]
+        }
+      }
+    },
     "api": {
       "description": "Names and structure only, never an example, default or description from the spec",
       "type": "object",
@@ -275,6 +303,8 @@
         "instance_key",
         "fingerprint",
         "check",
+        "affected_urls",
+        "affected_count",
         "baseline_state",
         "suppression"
       ],
@@ -309,6 +339,17 @@
           "maximum": 10
         },
         "instance_key": { "type": "string", "minLength": 1 },
+        "affected_urls": {
+          "description": "The pages the finding was seen on, its own url first; up to 20 (FR-CRAWL-03). One entry without a crawl",
+          "type": "array",
+          "maxItems": 20,
+          "items": { "type": "string" }
+        },
+        "affected_count": {
+          "description": "How many pages the finding was seen on: 1 without a crawl, and it can exceed the length of affected_urls",
+          "type": "integer",
+          "minimum": 0
+        },
         "baseline_state": {
           "description": "Compared with --baseline: new or unchanged; null without a baseline (FR-CI-02)",
           "enum": ["new", "unchanged", null]

@@ -44,6 +44,25 @@ CVSS_NOTE = (
     "observed and how easily it can be abused in context. Findings that are not a scorable "
     "weakness (early warnings, hints, informational observations) carry no score at all."
 )
+# FR-CRAWL-01: how a crawl's stop reason and skipped links are worded, shared by the console and HTML reports.
+CRAWL_STOP_TEXT = {
+    "complete": "all reachable pages were visited",
+    "max-depth": "stopped at --crawl-depth: links beyond it were not followed",
+    "max-pages": "stopped at --crawl-max-pages",
+    "max-duration": "stopped at --crawl-max-duration",
+    "scan-limit": "stopped by --max-requests or --max-duration of the scan",
+    "robots-unavailable": "robots.txt could not be read, so no page beyond the home page was requested",
+}
+CRAWL_SKIP_TEXT = {
+    "other-origin": "other origin",
+    "not-followable": "not a web page link",
+    "excluded": "excluded",
+    "robots-disallowed": "disallowed by robots.txt",
+    "query-variants": "too many query variants of one path",
+    "beyond-depth": "beyond --crawl-depth",
+    "queue-full": "too many links found",
+    "fetch-failed": "request failed",
+}
 _REDACTED_FINDING_FIELDS = ("title", "description", "evidence", "url", "instance_key")
 
 
@@ -111,6 +130,8 @@ def build_report(
     }
     # FR-SPEC-05: every text taken from the spec is redacted too (a server URL can carry credentials).
     report["api"] = result.api.to_dict(None if show_secrets else redact) if result.api is not None else None
+    # FR-CRAWL-01: settings and counts only; no URL of a crawled page is in this object.
+    report["crawl"] = result.crawl.to_dict() if result.crawl is not None else None
     if show_secrets:
         return _scrub(report, tuple(secrets))
 
@@ -127,6 +148,7 @@ def build_report(
         pairs = pairs_by_fingerprint.get(finding["fingerprint"], ())
         for key in _REDACTED_FINDING_FIELDS:
             finding[key] = redact(finding[key], pairs)
+        finding["affected_urls"] = [redact(url, pairs) for url in finding["affected_urls"]]
     return _scrub(report, tuple(secrets))
 
 
