@@ -146,6 +146,7 @@ def test_robots_and_sitemap_are_read_up_to_their_cap(http_server, name):
             self.send(200 if self.path == f"/{name}" else 404, body.encode())
 
     (finding,) = exposure.check_robots_and_sitemap(http_utils.build_session(timeout=5), http_server(H))
+    assert http_utils.HINT_FILE_MAX_BYTES == 512 * 1024  # the cap AT-38 names
     assert early in finding.evidence and late not in finding.evidence
 
 

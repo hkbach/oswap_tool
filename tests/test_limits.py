@@ -11,6 +11,7 @@ import threading
 
 import pytest
 
+from websec_scanner import limits
 from websec_scanner.limits import ScanLimiter, ScanLimitReached
 
 
@@ -124,7 +125,7 @@ def test_a_nonsense_retry_after_falls_back_to_the_default_backoff(clock):
     limiter.acquire("https://t.example/a")
     limiter.note_response("https://t.example/a", 429, retry_after="soon please")
     limiter.acquire("https://t.example/a")
-    assert clock.slept and clock.slept[-1] > 0
+    assert clock.slept == [pytest.approx(limits._BACKOFF_SECONDS)]  # the default, not just any wait
 
 
 def test_an_ordinary_response_does_not_slow_anything_down(clock):

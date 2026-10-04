@@ -212,9 +212,10 @@ class ScanUIHandler(BaseHTTPRequestHandler):
         raw_target = payload.get("target")
         if not isinstance(raw_target, str) or not raw_target.strip():
             return self._error(400, "Enter a target URL or hostname")
-        target = _normalize_target(raw_target.strip())
-        parts = urlsplit(target)
-        if parts.scheme not in ("http", "https") or not parts.hostname:
+        try:
+            # Same rule as the CLI (FR-CLI-07), so both entry points accept the same targets.
+            target = _normalize_target(raw_target.strip())
+        except ValueError:
             return self._error(400, "Target must be an http:// or https:// URL")
         groups = None  # absent: every group, as in the CLI
         if "checks" in payload:

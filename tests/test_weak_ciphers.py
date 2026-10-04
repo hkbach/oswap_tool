@@ -65,12 +65,21 @@ def test_score_separates_no_encryption_from_merely_broken(cipher_name, expected_
     assert cvss.base_score(vector) == expected_score
 
 
-def test_the_finding_says_why_the_suite_is_weak():
-    findings = tls_check._weak_cipher_findings("https://t/", "t", 443, ("DES-CBC-SHA", "TLSv1.2", 56))
+@pytest.mark.parametrize(
+    "cipher_name, reason_text",
+    [
+        ("DES-CBC-SHA", "56-bit key or a 64-bit block"),
+        ("EXP-RC4-MD5", "export grade"),
+        ("ADH-AES256-SHA", "authenticates neither side"),
+        ("NULL-SHA", "does not encrypt"),
+    ],
+)
+def test_the_finding_says_why_the_suite_is_weak(cipher_name, reason_text):
+    findings = tls_check._weak_cipher_findings("https://t/", "t", 443, (cipher_name, "TLSv1.2", 56))
     (finding,) = findings
     assert finding.id == "TLS-WEAK-CIPHER"
-    assert "DES-CBC-SHA" in finding.evidence
-    assert "56-bit" in finding.description or "broken" in finding.description.lower()
+    assert cipher_name in finding.evidence
+    assert reason_text in finding.description
 
 
 def test_no_finding_for_a_modern_suite():

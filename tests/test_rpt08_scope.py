@@ -51,7 +51,7 @@ def test_console_report_includes_the_scope_note():
 def test_html_report_footer_includes_the_scope_note():
     report = output.build_report(cli.run_scan("http://127.0.0.1:1", timeout=1))
     html = render_html(report)
-    assert output.SCOPE_NOTE.split(".")[0] in html
+    assert output.SCOPE_NOTE in html  # the whole note, including the clean-report sentence
 
 
 def test_no_absolute_assurance_language_anywhere_in_a_real_scan(http_server):

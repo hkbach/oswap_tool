@@ -126,7 +126,17 @@ class ScopedSession(requests.Session):
         location = super().get_redirect_target(resp)
         if location is None:
             return location
-        target = urljoin(resp.url, location)
+        try:
+            target = urljoin(resp.url, location)
+        except ValueError as exc:
+            # The server controls this header, and urljoin() rejects some strings outright
+            # (an unterminated IPv6 literal, for example). A redirect we cannot even parse is
+            # one we must not follow; record it instead of letting the scan die (NFR-REL-01).
+            self.blocked_redirects.setdefault(
+                f"!malformed:{location[:80]}",
+                f"Redirect not followed: {resp.url} returned a Location header that is not a usable URL ({exc})",
+            )
+            return None
         if self.is_excluded(target):
             return None
         if self.scope_host is None:
@@ -170,15 +180,24 @@ class _TrustAdapter(HTTPAdapter):
     retries happen below it.
     """
 
-    def __init__(self, ssl_context: ssl.SSLContext, limiter=None, **kwargs) -> None:
+    def __init__(self, ssl_context: ssl.SSLContext, limiter=None, on_request=None, **kwargs) -> None:
         self._ssl_context = ssl_context
         self._limiter = limiter
+        # FR-CI-07 --verbose: called once per request actually sent, with (method, url, status, error).
+        self._on_request = on_request
         super().__init__(**kwargs)
 
     def send(self, request, **kwargs):
         if self._limiter is not None:
             self._limiter.acquire(request.url)
-        response = super().send(request, **kwargs)
+        try:
+            response = super().send(request, **kwargs)
+        except Exception as exc:
+            if self._on_request is not None:
+                self._on_request(request.method, request.url, None, type(exc).__name__)
+            raise
+        if self._on_request is not None:
+            self._on_request(request.method, request.url, response.status_code, None)
         if self._limiter is not None:
             self._limiter.note_response(request.url, response.status_code, response.headers.get("Retry-After"))
         return response
@@ -207,12 +226,30 @@ def build_session(
     exclusions: Iterable[re.Pattern] = (),
     excluded_hosts: Iterable[str] = (),
     scan_id: str | None = None,
+    user_agent: str = USER_AGENT,
+    extra_headers: dict[str, str] | None = None,
+    cookies: dict[str, str] | None = None,
+    proxy: str | None = None,
+    on_request=None,
 ) -> ScopedSession:
+    """``extra_headers``, ``cookies``, ``proxy`` and ``user_agent`` are already validated (request_options)."""
     session = ScopedSession(scope_host, allowed_hosts, exclusions, excluded_hosts)
-    session.headers.update({"User-Agent": USER_AGENT})
+    # The operator's headers first, so they can never displace the scanner's identity (NFR-SEC-03).
+    session.headers.update(extra_headers or {})
+    session.headers["User-Agent"] = user_agent
     if scan_id:
         # FR-AUTHZ-09: lets the target filter this scan out of its logs and WAF rules.
         session.headers["X-Scanner-Scan-Id"] = scan_id
+    for name, value in (cookies or {}).items():
+        session.cookies.set(name, value)
+    if proxy:
+        # An explicit --proxy is a deliberate choice: send everything through it. With trust_env
+        # left on, requests would still apply NO_PROXY from the environment and quietly connect
+        # some hosts directly. trust_context() reads REQUESTS_CA_BUNDLE itself, so nothing else
+        # that the environment provided is lost (FR-CI-07).
+        session.trust_env = False
+        session.proxies = {"http": proxy, "https": proxy}
+    session.proxy = proxy  # the TLS check tunnels through it as well
     session.trust_context = trust_context(ca_bundle)
     session.limiter = limiter
 
@@ -224,7 +261,7 @@ def build_session(
         status_forcelist=(),  # do not retry on 4xx/5xx; that's signal, not noise
         raise_on_status=False,
     )
-    adapter = _TrustAdapter(session.trust_context, limiter=limiter, max_retries=retry)
+    adapter = _TrustAdapter(session.trust_context, limiter=limiter, on_request=on_request, max_retries=retry)
     session.mount("http://", adapter)
     session.mount("https://", adapter)
     session.request = _with_default_timeout(session.request, timeout)  # type: ignore

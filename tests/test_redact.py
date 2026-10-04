@@ -148,8 +148,12 @@ def test_same_cookie_on_a_redirect_and_the_final_response_is_redacted_in_both(ht
     report = output.build_report(cli.run_scan(http_server(RedirectThenHome), timeout=5))
     text = json.dumps(report)
     assert first not in text and second not in text
-    evidence = sorted(f["evidence"] for f in report["findings"] if f["id"] == "COOKIE-FLAGS-MISSING")
-    assert evidence == [f"sid=<redacted len={len(first)}>; Path=/", f"sid=<redacted len={len(second)}>; Path=/"]
+    cookies = [f for f in report["findings"] if f["id"] == "COOKIE-FLAGS-MISSING"]
+    assert len({f["fingerprint"] for f in cookies}) == 1  # one cookie name, one site: one fingerprint
+    assert sorted(f["evidence"] for f in cookies) == [
+        f"sid=<redacted len={len(first)}>; Path=/",
+        f"sid=<redacted len={len(second)}>; Path=/",
+    ]
 
 
 def test_credentials_in_the_target_url_never_reach_the_reports(http_server, tmp_path, capsys):
@@ -163,7 +167,9 @@ def test_credentials_in_the_target_url_never_reach_the_reports(http_server, tmp_
         assert password not in text and user not in text, f"credentials leaked in {where}"
     report = json.loads(outs["json"].read_text(encoding="utf-8"))
     assert report["target"].startswith(f"http://<redacted len={len(user)}>:<redacted len={len(password)}>@127.0.0.1:")
-    assert "redacted" not in web._report_filename(report)
+    filename = web._report_filename(report)
+    assert user not in filename and password not in filename  # host and port only
+    assert "redacted" not in filename
 
 
 def test_errors_are_redacted(closed_port):

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import base64
+import contextlib
+import io
 
 import pytest
 
@@ -16,6 +18,16 @@ from websec_scanner.output import build_report
 _FORBIDDEN_COMPANY_NAME = base64.b64decode("dGVjaHZpZnk=").decode()
 
 
+def _help_text(main) -> str:
+    """The --help a user actually sees; argparse prints it and exits."""
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.suppress(SystemExit):
+        main(["--help"])
+    text = out.getvalue()
+    assert text.strip(), "--help printed nothing"
+    return text
+
+
 def _product_texts() -> dict[str, str]:
     report = build_report(ScanResult(target="https://t.example/", started_at="2026-01-01T00:00:00Z"))
     texts = {
@@ -23,8 +35,10 @@ def _product_texts() -> dict[str, str]:
         "User-Agent": http_utils.USER_AGENT,
         "HTML report": render_html(report),
     }
-    for name in ("index.html", "app.js"):
+    for name in ("index.html", "app.js", "app.css"):
         texts[name] = (web._STATIC_DIR / name).read_text(encoding="utf-8")
+    texts["CLI --help"] = _help_text(cli.main)
+    texts["Web UI --help"] = _help_text(web.main)
     return texts
 
 

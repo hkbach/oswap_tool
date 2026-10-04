@@ -25,10 +25,16 @@ def by_id(findings, finding_id):
 
 
 class SoftNotFoundHandler(QuietHandler):
-    """Returns HTTP 200 for every path, like a SPA catch-all route."""
+    """Returns HTTP 200 for every path, like a SPA catch-all route.
+
+    The page carries a Contact: line, which matches the security.txt signature, so only
+    soft-404 detection can keep the exposure checks quiet (AT-06). With a body that
+    matches no signature the test would pass even with soft-404 detection removed.
+    """
 
     def do_GET(self):
-        self.send(200, b"<html><body>Welcome</body></html>", {"Content-Type": "text/html"})
+        body = b"<html><body>Welcome. Contact: support@example.invalid</body></html>"
+        self.send(200, body, {"Content-Type": "text/html"})
 
 
 class CorsReflectHandler(QuietHandler):

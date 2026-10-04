@@ -55,9 +55,10 @@ def test_http_target_redirected_to_https_with_bad_cert_reports_the_cert_not_the_
 
 
 def test_http_target_redirected_to_expired_https_reports_expiry(http_server, https_server):
-    target, _ = _http_to_https(http_server, https_server, "expired")
+    target, https_port = _http_to_https(http_server, https_server, "expired")
     result = cli.run_scan(target, timeout=5)
-    assert "TLS-CERT-EXPIRED" in ids(result.findings)
+    expired = next(f for f in result.findings if f.id == "TLS-CERT-EXPIRED")
+    assert expired.instance_key == f"127.0.0.1:{https_port}"  # the port we were sent to, not 443
     assert "TLS-NO-HTTPS-REDIRECT" not in ids(result.findings)
 
 

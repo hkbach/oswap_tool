@@ -227,7 +227,7 @@ Cách đọc: `- [ ] **ID** (Ưu tiên · Tier) Mô tả.` theo sau là `AC:` (a
   AC: target `https://` redirect về `http://` → không đòi HSTS trên response HTTP; `example.com` → `www.example.com` có HSTS ở www nhưng thiếu ở gốc → 1 finding LOW; JSON có `final_url`, `redirect_chain` và `schema_version` mới; SRS sửa FR-HDR-01 và mục 6.2.
   Phụ thuộc: FR-MODEL-01, FR-MODEL-02, D4, D5.
 - [x] **FR-FIX-11** (P1 · all) *(xong ở Sprint 3b: SRS NFR-SEC-03, AT-37)* Bỏ chữ "Passive" khỏi text sản phẩm cho khớp FR-FIX-04: banner CLI (`cli.py`), tiêu đề và footer Web UI (`static/index.html`, footer còn trỏ tới `SRS.md` cũ), tiêu đề/footer báo cáo HTML (`html_report.py`), User-Agent (`http_utils.py`, đồng thời sửa `/1.0` thành phiên bản thật).
-  AC: `grep -i passive owasp_scanner/` chỉ còn trong comment/docstring; test UI và báo cáo HTML được cập nhật; text vẫn là tiếng Anh (NFR-USA-03).
+  AC: `grep -i passive websec_scanner/` chỉ còn trong comment/docstring; test UI và báo cáo HTML được cập nhật; text vẫn là tiếng Anh (NFR-USA-03).
 
 ### E1. Độ chính xác và chiều sâu của các check hiện có
 
@@ -268,7 +268,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
   Là tiền đề cho: FR-CI-02 (baseline), FR-RPT-06 (so sánh), FR-RPT-02 (SARIF).
 - [x] **FR-MODEL-02** (P0 · all) *(xong ở Sprint 3: `schema_version` 1.1, `docs/report.schema.json`, AT-30)* Thêm `schema_version`, `scanner_version`, `scan_id` (UUID), `rules_version` vào JSON; giữ tương thích ngược hoặc nâng version có changelog.
   AC: test schema (jsonschema) cho JSON output; AT-12 vẫn đạt.
-- [x] **FR-MODEL-03** (P1 · Pro) *(xong ở Sprint 10: CVSS v3.1 thật — quyết định chủ sản phẩm ngày 2026-10-01, không phải bảng severity thay thế. `websec_scanner/cvss.py` cài công thức base score chính thức, test đối chiếu ví dụ đã công bố (AT-61). `catalog._CVSS_VECTORS` gán 1 vector/loại cho 44/47 id (3 id trong `NOT_A_WEAKNESS` không có điểm). `schema_version` 1.6, SRS mục 6.1/6.2. Mọi nơi hiển thị ghi "(estimated)")* Điểm số: `cvss_vector`/`cvss_score` ước tính theo loại finding (ghi rõ "estimated") hoặc bảng severity có lý do; báo cáo giải thích cách tính.
+- [x] **FR-MODEL-03** (P1 · Pro) *(xong ở Sprint 10: CVSS v3.1 thật — quyết định chủ sản phẩm ngày 2026-10-01, không phải bảng severity thay thế. `websec_scanner/cvss.py` cài công thức base score chính thức, test đối chiếu ví dụ đã công bố (AT-61). `catalog._CVSS_VECTORS` gán 1 vector/loại cho 34/47 id; 13 id trong `catalog.NO_CVSS` không có điểm (3 id `NOT_A_WEAKNESS` cộng với mọi finding severity INFO theo quyết định C1). `schema_version` 1.6, SRS mục 6.1/6.2. Mọi nơi hiển thị ghi "(estimated)")* Điểm số: `cvss_vector`/`cvss_score` ước tính theo loại finding (ghi rõ "estimated") hoặc bảng severity có lý do; báo cáo giải thích cách tính.
   **Review ngày 2026-10-01 đã thực hiện** trên bảng vector; kết quả áp dụng trong cùng Sprint 10: sửa kịch bản của HSTS/redirect/chứng chỉ/clickjacking/cookie, thêm `catalog.NO_CVSS`, cho check ghi đè vector theo instance, đổi CWE chứng chỉ sang CWE-324. Hai quyết định đã chốt: **C1** không gán CVSS cho finding severity INFO; **C2** giữ CWE-298 cho `TLS-CERT-NOT-YET-VALID`.
   `[CONFIRM]` Còn lại: vector vẫn gán theo *loại* finding (không theo từng target), và vẫn là thang **tách biệt** khỏi `Severity` nội bộ nên hai thang có thể không khớp. Cần **người làm bảo mật** rà lại lần cuối trước khi giao số cho khách hàng trả tiền (review 2026-10-01 do chủ sản phẩm cung cấp, chưa phải security review nội bộ).
 - [ ] **FR-MODEL-04** (P1 · Business) Ánh xạ tuân thủ dạng dữ liệu: OWASP Top 10:2021, OWASP API Top 10 (2023), OWASP ASVS, PCI DSS, ISO 27001 Annex A, SOC 2 (CC), NIST 800-53 (tùy chọn).
@@ -306,13 +306,15 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
   Phụ thuộc: FR-MODEL-01, FR-MODEL-02.
 - [x] **FR-CI-03** (P0 · all) *(xong ở Sprint 5: `examples/ci/`, AT-46; chưa chạy trên CI thật)* Template CI/CD: GitHub Actions, GitLab CI, Azure DevOps, Jenkins (trong `examples/ci/`), kèm hướng dẫn upload SARIF/artefact.
 - [x] **FR-CI-04** (P0 · Pro) *(xong ở Sprint 9: `Dockerfile` 2 giai đoạn, user không phải root, job CI `docker` build+smoke-test; sửa luôn Jenkinsfile dùng source archive thay vì `git+apt-get`. Publish lên `ghcr.io/hkbach/websec-scanner` thêm ở v1.10.0 theo yêu cầu chủ sản phẩm 2026-09-30 (job `docker-publish`, chỉ chạy khi push tag `v*`); SRS AT-59. Còn việc thủ công của admin: đặt visibility package công khai, xem README mục Docker)* Image Docker chính thức chạy được CLI (`docker run ... scan https://...`), user không phải root.
-- [ ] **FR-CI-05** (P1 · Pro) `--targets-file FILE` và nhiều `target` trong một lần chạy, gộp báo cáo; giới hạn tuần tự/song song có kiểm soát.
-- [ ] **FR-CI-06** (P1 · Pro) File cấu hình (`scanner.yaml`): target, exclusion, rate limit, auth profile, ngưỡng fail, đường dẫn báo cáo; tham số CLI ghi đè cấu hình.
+- [x] **FR-CI-05** (P1 · Pro) *(xong ở Sprint 13: nhiều target qua đối số, `--targets-file` hoặc config; mỗi target một bộ file trong `--output-dir` theo `--formats` — quyết định chủ sản phẩm 2026-10-01, giữ nguyên schema JSON để mỗi file dùng thẳng làm baseline —; `--baseline-dir`, `--parallel` 1–64, exit code theo target tệ nhất; từ chối gửi credential tới nhiều host; SRS mục 4.14 FR-MULTI-01…05, AT-73)* `--targets-file FILE` và nhiều `target` trong một lần chạy, gộp báo cáo; giới hạn tuần tự/song song có kiểm soát.
+- [x] **FR-CI-06** (P1 · Pro) *(xong ở Sprint 13: `config.py`, `--config scanner.toml` — TOML như suppression ở Sprint 12, không thêm dependency. Mọi tùy chọn CLI có khoá tương đương, trừ `--yes`/`--show-secrets` cố ý chỉ nhận trên dòng lệnh; `${ENV}` cho credential, cảnh báo khi credential ghi thẳng; SRS FR-CFG-01…03, AT-72. Auth profile thuộc FR-AUTH-01, Sprint 16)* File cấu hình (`scanner.toml`, ban đầu dự kiến `.yaml`): target, exclusion, rate limit, auth profile, ngưỡng fail, đường dẫn báo cáo; tham số CLI ghi đè cấu hình.
 - [x] **FR-CI-10** (P0 · all) *(xong ở Sprint 5: mặc định kho OS cho cả hai đường, `--ca-bundle`; SRS FR-CLI-06, AT-42)* `--ca-bundle PATH` (và biến môi trường `REQUESTS_CA_BUNDLE`/`SSL_CERT_FILE` được tôn trọng) cho **cả** HTTP session và kiểm tra TLS (`ssl.create_default_context(cafile=...)`). Gỡ blocker **B1** `[FACT – quan sát trên máy dev ngày 2026-09-23; đính chính 2026-09-30: thành phần chặn TLS là Avast Web/Mail Shield chạy trên máy, không phải proxy mạng; SRS mục 10]`: `requests` tin kho `certifi`, còn nhóm TLS tin kho chứng chỉ của hệ điều hành. Sau proxy có TLS inspection, `requests` từ chối **mọi** site HTTPS nên baseline thất bại; nhóm TLS vẫn qua vì kho OS tin CA của proxy. Kết quả: 1 lỗi "Could not fetch", 0 finding, exit code `0`.
   AC: mock HTTPS server ký bởi CA tự tạo → không có `--ca-bundle` thì baseline thất bại và có `TLS-CERT-NOT-TRUSTED`; có `--ca-bundle` trỏ tới CA đó thì baseline thành công, các check HTTP chạy đủ, không có `TLS-CERT-NOT-TRUSTED`; Web UI dùng cùng cấu hình (tham số khi khởi động server).
   `[REC]` Phương án thay thế: dùng kho chứng chỉ của OS cho `requests` (thư viện `truststore`). Cần Python ≥ 3.10, xung đột với NFR-PORT-01 (≥ 3.9); cần kiểm tra license.
-- [ ] **FR-CI-07** (P1 · Pro) Tham số vận hành: `--proxy`, `--header K:V` (lặp được), `--cookie`, `--user-agent`, `--version`, `--quiet`/`--verbose`.
+- [x] **FR-CI-07** (P1 · Pro) *(xong ở Sprint 13: `request_options.py`. Credential (header nhạy cảm, cookie, mật khẩu proxy) bị che ở mọi nơi kể cả khi target phản xạ; `--proxy` chỉ `http://`, áp cả cho check TLS qua `CONNECT`; `--user-agent` chỉ ghép trước, giữ NFR-SEC-03 — quyết định chủ sản phẩm 2026-10-01; SRS FR-OPT-01…05, AT-74)* Tham số vận hành: `--proxy`, `--header K:V` (lặp được), `--cookie`, `--user-agent`, `--version`, `--quiet`/`--verbose`.
   AC: header/cookie truyền qua CLI không xuất hiện nguyên văn trong log/evidence (dùng `redact`).
+- [ ] **FR-CI-11** (P2 · Pro) *(mở ở Sprint 13)* Proxy còn thiếu sau FR-CI-07: (1) proxy `https://` — check TLS cần TLS lồng trong TLS (ví dụ `urllib3.util.ssltransport`) và một proxy https giả để test; (2) proxy SOCKS — cần thêm dependency (rà license theo FR-SEC-10); (3) không có `--proxy` thì check TLS vẫn kết nối thẳng dù `HTTPS_PROXY` có trong môi trường — đổi điều này là đổi hành vi mặc định của người đang dùng proxy qua biến môi trường, nên cần quyết định riêng.
+  AC: mỗi phần có test với proxy cục bộ; check TLS không còn kết nối thẳng khi người dùng đã chỉ định proxy dưới bất kỳ hình thức nào.
 - [ ] **FR-CI-08** (P2 · Business) Pre-commit/PR comment bot: đăng tóm tắt lên pull request (GitHub/GitLab).
 
 ### E5. Ủy quyền target và kiểm soát quét an toàn
@@ -413,7 +415,7 @@ Theo D1: Web UI chạy chung tiến trình với scanner. Các mục dưới đ�
 
 - [x] **FR-WEB-01** (P0 · all) *(xong ở Sprint 3: `output.py`, AT-31; `--fail-on` và redact nối vào cùng chỗ ở FR-CI-01, FR-AUTH-02)* **Một nguồn sự thật**: Web UI và CLI cùng gọi `run_scan()` và cùng bộ xử lý đầu ra (redact, sort, `schema_version`, `fingerprint`, `gate_failed` theo `--fail-on`). JSON thêm của Web UI (`gate_failed`, `report_id`, `report_url`) được khai báo trong schema.
   AC: contract test cho `POST /api/scan` và `GET /api/report/<id>.html` (mã lỗi, Content-Type, schema); test so sánh JSON của CLI và Web UI cho cùng mock target.
-- [ ] **FR-WEB-02** (P0 · all) **Giữ an toàn mặc định của server cục bộ**: mặc định bind `127.0.0.1`; bind địa chỉ khác phải qua cờ tường minh kèm cảnh báo và **bắt buộc token truy cập**; giữ kiểm tra Host/Origin/Content-Type/kích thước body và bổ sung test cho từng kiểm tra (chống DNS rebinding, CSRF từ trang khác); header bảo mật cho chính trang UI (CSP, `X-Content-Type-Options`, `frame-ancestors 'none'`).
+- [x] **FR-WEB-02** (P0 · all) *(xong ở Sprint 9: `--allow-remote` bắt buộc khi bind ngoài loopback, token ngẫu nhiên sinh và in một lần, kiểm tra Host/Origin giữ nguyên; SRS AT-56. Ô tick bị bỏ sót tới đợt audit 2026-10-04)* **Giữ an toàn mặc định của server cục bộ**: mặc định bind `127.0.0.1`; bind địa chỉ khác phải qua cờ tường minh kèm cảnh báo và **bắt buộc token truy cập**; giữ kiểm tra Host/Origin/Content-Type/kích thước body và bổ sung test cho từng kiểm tra (chống DNS rebinding, CSRF từ trang khác); header bảo mật cho chính trang UI (CSP, `X-Content-Type-Options`, `frame-ancestors 'none'`).
   AC: request Host/Origin lạ → 403; body quá lớn → 413; thiếu `authorized` → 400; tool tự quét UI của chính nó không ra finding header mức MEDIUM trở lên.
 - [ ] **FR-WEB-03** (P1 · all) **Quét không chặn request**: chạy scan trong worker thread với `scan_id`; `POST /api/scan` trả ngay `202 + scan_id`; `GET /api/scan/<id>` trả trạng thái/giai đoạn/số finding tạm; nút hủy. Vẫn giới hạn một (hoặc N cấu hình) lần quét đồng thời.
   AC: quét target chậm (mock delay) không làm trình duyệt timeout; hủy dừng các request còn lại.
@@ -518,6 +520,8 @@ UI đã có sẵn (Web UI cục bộ, D1) nên không đưa vào backlog. Phần
 - [ ] **FR-QA-03** (P1 · Pro) **Benchmark độ chính xác** trên ứng dụng cố ý dễ tổn thương chạy **local/nội bộ** (ví dụ OWASP Juice Shop, DVWA, crAPI, VAmPI – kiểm tra license và điều khoản từng dự án): đo precision/recall theo từng loại lỗi, lưu kết quả theo phiên bản scanner để phát hiện hồi quy.
 - [ ] **FR-QA-04** (P1 · Pro) **Corpus false positive**: mỗi false positive khách báo → thêm test hồi quy; mục tiêu độ chính xác đặt sau khi có số đo baseline `[CONFIRM]` (không hứa con số khi chưa đo).
 - [x] **FR-QA-05** (P1 · Pro) *(xong ở Sprint 11: đo trên mock server theo thời điểm request đến nơi — tốc độ trung bình và không cửa sổ 1 giây nào vượt mức, cho cả nhóm tuần tự và nhóm chạy 5 luồng; AT-63)* Kiểm thử tải/an toàn: chứng minh scanner tuân thủ giới hạn tốc độ và không gây tải bất thường lên mock server.
+- [ ] **FR-QA-08** (P1 · all) *(mở ở đợt audit 2026-10-04)* Giữ cho "mọi finding id đều được test sinh ra" (FR-QA-01) luôn đúng bằng máy, không bằng phép đo thủ công: thu thập id của mọi `Finding` mà suite tạo ra trong một lần chạy đầy đủ rồi đối chiếu với `catalog.FINDING_CATALOG`. Hiện AT-49 ghi 47/47 theo số đo ngày 2026-09-30 và con số đó sẽ âm thầm sai khi thêm finding mới. Cần chạy có điều kiện (chỉ khi chạy toàn bộ suite) để `pytest <một file>` không fail oan.
+  AC: thêm finding id mới mà không có test sinh ra nó thì CI fail; chạy một file lẻ thì bỏ qua kiểm tra này chứ không fail; AT-49 trỏ tới test mới.
 - [ ] **FR-QA-06** (P1 · Business) Kiểm thử phân quyền/đa tenant tự động (không đọc chéo org, chống IDOR trên chính API của nền tảng).
 - [ ] **FR-QA-07** (P0 · all) *(cấu hình xong ở Sprint 3; workflow `.github/workflows/ci.yml` ở Sprint 6, SRS AT-47. CI xanh trên GitHub ngày 2026-09-30. Chưa tick: còn chờ admin bật branch protection cho `main`, xem README "Branch protection for main")* CI cho repo: `ruff check` + `ruff format --check`, `pytest` (offline), quét phụ thuộc (ví dụ `pip-audit`), quét secret; ma trận Python 3.9 và bản mới nhất; chặn merge khi fail. Type-check (mypy/pyright) và build image thêm sau.
   AC: cấu hình ruff trong `pyproject.toml`; workflow CI chạy được trên nhánh mẫu; README ghi lệnh chạy cục bộ.
@@ -598,7 +602,9 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 9 | Đóng Phase A: Web UI bắt buộc token khi bind ra ngoài, phạm vi & giới hạn trong mọi báo cáo, kiểm kê license, image Docker chính thức, rà lại README | FR-WEB-02, FR-RPT-08, FR-SEC-10, FR-CI-04, FR-DOC-01 | Xong (v1.8.0) trên branch `feat/sprint-9`, chờ review |
 | 10 | Điểm số CVSS v3.1 ước tính theo loại finding; báo cáo HTML đầy đủ (top issues, điểm rủi ro, cách tái hiện); Web UI hiện cùng điểm đó; sửa bảng vector theo review ngày 2026-10-01 và đưa điểm vào SARIF | FR-MODEL-03, FR-RPT-01, FR-RPT-10, FR-DET-17, SRS FR-UI-12 | Xong (v1.13.0) trên branch `feat/sprint-10`, chờ review |
 | 11 | Kiểm soát quét an toàn: giới hạn tốc độ/số request/thời lượng, tự giảm tốc khi target đẩy lùi, phạm vi khai báo nhiều host, loại trừ URL, header scan id | FR-AUTHZ-05, FR-AUTHZ-03, FR-AUTHZ-06, FR-AUTHZ-09, FR-QA-05 | Xong (v1.14.0) trên branch `feat/sprint-11`, chờ review; CI xanh trên GitHub |
-| 12 | CI với nợ cũ: baseline (chỉ fail vì finding mới), so sánh hai lần quét, suppression có hạn, CSV và JUnit; sửa fingerprint không ổn định | FR-CI-02, FR-RPT-06, FR-MODEL-06, FR-RPT-03, FR-MODEL-07 | Xong (v1.15.0) trên branch `feat/sprint-12`, chờ review |
+| 12 | CI với nợ cũ: baseline (chỉ fail vì finding mới), so sánh hai lần quét, suppression có hạn, CSV và JUnit; sửa fingerprint không ổn định | FR-CI-02, FR-RPT-06, FR-MODEL-06, FR-RPT-03, FR-MODEL-07 | Xong (v1.15.0) trên branch `feat/sprint-12`, chờ review; CI xanh trên GitHub |
+| 13 | File cấu hình, nhiều target, tham số vận hành (proxy, header, cookie, User-Agent, quiet/verbose) | FR-CI-06, FR-CI-05, FR-CI-07 (+ mở FR-CI-11) | Xong (v1.16.0) trên branch `feat/sprint-13`, chờ review; CI xanh trên GitHub |
+| 13b | Audit chất lượng toàn hệ thống (không thêm tính năng): 4 lỗi ở v1.17.0; rà độ chặt assertion của AT-02…AT-77 và đối chiếu từng mục `[x]` của backlog ở v1.18.0, kèm mutation test 18/18 bất biến lõi | — | Xong (v1.18.0) trên branch `feat/sprint-13`, chờ review |
 
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
 
@@ -667,11 +673,11 @@ Thứ tự sprint chi tiết của Phase B (Sprint 9 trở đi): `docs/PHASE-B-R
 
 | Epic | P0 xong | P1 xong | P2 xong | Ghi chú |
 |---|---|---|---|---|
-| E0 | ☑ | – | – | FIX-01…11 xong (Sprint 2–3b) |
+| E0 | ☑ | ☑ | – | FIX-01…11 xong (Sprint 2–3b) |
 | E1 | ☐ | ☐ | ☐ | DET-01, 02, 03 (P0) và DET-16 (P1) xong ở Sprint 4; DET-17 (P1) xong ở Sprint 10; còn DET-04 (P0) |
 | E2 | ☑ | ☐ | – | MODEL-01, 02 xong (Sprint 3); MODEL-03 (P1) xong (Sprint 10); MODEL-06 (P1), MODEL-07 (P0) xong (Sprint 12); MODEL-05 một phần |
 | E3 | ☑ | ☐ | ☐ | RPT-02, RPT-09 xong (Sprint 5); RPT-08 xong (Sprint 9); RPT-01, RPT-10 xong (Sprint 10); RPT-03, RPT-06 xong (Sprint 12) |
-| E4 | ☑ | ☐ | – | CI-01, CI-03, CI-10 xong (Sprint 5); CI-04 xong (Sprint 9); CI-02 xong (Sprint 12) |
+| E4 | ☑ | ☑ | ☐ | CI-01, CI-03, CI-10 xong (Sprint 5); CI-04 xong (Sprint 9); CI-02 xong (Sprint 12); CI-05, 06, 07 xong (Sprint 13); còn CI-08, CI-11 (cả hai P2) |
 | E5 | ☐ | ☐ | – | AUTHZ-03 (D4 ở Sprint 3b, phần còn lại ở Sprint 11), AUTHZ-05, AUTHZ-06, AUTHZ-09 xong (Sprint 11); còn AUTHZ-01, 02, 04, 07, 08, 10 |
 | E6 | ☐ | ☐ | ☐ | |
 | E7 | ☐ | ☐ | ☐ | |
@@ -681,7 +687,7 @@ Thứ tự sprint chi tiết của Phase B (Sprint 9 trở đi): `docs/PHASE-B-R
 | E11 | – | ☐ | ☐ | |
 | E12a | ☑ | ☐ | – | Web UI cục bộ; WEB-01 xong (Sprint 3), WEB-02 xong (Sprint 9) |
 | E12–E14, E16–E20 | ☐ | ☐ | ☐ | E15 (UI) đã loại; E12 chỉ khi SaaS |
-| E21–E22 | ☐ | ☐ | – | QA-01, QA-02 xong (Sprint 6); QA-07 chờ branch protection; README tiếng Anh (Sprint 7) |
+| E21–E22 | ☐ | ☐ | – | QA-01, QA-02 xong (Sprint 6); QA-05 xong (Sprint 11); QA-07 chờ branch protection; README tiếng Anh (Sprint 7); DOC-01 xong (Sprint 9) |
 
 *Tài liệu này là backlog định hướng, không phải cam kết với khách hàng. Mọi quyết định về giá, thời gian, SLA, pháp lý và kiến trúc lớn cần con người có thẩm quyền xem xét trước khi thực hiện.*
 

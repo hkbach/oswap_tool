@@ -42,7 +42,8 @@ def test_failing_check_is_recorded_and_scan_continues(http_server, monkeypatch):
 
     monkeypatch.setattr(cli.cors_check, "check_cors", boom)
     result = cli.run_scan(http_server(MockHandler))
-    assert any("cors" in e and "simulated parser bug" in e for e in result.errors)
+    assert any(e.startswith("Check 'cors' failed: ") and "simulated parser bug" in e for e in result.errors)
+    assert "cors" in result.checks_run  # a check that failed still counts as run
     assert "EXPOSURE-ENV" in ids(result.findings)  # later checks still ran
     assert result.finished_at
 
@@ -106,8 +107,11 @@ def test_hardened_cookie_on_redirect_hop_is_not_flagged(http_server):
 # FR-EXP-03: with soft-404, a 200 for security.txt proves nothing either.
 def test_soft_404_does_not_claim_security_txt(http_server):
     class H(QuietHandler):
+        # The page carries a Contact: line, so it matches the security.txt signature:
+        # only soft-404 detection can keep this quiet. With a body that matches no
+        # signature the signature gate alone suppressed it and this proved nothing.
         def do_GET(self):
-            self.send(200, b"catch-all")
+            self.send(200, b"catch-all\nContact: support@example.invalid\n")
 
     found = exposure.check_sensitive_paths(cli.build_session(timeout=2), http_server(H))
     assert found == []
