@@ -18,9 +18,9 @@ import pytest
 import requests
 from conftest import QuietHandler
 from mock_server import Handler as MockHandler
-from websec_scanner.api import inventory
 
 from websec_scanner import cli, output, web
+from websec_scanner.api import inventory
 from websec_scanner.models import ScanResult
 from websec_scanner.redact import redact
 

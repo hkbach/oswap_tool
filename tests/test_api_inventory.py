@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 
 import pytest
+
 from websec_scanner.api import inventory, spec_loader
 from websec_scanner.api.spec_loader import SpecError
 
