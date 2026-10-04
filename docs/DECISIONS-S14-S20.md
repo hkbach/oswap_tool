@@ -16,7 +16,7 @@
 
 | ID | Thứ tự chạy | Câu hỏi | Quyết định đề xuất | Trạng thái |
 |---|---|---|---|---|
-| **D6** | 2 | Benchmark dùng app nào, chạy ở đâu? | Mock server + Juice Shop + VAmPI + badssl.com (tự host); crAPI để sau; DVWA tùy chọn. PR chạy mock; benchmark Docker chạy theo lịch + thủ công trước release. | `[CONFIRM]` |
+| **D6** | 2 | Benchmark dùng app nào, chạy ở đâu? | Mock server + Juice Shop + VAmPI (**badssl.com chuyển sang gói D7**, 2026-10-04); crAPI để sau; DVWA tùy chọn. PR chạy mock; benchmark Docker chạy theo lịch + thủ công trước release. | `[CONFIRM]` |
 | **D7** | 3 | Dò chủ động phiên bản TLS còn "non-intrusive"? | **Có**, nếu chỉ dùng handshake chuẩn, số kết nối có giới hạn, không gửi bản tin dị dạng. Tự viết bộ dò, **không** dùng sslyze (AGPL-3.0). | `[CONFIRM]` |
 | **D8** | 1 | Web UI có nhận credential? | **Không.** Quét có đăng nhập chỉ ở CLI/CI; secret chỉ qua biến môi trường/config. | Đã đồng ý |
 | **D9** | 4 | Parse OpenAPI bằng thư viện hay tự viết? | PyYAML (`safe_load`) + `json` chuẩn + tự xử lý `$ref` nội bộ. Không dùng prance. Chặn `$ref` ra ngoài. | `[CONFIRM]` |
@@ -34,7 +34,7 @@
 | Mock server trong repo | Của mình | Kết quả mong đợi tuyệt đối, nhanh, ổn định | Bắt buộc |
 | OWASP Juice Shop | MIT | Header, cookie, file lộ, SPA crawl | Bắt buộc |
 | VAmPI | MIT | Quét API (có OpenAPI 3 + Postman) – dùng cho gói D9 | Bắt buộc |
-| badssl.com (tự host Docker) | Apache-2.0 | TLS/chứng chỉ: hết hạn, tự ký, cipher yếu | Bắt buộc |
+| badssl.com (tự host) | Apache-2.0 | TLS/chứng chỉ: hết hạn, tự ký, cipher yếu | **Gói D7** (không có image chính thức: phải clone repo, `make serve`, sửa `/etc/hosts`, cài CA của họ; chỉ ghim được theo commit SHA) |
 | OWASP crAPI | Apache-2.0 | OWASP API Top 10 (nhiều container, nặng) | Sau |
 | DVWA | GPL-3.0 | Ứng dụng PHP cổ điển | Tùy chọn |
 
@@ -44,11 +44,11 @@
 
 ### 1.2 Việc cần làm
 
-- [ ] **FR-QA-03a** (P1) `benchmarks/docker-compose.yml` dựng Juice Shop, VAmPI, badssl trên network nội bộ; image ghim theo digest (`image: name@sha256:...`).
+- [ ] **FR-QA-03a** (P1) `benchmarks/docker-compose.yml` dựng Juice Shop, VAmPI (badssl: gói D7) chỉ bind `127.0.0.1`; image ghim theo digest (`image: name@sha256:...`).
   AC: `docker compose up` không publish cổng ra host ngoài `127.0.0.1`; README ghi lệnh chạy.
-- [ ] **FR-QA-03b** (P1) File kết quả đúng (ground truth) cho từng app: `benchmarks/expected/<app>@<digest>.toml` liệt kê finding ID + instance_key mong đợi, và danh sách "không được báo".
+- [ ] **FR-QA-03b** (P1) File kết quả đúng (ground truth) cho từng app: `benchmarks/expected/<app>.toml` (digest ghi bên trong file) liệt kê finding ID + instance_key mong đợi, và danh sách "không được báo".
   AC: đổi digest mà chưa cập nhật expected → job báo lỗi rõ ràng, không im lặng.
-- [ ] **FR-QA-03c** (P1) Script `benchmarks/run.py`: chạy scanner trên từng app, so với expected, tính precision/recall theo nhóm check, xuất `benchmarks/results/<date>.json` + bảng Markdown.
+- [ ] **FR-QA-03c** (P1) Script `benchmarks/run.py`: chạy scanner trên từng app, so với expected, tính precision/recall theo nhóm check, xuất `results.json` + `summary.md` làm artifact CI (không commit); baseline `benchmarks/baseline.json` commit trong repo.
 - [ ] **FR-QA-03d** (P1) CI:
   - Mỗi PR: chỉ test với mock server (đã có).
   - Workflow theo lịch (hằng đêm hoặc hằng tuần) + `workflow_dispatch`: chạy benchmark Docker, lưu kết quả làm artifact, **fail khi precision hoặc recall giảm** so với lần chạy trước (ngưỡng `[CONFIRM]`).

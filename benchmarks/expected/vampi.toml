@@ -1,0 +1,14 @@
+# Ground truth for VAmPI (FR-QA-03b, decision D6). See benchmarks/expected/juice-shop.toml for the
+# format and for what "reviewed" means.
+#
+# STATUS: NOT REVIEWED. reviewed_by is empty, so `python -m benchmarks.run` refuses to score.
+#
+# Scope: the scanner does not scan APIs yet (OpenAPI parsing is decision D9), so today it only runs
+# its passive checks on the root path. VAmPI's own vulnerabilities (injection, broken object-level
+# authorization, ...) are API-level and outside what a non-intrusive scanner claims to find: do not
+# list them as expected. Only issues in the groups the scanner checks belong here.
+app = "vampi"
+image = "erev0s/vampi@sha256:0a5a224b6e14ae7da6a6ea265178ff71286ff903aec74adee98f660bb0e4ca12"
+target = "http://127.0.0.1:5000/"
+reviewed_by = ""
+reviewed_on = ""
