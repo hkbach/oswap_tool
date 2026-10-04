@@ -46,7 +46,7 @@ def test_min_deps_job_pins_the_floors_declared_in_pyproject(workflow):
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     runtime = re.search(r"^dependencies = \[(.*?)^\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
     floors = dict(re.findall(r'"([a-z0-9-]+)>=([\d.]+)"', runtime))
-    assert floors and set(floors) == {"requests", "urllib3", "cryptography"}
+    assert floors and set(floors) == {"requests", "urllib3", "cryptography", "pyyaml"}
     job = workflow[workflow.index("  min-deps:") : workflow.index("  audit:")]
     for name, version in floors.items():
         assert f'"{name}=={version}"' in job, f"min-deps must install {name}=={version}"

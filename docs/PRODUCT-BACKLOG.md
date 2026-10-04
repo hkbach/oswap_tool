@@ -247,7 +247,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
   AC: mock server trả 200 hoặc 302→/login cho mọi path → không có finding lộ file; hành vi FR-EXP-02/03 vẫn đúng.
 - [x] **FR-DET-03** (P0 · Pro) *(xong ở Sprint 4: SRS 6.1, AT-41)* Đánh dấu `confidence` (high/medium/low) cho mỗi finding; finding chỉ dựa trên tín hiệu gián tiếp (robots, banner) mặc định là low/medium.
   AC: trường `confidence` có trong JSON; finding có xác thực nội dung (FR-DET-01) là high.
-- [ ] **FR-DET-04** (P0 · all) *(D7)* TLS: **dò chủ động** các phiên bản (SSLv3, TLS1.0, 1.1, 1.2, 1.3) và nhóm cipher server hỗ trợ, không chỉ giao thức được thương lượng (sửa FR-TLS-04/05). Tự viết bộ dò (`checks/tls_probe.py`); **không** dùng sslyze (AGPL-3.0) hay testssl.sh (GPL-2.0) — chi tiết `docs/DECISIONS-S14-S20.md` mục 2.
+- [ ] **FR-DET-04** (P0 · all) *(D7; code xong ở branch `feat/d7-d9-tls-openapi`, v1.20.0: `checks/tls_probe.py`, `rules/tls_probe.json`, SRS FR-TLS-12…16, AT-82. Chưa tick: còn bước thử trên badssl tự host, xem FR-DET-04a)* TLS: **dò chủ động** các phiên bản (SSLv3, TLS1.0, 1.1, 1.2, 1.3) và nhóm cipher server hỗ trợ, không chỉ giao thức được thương lượng (sửa FR-TLS-04/05). Tự viết bộ dò (`checks/tls_probe.py`); **không** dùng sslyze (AGPL-3.0) hay testssl.sh (GPL-2.0) — chi tiết `docs/DECISIONS-S14-S20.md` mục 2.
   AC: mock TLS server bật TLS1.0/1.1 → finding `TLS-WEAK-PROTOCOL` dù client thương lượng được 1.3. Nếu môi trường Python/OpenSSL không cho phép dò bản cũ, ghi rõ trong `errors` là "không kiểm tra được", không im lặng bỏ qua.
 - [ ] **FR-DET-04a** (P0) *(badssl tự host chuyển từ gói D6 sang D7 ngày 2026-10-04: upstream không có image chính thức; làm bằng cách clone repo ghim theo commit SHA + `make serve` + `/etc/hosts` + `--ca-bundle` với CA của họ)* Module `checks/tls_probe.py`: ClientHello chuẩn cho mỗi phiên bản, đọc phiên bản trong ServerHello/alert, không hoàn tất trao đổi dữ liệu ứng dụng. OpenSSL 3 qua `ssl` không bắt tay được SSLv3/TLS1.0 mặc định → tự dựng ClientHello tối thiểu bằng `socket`+`struct` (ưu tiên), hoặc chứng minh `SECLEVEL=0` hoạt động trên các nền tảng hỗ trợ.
   AC: phát hiện đúng phiên bản bật/tắt trên badssl tự host và mock TLS server; không dò được một phiên bản thì ghi vào `errors`, không im lặng.
@@ -365,12 +365,12 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 
 - [ ] **FR-API-01** (P0 · Pro) Nạp định nghĩa API: OpenAPI 3.x/Swagger 2.0 (file hoặc URL), Postman Collection v2.1, và GraphQL (introspection nếu được phép). **Gói D9 chỉ làm phần OpenAPI 3.0/3.1 + Swagger 2.0 từ file** (FR-API-01a..d, dùng PyYAML + tự resolve `$ref` nội bộ, không prance); nạp từ URL, Postman và GraphQL để sau, có thể tách FR riêng khi tới lượt.
   AC: parse lỗi → thông báo rõ, không crash; danh sách endpoint/method/tham số hiển thị trong báo cáo.
-- [ ] **FR-API-01a** (P0) `api/spec_loader.py`: nhận file `.json`/`.yaml`/`.yml`; YAML dùng `yaml.safe_load` (test: tag `!!python/object` bị từ chối).
-- [ ] **FR-API-01b** (P0) Tự resolve `$ref` **nội bộ** (`#/components/...`) và file tương đối trong cùng thư mục spec. **Cấm:** `$ref` tới URL, đường dẫn tuyệt đối, hoặc `..` thoát khỏi thư mục spec → báo lỗi rõ ràng (chống SSRF và đọc file trái phép).
+- [x] **FR-API-01a** (P0) *(xong ở gói D9, v1.21.0: `api/spec_loader.py`; SRS FR-SPEC-01/02, AT-83)* `api/spec_loader.py`: nhận file `.json`/`.yaml`/`.yml`; YAML dùng `yaml.safe_load` (test: tag `!!python/object` bị từ chối).
+- [x] **FR-API-01b** (P0) *(xong ở gói D9, v1.21.0; SRS FR-SPEC-03, AT-83)* Tự resolve `$ref` **nội bộ** (`#/components/...`) và file tương đối trong cùng thư mục spec. **Cấm:** `$ref` tới URL, đường dẫn tuyệt đối, hoặc `..` thoát khỏi thư mục spec → báo lỗi rõ ràng (chống SSRF và đọc file trái phép).
   AC: test với `$ref` trỏ `http://169.254.169.254/`, `/etc/passwd`, `../../secret.yaml` → đều bị từ chối, không có request mạng.
-- [ ] **FR-API-01c** (P0) Giới hạn an toàn: kích thước file (≤ 5 MB), độ sâu lồng/`$ref` (≤ 32), `$ref` vòng lặp, số endpoint tối đa (cấu hình).
+- [x] **FR-API-01c** (P0) *(xong ở gói D9, v1.21.0; SRS FR-SPEC-02/03/04, AT-83)* Giới hạn an toàn: kích thước file (≤ 5 MB), độ sâu lồng/`$ref` (≤ 32), `$ref` vòng lặp, số endpoint tối đa (cấu hình).
   AC: test YAML "billion laughs"/alias bomb và `$ref` vòng tròn → lỗi có kiểm soát, không treo.
-- [ ] **FR-API-01d** (P0) Hỗ trợ OpenAPI 3.0/3.1 và Swagger 2.0 đủ để liệt kê server, path, method, tham số, security scheme; lỗi spec không crash tool.
+- [x] **FR-API-01d** (P0) *(xong ở gói D9, v1.21.0: `api/inventory.py`, `--api-spec`, `schema_version` 1.9, PyYAML trong `pyproject.toml`/`THIRD_PARTY_LICENSES`/job `min-deps`/pip-audit; SRS FR-SPEC-04/05/06, AT-83. AC "parse được spec của VAmPI" kiểm chứng thủ công ngày 2026-10-04 trên commit upstream `f16052dce83f`: 14 endpoint trên 12 path, khớp với đếm độc lập bằng PyYAML thô; file không được commit vào repo)* Hỗ trợ OpenAPI 3.0/3.1 và Swagger 2.0 đủ để liệt kê server, path, method, tham số, security scheme; lỗi spec không crash tool.
   AC: parse thành công spec của VAmPI (benchmark gói D6). Thêm PyYAML vào `pyproject.toml`, `THIRD_PARTY_LICENSES`, pip-audit. Web UI: nếu cho tải spec lên thì áp cùng giới hạn; không nhận URL spec từ xa ở Web UI.
 - [ ] **FR-API-02** (P0 · Pro) Kiểm tra không xâm lấn trên từng endpoint GET/HEAD/OPTIONS: header bảo mật trên response API, CORS, `Content-Type` sai/thiếu, lộ thông báo lỗi chi tiết, method được quảng bá.
 - [ ] **FR-API-03** (P0 · Pro) **Thiếu xác thực**: gọi endpoint mà spec yêu cầu auth khi không gửi credential; nếu trả 2xx kèm dữ liệu → finding (OWASP API2/API5). Chỉ với method an toàn.
@@ -666,8 +666,8 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 |---|---|---|---|---|
 | 1 | D8 | Web UI không nhận credential (D8): `/api/scan` từ chối mọi trường credential | FR-WEB-07 (+ FR-WEB-08 tùy chọn, chưa làm) | Xong (v1.19.0) trên branch `feat/sprint-16`, chờ review |
 | 2 | D6 | Benchmark độ chính xác (D6): Juice Shop/VAmPI trong Docker (badssl chuyển sang D7), ground truth, precision/recall, CI hằng tuần + khi sửa scanner | FR-QA-03a…d (03e P2, để sau) | Đã code (branch `feat/d6-benchmark`), chờ CI chạy thật và duyệt ground truth |
-| 3 | D7 | Dò chủ động phiên bản TLS và cipher (D7): tự viết, không sslyze/testssl.sh; giới hạn số handshake | FR-DET-04a…e | Chưa làm |
-| 4 | D9 | Parse OpenAPI/Swagger bằng PyYAML + tự resolve `$ref` nội bộ, chặn SSRF/path traversal/bomb (D9) | FR-API-01a…d | Chưa làm |
+| 3 | D7 | Dò chủ động phiên bản TLS và cipher (D7): tự viết, không sslyze/testssl.sh; giới hạn số handshake | FR-DET-04a…e | Đã code (v1.20.0, branch `feat/d7-d9-tls-openapi`); chưa tick FR-DET-04 vì còn bước thử trên badssl tự host |
+| 4 | D9 | Parse OpenAPI/Swagger bằng PyYAML + tự resolve `$ref` nội bộ, chặn SSRF/path traversal/bomb (D9) | FR-API-01a…d | Xong (v1.21.0, branch `feat/d7-d9-tls-openapi`), chờ review; FR-API-01 cha còn mở (URL, Postman, GraphQL) |
 | 5 | D10 | Dữ liệu lỗ hổng NVD/OSV/KEV: attribution, loại nguồn CC-BY-SA, không nhúng API key (D10) | FR-CVE-06…11 | Chưa làm |
 | 6 | D11 | Gói/giá, license key Ed25519 offline, khách thử nghiệm (D11) | FR-BILL-05a…g, FR-DOC-07…09 | Chưa làm |
 

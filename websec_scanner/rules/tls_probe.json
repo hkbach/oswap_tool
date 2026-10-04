@@ -1,0 +1,450 @@
+{
+  "version": "2026.10.04.1",
+  "description": "What the TLS check offers a server, one probe each (FR-DET-04, decision D7): the protocol versions in 'protocols' and the weak cipher groups in 'cipher_groups'. A probe is a standard ClientHello; the scanner reads the server's first reply and closes, so no handshake completes. SSLv2 is not probed: it uses a different hello format and no current server speaks it. Suite codes and names are from the IANA TLS Cipher Suites registry (retrieved 2026-10-04); only RSA, DH, DHE, ECDH and ECDHE key exchanges are listed, because a web server does not use PSK, Kerberos or SRP suites. 'markers' recognise a group in the OpenSSL name of a negotiated suite (ssl.cipher()); the first group that matches wins, so the order is the order of severity. A group without 'suites' is recognised in a negotiated suite but not probed.",
+  "source": {
+    "registry": "IANA TLS Cipher Suites",
+    "url": "https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4",
+    "retrieved": "2026-10-04"
+  },
+  "limits": {
+    "max_connections": 30,
+    "pause_seconds": 0.2,
+    "probe_timeout_seconds": 5
+  },
+  "protocols": [
+    {
+      "name": "SSLv3",
+      "version": "0x0300",
+      "weak": true,
+      "probe_suites": [
+        "0x002F",
+        "0x0035",
+        "0x000A",
+        "0x0005"
+      ]
+    },
+    {
+      "name": "TLSv1",
+      "version": "0x0301",
+      "weak": true,
+      "probe_suites": [
+        "0xC014",
+        "0xC013",
+        "0xC00A",
+        "0xC009",
+        "0x0039",
+        "0x0033",
+        "0x0035",
+        "0x002F",
+        "0x000A",
+        "0x0005"
+      ]
+    },
+    {
+      "name": "TLSv1.1",
+      "version": "0x0302",
+      "weak": true,
+      "probe_suites": [
+        "0xC014",
+        "0xC013",
+        "0xC00A",
+        "0xC009",
+        "0x0039",
+        "0x0033",
+        "0x0035",
+        "0x002F",
+        "0x000A",
+        "0x0005"
+      ]
+    },
+    {
+      "name": "TLSv1.2",
+      "version": "0x0303",
+      "weak": false,
+      "probe_suites": [
+        "0xC030",
+        "0xC02F",
+        "0xC02C",
+        "0xC02B",
+        "0xCCA8",
+        "0xCCA9",
+        "0x009F",
+        "0x009E",
+        "0x009D",
+        "0x009C",
+        "0xC028",
+        "0xC027",
+        "0xC024",
+        "0xC023",
+        "0x003D",
+        "0x003C",
+        "0xC014",
+        "0xC013",
+        "0xC00A",
+        "0xC009",
+        "0x0039",
+        "0x0033",
+        "0x0035",
+        "0x002F",
+        "0x000A",
+        "0x0005"
+      ]
+    },
+    {
+      "name": "TLSv1.3",
+      "version": "0x0304",
+      "weak": false,
+      "probe_suites": [
+        "0x1301",
+        "0x1302",
+        "0x1303"
+      ]
+    }
+  ],
+  "cipher_groups": [
+    {
+      "id": "NULL",
+      "reason": "no-encryption",
+      "title": "NULL (no encryption)",
+      "description": "does not encrypt the traffic at all",
+      "markers": [
+        "NULL"
+      ],
+      "suites": [
+        {
+          "code": "0x0001",
+          "name": "TLS_RSA_WITH_NULL_MD5"
+        },
+        {
+          "code": "0x0002",
+          "name": "TLS_RSA_WITH_NULL_SHA"
+        },
+        {
+          "code": "0x003B",
+          "name": "TLS_RSA_WITH_NULL_SHA256"
+        },
+        {
+          "code": "0xC001",
+          "name": "TLS_ECDH_ECDSA_WITH_NULL_SHA"
+        },
+        {
+          "code": "0xC006",
+          "name": "TLS_ECDHE_ECDSA_WITH_NULL_SHA"
+        },
+        {
+          "code": "0xC00B",
+          "name": "TLS_ECDH_RSA_WITH_NULL_SHA"
+        },
+        {
+          "code": "0xC010",
+          "name": "TLS_ECDHE_RSA_WITH_NULL_SHA"
+        },
+        {
+          "code": "0xC015",
+          "name": "TLS_ECDH_anon_WITH_NULL_SHA"
+        }
+      ]
+    },
+    {
+      "id": "EXPORT",
+      "reason": "no-encryption",
+      "title": "export-grade",
+      "description": "is export grade, so its key is 40-56 bits by design",
+      "markers": [
+        "EXP-",
+        "EXP1024",
+        "EXPORT"
+      ],
+      "suites": [
+        {
+          "code": "0x0003",
+          "name": "TLS_RSA_EXPORT_WITH_RC4_40_MD5"
+        },
+        {
+          "code": "0x0006",
+          "name": "TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5"
+        },
+        {
+          "code": "0x0008",
+          "name": "TLS_RSA_EXPORT_WITH_DES40_CBC_SHA"
+        },
+        {
+          "code": "0x000B",
+          "name": "TLS_DH_DSS_EXPORT_WITH_DES40_CBC_SHA"
+        },
+        {
+          "code": "0x000E",
+          "name": "TLS_DH_RSA_EXPORT_WITH_DES40_CBC_SHA"
+        },
+        {
+          "code": "0x0011",
+          "name": "TLS_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA"
+        },
+        {
+          "code": "0x0014",
+          "name": "TLS_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA"
+        },
+        {
+          "code": "0x0017",
+          "name": "TLS_DH_anon_EXPORT_WITH_RC4_40_MD5"
+        },
+        {
+          "code": "0x0019",
+          "name": "TLS_DH_anon_EXPORT_WITH_DES40_CBC_SHA"
+        }
+      ]
+    },
+    {
+      "id": "ANON",
+      "reason": "unauthenticated",
+      "title": "anonymous (unauthenticated)",
+      "description": "authenticates neither side, so an on-path attacker can take over the session",
+      "markers": [
+        "ADH-",
+        "AECDH-"
+      ],
+      "suites": [
+        {
+          "code": "0x0018",
+          "name": "TLS_DH_anon_WITH_RC4_128_MD5"
+        },
+        {
+          "code": "0x001A",
+          "name": "TLS_DH_anon_WITH_DES_CBC_SHA"
+        },
+        {
+          "code": "0x001B",
+          "name": "TLS_DH_anon_WITH_3DES_EDE_CBC_SHA"
+        },
+        {
+          "code": "0x0034",
+          "name": "TLS_DH_anon_WITH_AES_128_CBC_SHA"
+        },
+        {
+          "code": "0x003A",
+          "name": "TLS_DH_anon_WITH_AES_256_CBC_SHA"
+        },
+        {
+          "code": "0x0046",
+          "name": "TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA"
+        },
+        {
+          "code": "0x006C",
+          "name": "TLS_DH_anon_WITH_AES_128_CBC_SHA256"
+        },
+        {
+          "code": "0x006D",
+          "name": "TLS_DH_anon_WITH_AES_256_CBC_SHA256"
+        },
+        {
+          "code": "0x0089",
+          "name": "TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA"
+        },
+        {
+          "code": "0x009B",
+          "name": "TLS_DH_anon_WITH_SEED_CBC_SHA"
+        },
+        {
+          "code": "0x00A6",
+          "name": "TLS_DH_anon_WITH_AES_128_GCM_SHA256"
+        },
+        {
+          "code": "0x00A7",
+          "name": "TLS_DH_anon_WITH_AES_256_GCM_SHA384"
+        },
+        {
+          "code": "0x00BF",
+          "name": "TLS_DH_anon_WITH_CAMELLIA_128_CBC_SHA256"
+        },
+        {
+          "code": "0x00C5",
+          "name": "TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA256"
+        },
+        {
+          "code": "0xC016",
+          "name": "TLS_ECDH_anon_WITH_RC4_128_SHA"
+        },
+        {
+          "code": "0xC017",
+          "name": "TLS_ECDH_anon_WITH_3DES_EDE_CBC_SHA"
+        },
+        {
+          "code": "0xC018",
+          "name": "TLS_ECDH_anon_WITH_AES_128_CBC_SHA"
+        },
+        {
+          "code": "0xC019",
+          "name": "TLS_ECDH_anon_WITH_AES_256_CBC_SHA"
+        },
+        {
+          "code": "0xC046",
+          "name": "TLS_DH_anon_WITH_ARIA_128_CBC_SHA256"
+        },
+        {
+          "code": "0xC047",
+          "name": "TLS_DH_anon_WITH_ARIA_256_CBC_SHA384"
+        },
+        {
+          "code": "0xC05A",
+          "name": "TLS_DH_anon_WITH_ARIA_128_GCM_SHA256"
+        },
+        {
+          "code": "0xC05B",
+          "name": "TLS_DH_anon_WITH_ARIA_256_GCM_SHA384"
+        },
+        {
+          "code": "0xC084",
+          "name": "TLS_DH_anon_WITH_CAMELLIA_128_GCM_SHA256"
+        },
+        {
+          "code": "0xC085",
+          "name": "TLS_DH_anon_WITH_CAMELLIA_256_GCM_SHA384"
+        }
+      ]
+    },
+    {
+      "id": "RC4",
+      "reason": "broken",
+      "title": "RC4",
+      "description": "uses RC4, a stream cipher with practical plaintext-recovery attacks (RFC 7465)",
+      "markers": [
+        "RC4"
+      ],
+      "suites": [
+        {
+          "code": "0x0004",
+          "name": "TLS_RSA_WITH_RC4_128_MD5"
+        },
+        {
+          "code": "0x0005",
+          "name": "TLS_RSA_WITH_RC4_128_SHA"
+        },
+        {
+          "code": "0xC002",
+          "name": "TLS_ECDH_ECDSA_WITH_RC4_128_SHA"
+        },
+        {
+          "code": "0xC007",
+          "name": "TLS_ECDHE_ECDSA_WITH_RC4_128_SHA"
+        },
+        {
+          "code": "0xC00C",
+          "name": "TLS_ECDH_RSA_WITH_RC4_128_SHA"
+        },
+        {
+          "code": "0xC011",
+          "name": "TLS_ECDHE_RSA_WITH_RC4_128_SHA"
+        }
+      ]
+    },
+    {
+      "id": "RC2",
+      "reason": "broken",
+      "title": "RC2",
+      "description": "uses RC2, a 64-bit block cipher no longer considered safe",
+      "markers": [
+        "RC2"
+      ],
+      "suites": []
+    },
+    {
+      "id": "3DES",
+      "reason": "broken",
+      "title": "3DES",
+      "description": "uses 3DES, a 64-bit block cipher open to birthday attacks (SWEET32)",
+      "markers": [
+        "DES-CBC3",
+        "3DES"
+      ],
+      "suites": [
+        {
+          "code": "0x000A",
+          "name": "TLS_RSA_WITH_3DES_EDE_CBC_SHA"
+        },
+        {
+          "code": "0x000D",
+          "name": "TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA"
+        },
+        {
+          "code": "0x0010",
+          "name": "TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA"
+        },
+        {
+          "code": "0x0013",
+          "name": "TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA"
+        },
+        {
+          "code": "0x0016",
+          "name": "TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA"
+        },
+        {
+          "code": "0xC003",
+          "name": "TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA"
+        },
+        {
+          "code": "0xC008",
+          "name": "TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA"
+        },
+        {
+          "code": "0xC00D",
+          "name": "TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA"
+        },
+        {
+          "code": "0xC012",
+          "name": "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA"
+        }
+      ]
+    },
+    {
+      "id": "DES",
+      "reason": "broken",
+      "title": "single DES",
+      "description": "uses single DES, whose 56-bit key can be brute-forced",
+      "markers": [
+        "DES"
+      ],
+      "suites": [
+        {
+          "code": "0x0009",
+          "name": "TLS_RSA_WITH_DES_CBC_SHA"
+        },
+        {
+          "code": "0x000C",
+          "name": "TLS_DH_DSS_WITH_DES_CBC_SHA"
+        },
+        {
+          "code": "0x000F",
+          "name": "TLS_DH_RSA_WITH_DES_CBC_SHA"
+        },
+        {
+          "code": "0x0012",
+          "name": "TLS_DHE_DSS_WITH_DES_CBC_SHA"
+        },
+        {
+          "code": "0x0015",
+          "name": "TLS_DHE_RSA_WITH_DES_CBC_SHA"
+        }
+      ]
+    },
+    {
+      "id": "IDEA",
+      "reason": "broken",
+      "title": "IDEA",
+      "description": "uses IDEA, a 64-bit block cipher dropped from TLS 1.2 onwards",
+      "markers": [
+        "IDEA"
+      ],
+      "suites": []
+    },
+    {
+      "id": "MD5",
+      "reason": "broken",
+      "title": "MD5",
+      "description": "authenticates records with MD5, which is no longer collision resistant",
+      "markers": [
+        "MD5"
+      ],
+      "suites": []
+    }
+  ]
+}

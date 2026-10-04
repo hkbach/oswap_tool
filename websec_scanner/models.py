@@ -5,14 +5,18 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from . import __version__
+
+if TYPE_CHECKING:
+    from .api.inventory import ApiInventory
 
 # Version of the JSON report layout (docs/report.schema.json). Bump on any change to the
 # report shape: minor for added fields, major for removed/renamed fields or changed meaning.
 # History: "1.0" = unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0;
 # 1.2 adds final_url and redirect_chain; 1.3 adds gate.
-SCHEMA_VERSION = "1.8"
+SCHEMA_VERSION = "1.9"
 
 
 class Severity(str, Enum):
@@ -105,6 +109,8 @@ class ScanResult:
     baseline_fetched: bool = False
     # What limits this scan ran under and whether one stopped it (FR-AUTHZ-05, limits.ScanLimiter.snapshot).
     limits: dict = field(default_factory=lambda: _no_limits())
+    # The API inventory read from --api-spec (FR-SPEC-01); build_report() turns it into the report's "api".
+    api: ApiInventory | None = None
 
     def add(self, finding: Finding) -> None:
         self.findings.append(finding)

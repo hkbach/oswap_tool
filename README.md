@@ -53,14 +53,21 @@ job that scans your own staging environment.
 The tool is not fully passive. For an `https://` target, one scan sends about
 **29 GET requests** (the home page, sensitive paths and directories, two
 random "soft-404" probes, `robots.txt`, `sitemap.xml`, one request with a test
-`Origin` header) and **2 TLS handshakes**. It sends no exploit payloads and
+`Origin` header) and **up to 13 TLS connections**. It sends no exploit payloads and
 changes no data on the target. Details are in SRS section 1.2.
+
+Eleven of those TLS connections are **probes** (FR-DET-04): each is one standard TLS
+hello that offers a single protocol version, or a single group of weak cipher suites, to
+learn whether the server accepts it. A probe reads the server's first reply and closes;
+no handshake is completed and no data is sent. Because they ask for old protocol
+versions on purpose, **an IDS or WAF may log them**. `--no-tls-probe` turns them off and
+leaves the two connections that read and verify the certificate.
 
 | Check | What it looks at | OWASP mapping |
 |---|---|---|
 | Security headers | HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, information-leaking headers (Server, X-Powered-By, ...) | A05:2021, A03:2021 |
 | Cookies | Missing Secure / HttpOnly / SameSite attributes | A05:2021 |
-| TLS/SSL | Weak negotiated protocol (below TLS 1.2), weak cipher, expired / expiring / not yet valid / untrusted certificate | A02:2021 |
+| TLS/SSL | Weak protocol versions the server accepts (SSLv3, TLS 1.0, TLS 1.1) and weak cipher suites it accepts (no encryption, export grade, anonymous, RC4, 3DES, single DES), found by probing; expired / expiring / not yet valid / untrusted certificate | A02:2021 |
 | HTTP to HTTPS | Whether plain HTTP is redirected to HTTPS | A02:2021 |
 | CORS | `Access-Control-Allow-Origin` wildcard or reflected origin, with or without credentials | A05:2021 |
 | Exposed files | `.git/`, `.env`, backups, `id_rsa`, `docker-compose.yml`, `phpinfo.php`, ... reported only when the content matches the file type | A01:2021 |
@@ -105,7 +112,7 @@ so a clean report of a partial scan is not mistaken for a full one.
 |---|---|---|
 | `headers` | Security headers | HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, headers that disclose server software |
 | `cookies` | Cookies | Secure, HttpOnly and SameSite attributes |
-| `tls` | TLS/SSL | Negotiated protocol and cipher, certificate validity period and trust (2 TLS handshakes) |
+| `tls` | TLS/SSL | Protocol versions and weak cipher suites the server accepts (standard handshakes, never completed), negotiated protocol and cipher, certificate validity period and trust (up to 13 TLS connections) |
 | `https-redirect` | HTTP to HTTPS redirect | Whether plain HTTP is redirected to HTTPS |
 | `cors` | CORS | `Access-Control-Allow-Origin` for a test Origin, with and without credentials |
 | `exposed-files` | Exposed files | `.git`, `.env`, backups, keys, ... reported only when the content matches |
@@ -124,10 +131,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.19.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.21.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.19.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.21.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -209,6 +216,8 @@ Every option below can also be set in a [config file](#config-file), except
 | `--checks GROUPS` | Comma-separated test targets to run, for example `headers,tls` (default: all). See [Test targets](#test-targets-check-groups) |
 | `--list-checks` | Print the test targets and exit (no target, no prompt) |
 | `--ca-bundle PATH` | PEM file of CA certificates to trust instead of the OS store, for the HTTP requests and the TLS check |
+| `--no-tls-probe` | Skip the TLS probes: about 11 extra standard handshakes that ask which protocol versions and weak cipher suites the server accepts (config key `tls_probe = false`) |
+| `--api-spec FILE` | Show an API inventory read from an OpenAPI 3.0/3.1 or Swagger 2.0 file (`.json`, `.yaml`, `.yml`, up to 5 MB). The file is only read: nothing it names is requested (config key `api_spec`) |
 | `--timeout SECONDS` | Per-request timeout (default `10`) |
 | `--workers N` | Concurrent requests for the path checks (default `5`) |
 | `--rate-limit N` | At most N requests per second, overall and per host (default: no limit) |
@@ -265,6 +274,42 @@ off redaction for every CI run.
 operating system's certificate store. `--ca-bundle`, or the environment
 variables `REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE`, replace it for both.
 
+### API inventory
+
+`--api-spec FILE` reads an OpenAPI 3.0/3.1 or Swagger 2.0 description of an API and lists what it
+declares: the servers, the endpoints (method, path, parameters, which security schemes apply) and
+the security schemes. The list is printed after the findings and is in the JSON report as `api`
+(`null` when the option is not used).
+
+```bash
+python -m websec_scanner https://api.example.com --api-spec openapi.yaml --json report.json
+```
+
+What it does **not** do: it sends no request to any endpoint or server the spec names, it
+does not test the API (that is not in this release), and it takes only names and structure from
+the file, never an example, a default or a description, which is where a spec keeps sample
+secrets. A server URL that carries credentials is masked like any other secret.
+
+A spec is a file somebody else wrote, so it is read defensively. It is refused, before the scan
+sends anything, with exit code `2` and a message that names the file, when it:
+
+- is not `.json`, `.yaml` or `.yml`, is larger than 5 MB, is nested more than 64 levels, or
+  repeats a key (parsers disagree about which one wins);
+- uses YAML aliases to expand to more than 500,000 values (a few hundred bytes can stand for
+  billions: the "billion laughs" file), or a YAML tag that can run code such as
+  `!!python/object`;
+- has a `$ref` that leaves the file's own directory or the machine: a URL (including
+  `http://169.254.169.254/`), an absolute or UNC path, a drive letter, a backslash, a
+  percent-escape, `..` out of the directory, a symlink out of it, a cycle, a chain deeper than 32,
+  more than 10,000 references or more than 20 included files. Only `#/pointers` and relative
+  paths to `.json`/`.yaml`/`.yml` files next to the spec are followed;
+- describes more than 2,000 endpoints or 100 parameters on one operation (an error, never a
+  silent cut).
+
+The console shows the first 100 endpoints; the JSON report has all of them. The local web UI does
+not accept a spec: a browser request carries at most 4,096 bytes, and `api_spec` is refused like
+any other field the page does not send.
+
 ### Exit codes
 
 | Code | Meaning |
@@ -306,7 +351,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.19.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.21.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -449,6 +494,7 @@ them:
 | `--workers N` | Concurrent requests for the path checks (default `5`) |
 | `--fail-on LEVEL` | Threshold behind the page's gate status, same meaning as the CLI's (default `high`) |
 | `--ca-bundle PATH` | PEM file of CA certificates to trust instead of the OS store |
+| `--no-tls-probe` | Skip the TLS probes for every scan this server runs |
 | `--rate-limit N` | At most N requests per second per scan (default: no limit) |
 | `--max-requests N` / `--max-duration SECONDS` | Stop a scan after this many requests / seconds |
 
@@ -516,7 +562,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-81 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-83 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -668,17 +714,20 @@ websec_scanner/
   http_utils.py     # shared HTTP session: timeout, User-Agent, redirect scope, trust store
   soft404.py        # soft-404 detection by response fingerprint
   rule_loader.py    # loads and validates rules/*.json
-  rules/            # sensitive paths and content signatures, known TLS interceptors
+  rules/            # sensitive paths and content signatures, known TLS interceptors, TLS probes
+  api/              # --api-spec: a safe OpenAPI/Swagger loader and the inventory built from it
   web.py            # local web UI server (python -m websec_scanner.web)
   static/           # index.html, app.js, app.css of the web UI
   checks/
     headers.py         # security headers
     cookies.py         # cookie attributes
     tls_check.py       # TLS and certificate
+    tls_probe.py       # which protocol versions and weak ciphers a server accepts
     cors_check.py      # CORS misconfiguration
     exposure.py        # exposed files, directory listing, robots.txt, sitemap.xml
     redirect_check.py  # HTTP to HTTPS redirect
 examples/ci/        # CI templates for GitHub Actions, GitLab CI, Azure Pipelines, Jenkins
+benchmarks/         # accuracy benchmark against Juice Shop and VAmPI (runs in CI, see its README)
 tests/              # offline test suite, mock servers, golden files
 docs/               # SRS, backlog, JSON Schema of the report
 Dockerfile          # official CLI image, non-root, not published to a registry yet
@@ -687,6 +736,44 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog
+
+- **v1.21.0** (API inventory). `--api-spec FILE` lists the servers, endpoints and security schemes
+  of an OpenAPI 3.0/3.1 or Swagger 2.0 file. What changes for you:
+  - **New option and a new JSON field.** The report gains `api` (an object, or `null` without
+    `--api-spec`) and `schema_version` becomes `1.9`. Nothing was removed or renamed, so a
+    consumer that ignores unknown fields is unaffected; one that validates against the schema
+    needs the new `docs/report.schema.json`.
+  - **New runtime dependency: PyYAML** (MIT), used only through its safe loader. Install it
+    with the package (`pip install .` pulls it in); the Docker image already has it.
+  - **The spec is read, never scanned.** No request goes to any endpoint or server it names,
+    and checking the API itself is not part of this release. See "API inventory" above for
+    what a spec may not do.
+  - The local web UI does not accept a spec (a browser request is limited to 4,096 bytes).
+
+- **v1.20.0** (TLS probing). The TLS check now asks which protocol versions and weak
+  cipher suites a server accepts, instead of only reporting the one it negotiated. What
+  changes for you:
+  - **A server that offers TLS 1.2 and also TLS 1.0 is now reported.** Before, only a
+    server that *negotiated* a weak protocol was. `TLS-WEAK-PROTOCOL` (HIGH) now appears
+    once per enabled weak version (SSLv3, TLS 1.0, TLS 1.1), and `TLS-WEAK-CIPHER` (HIGH)
+    once per enabled weak cipher group (no encryption, export grade, anonymous, RC4,
+    3DES, single DES). **A pipeline gated on the default `--fail-on high` can start
+    failing for a target that used to pass.** That is the point of the change.
+  - **The `instance_key`, and so the fingerprint, of those two findings changes once**:
+    from `host:port` to `host:port:<protocol or group>` (for example
+    `example.com:443:TLSv1`). A baseline written before v1.20.0 shows them as new; write a
+    new one with `--json`. The point is that a baseline can now tell "3DES fixed, RC4
+    remains" apart. `schema_version` is unchanged.
+  - **Up to 11 more TLS connections per scan** (13 in total with the two certificate
+    connections, at most 30 by rule), 0.2 s apart. They go through `--proxy`, count against
+    `--rate-limit` and `--max-requests`, and are announced in the consent banner. Turn them
+    off with `--no-tls-probe`, `tls_probe = false` in a config file, or the web UI's own
+    `--no-tls-probe`.
+  - **A probe that cannot run is reported, not skipped**: a line in `errors` says what could
+    not be tested and why (unreachable, no reply, not TLS, budget reached).
+  - Not probed: SSLv2 (a different hello format that no current server speaks). A server
+    that rejects every cipher suite a probe offers is read as not accepting the version, so
+    an absent finding is not proof that a version is off.
 
 - **v1.19.0** (web UI). The local web UI no longer accepts credentials in any form.
   What changes for you:

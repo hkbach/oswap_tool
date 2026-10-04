@@ -216,6 +216,7 @@ def test_at12_json_report(http_server, tmp_path):
         "disclaimer",  # FR-RPT-08
         "limits",  # FR-AUTHZ-05
         "baseline",  # FR-CI-02
+        "api",  # FR-SPEC-05
     }  # fmt: skip
     assert set(data["summary"]) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
     assert set(data["findings"][0]) == {

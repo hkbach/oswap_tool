@@ -24,10 +24,11 @@
     "summary",
     "findings",
     "errors",
-    "baseline"
+    "baseline",
+    "api"
   ],
   "properties": {
-    "schema_version": { "const": "1.8" },
+    "schema_version": { "const": "1.9" },
     "scanner_version": { "type": "string", "minLength": 1 },
     "rules_version": { "type": "string", "minLength": 1 },
     "scan_id": {
@@ -93,6 +94,10 @@
       "items": { "enum": ["headers", "cookies", "tls", "https-redirect", "cors", "exposed-files", "directory-listing", "robots-sitemap"] }
     },
     "limits": { "$ref": "#/$defs/limits" },
+    "api": {
+      "description": "API inventory read from the --api-spec file (FR-SPEC-05); null without one",
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/api" }]
+    },
     "baseline": {
       "description": "Comparison with the previous scan given by --baseline (FR-CI-02, FR-RPT-06); null without one",
       "oneOf": [
@@ -191,6 +196,51 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
     },
     "count": { "type": "integer", "minimum": 0 },
+    "api": {
+      "description": "Names and structure only, never an example, default or description from the spec",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "format", "version", "title", "servers", "security_schemes", "endpoint_count", "endpoints"],
+      "properties": {
+        "source": { "description": "The file name, never a local path", "type": "string" },
+        "format": { "enum": ["openapi", "swagger"] },
+        "version": { "type": "string" },
+        "title": { "type": "string" },
+        "servers": { "type": "array", "items": { "type": "string" } },
+        "security_schemes": { "type": "array", "items": { "$ref": "#/$defs/api_security_scheme" } },
+        "endpoint_count": { "type": "integer", "minimum": 0 },
+        "endpoints": { "type": "array", "items": { "$ref": "#/$defs/api_endpoint" } }
+      }
+    },
+    "api_security_scheme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "detail"],
+      "properties": { "name": { "type": "string" }, "type": { "type": "string" }, "detail": { "type": "string" } }
+    },
+    "api_endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path", "operation_id", "parameters", "security", "deprecated"],
+      "properties": {
+        "method": { "type": "string", "pattern": "^[A-Z]+$" },
+        "path": { "type": "string" },
+        "operation_id": { "type": ["string", "null"] },
+        "parameters": { "type": "array", "items": { "$ref": "#/$defs/api_parameter" } },
+        "security": { "description": "Names of the security schemes that apply, after the global default", "type": "array", "items": { "type": "string" } },
+        "deprecated": { "type": "boolean" }
+      }
+    },
+    "api_parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "in", "required"],
+      "properties": {
+        "name": { "type": "string" },
+        "in": { "enum": ["query", "header", "path", "cookie", "formData", "body"] },
+        "required": { "type": "boolean" }
+      }
+    },
     "limits": {
       "description": "Traffic limits this scan ran under (FR-AUTHZ-05); nulls mean the limit was not set",
       "type": "object",

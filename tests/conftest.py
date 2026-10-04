@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime
 import ipaddress
 import ssl
+import sys
 import threading
 import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -44,6 +45,15 @@ class QuietHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
 
+class _QuietServer(ThreadingHTTPServer):
+    """A test server that does not print a traceback when a client hangs up mid-handshake."""
+
+    def handle_error(self, request, client_address):
+        if issubclass(sys.exc_info()[0] or Exception, OSError):  # includes ssl.SSLError, ConnectionError
+            return
+        super().handle_error(request, client_address)
+
+
 def _start(server):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -56,7 +66,7 @@ def http_server():
     servers = []
 
     def factory(handler_cls):
-        server = _start(ThreadingHTTPServer(("127.0.0.1", 0), handler_cls))
+        server = _start(_QuietServer(("127.0.0.1", 0), handler_cls))
         servers.append(server)
         return f"http://127.0.0.1:{server.server_address[1]}/"
 
@@ -147,7 +157,7 @@ def https_server(tmp_path):
         ctx.load_cert_chain(certfile=str(certfile), keyfile=str(keyfile))
         if only_version is not None:
             _only_legacy_version(ctx, only_version)
-        server = ThreadingHTTPServer(("127.0.0.1", 0), handler_cls)
+        server = _QuietServer(("127.0.0.1", 0), handler_cls)
         server.socket = ctx.wrap_socket(server.socket, server_side=True)
         _start(server)
         servers.append(server)
@@ -190,3 +200,36 @@ def closed_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+@pytest.fixture
+def fake_tls():
+    """Factory: fake_tls(Policy(...)) -> a started FakeTlsServer (tests/tls_fake_server.py).
+
+    Speaks TLS only as far as a ServerHello or an alert, so it can stand in for SSLv3, RC4 or
+    EXPORT servers that no OpenSSL on a developer machine can reproduce.
+    """
+    from tls_fake_server import FakeTlsServer
+
+    servers = []
+
+    def factory(policy=None):
+        server = FakeTlsServer(policy).__enter__()
+        servers.append(server)
+        return server
+
+    yield factory
+    for server in servers:
+        server.close()
+
+
+@pytest.fixture(autouse=True)
+def _no_pause_between_tls_probes(monkeypatch):
+    """The probes wait a fraction of a second between connections (rules/tls_probe.json).
+
+    Real waiting would add seconds to every test that scans an HTTPS server; the tests of the
+    pause itself pass their own ``sleep`` and are unaffected.
+    """
+    from websec_scanner.checks import tls_probe
+
+    monkeypatch.setattr(tls_probe, "_sleep", lambda seconds: None)

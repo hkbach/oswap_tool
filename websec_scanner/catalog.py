@@ -282,7 +282,9 @@ CHECK_GROUPS: tuple[CheckGroup, ...] = (
     CheckGroup(
         "tls",
         "TLS/SSL",
-        "Negotiated protocol and cipher, certificate validity period and trust (2 TLS handshakes).",
+        "Protocol versions and weak cipher suites the server accepts (standard handshakes, never "
+        "completed), negotiated protocol and cipher, certificate validity period and trust "
+        "(up to 13 TLS connections).",
         ("tls",),
     ),
     CheckGroup(

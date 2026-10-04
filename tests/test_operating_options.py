@@ -184,7 +184,9 @@ def test_both_tls_handshakes_are_tunnelled_not_just_one(https_server):
     url, port = https_server(QuietHandler)
     proxy, proxy_url = start_proxy()
     try:
-        tls_check.check_tls("127.0.0.1", port, timeout=5, proxy=proxy_url)
+        # probe=False: this is about the two certificate connections. The eleven probes are counted in
+        # tests/test_tls_probe_check.py::test_every_probe_goes_through_the_proxy.
+        tls_check.check_tls("127.0.0.1", port, timeout=5, proxy=proxy_url, probe=False)
     finally:
         proxy.shutdown()
     assert [t for m, t in ProxyHandler.seen if m == "CONNECT"] == [f"127.0.0.1:{port}"] * 2

@@ -68,7 +68,8 @@ def test_score_separates_no_encryption_from_merely_broken(cipher_name, expected_
 @pytest.mark.parametrize(
     "cipher_name, reason_text",
     [
-        ("DES-CBC-SHA", "56-bit key or a 64-bit block"),
+        ("DES-CBC-SHA", "56-bit key can be brute-forced"),  # single DES
+        ("DES-CBC3-SHA", "SWEET32"),  # 3DES: a 64-bit block, a different weakness
         ("EXP-RC4-MD5", "export grade"),
         ("ADH-AES256-SHA", "authenticates neither side"),
         ("NULL-SHA", "does not encrypt"),
