@@ -57,6 +57,7 @@ CONFIG_KEYS: dict[str, str] = {
     "exclude": "exclude",
     "exclude_hosts": "exclude_host",
     "default_excludes": "no_default_excludes",
+    "tls_probe": "no_tls_probe",
     "scan_id_header": "scan_id_header",
     "ca_bundle": "ca_bundle",
     "proxy": "proxy",
@@ -82,7 +83,7 @@ _STR = {"targets_file", "fail_on", "ca_bundle", "proxy", "user_agent", "baseline
         "suppressions", "output_dir", "json", "sarif", "html", "csv", "junit"}  # fmt: skip
 _INT = {"timeout", "workers", "parallel", "max_requests"}
 _NUMBER = {"rate_limit", "max_duration"}
-_BOOL = {"default_excludes", "scan_id_header", "color", "quiet", "verbose"}
+_BOOL = {"default_excludes", "tls_probe", "scan_id_header", "color", "quiet", "verbose"}
 _LIST = {"targets", "checks", "scope_hosts", "exclude", "exclude_hosts", "formats"}
 _TABLE = {"headers", "cookies"}
 _PATHS = {"targets_file", "ca_bundle", "baseline", "baseline_dir", "suppressions", "output_dir",

@@ -15,6 +15,9 @@ chain is untrusted or expired, this module opens the connection twice:
    to detect trust-chain/hostname problems (self-signed, wrong CA,
    hostname mismatch) without duplicating an expiry finding.
 
+A third group of connections, the probes of ``tls_probe`` (FR-DET-04), asks which protocol
+versions and weak cipher groups the server accepts beyond the one that step 1 negotiated.
+
 Maps to OWASP Top 10 A02:2021 (Cryptographic Failures) and ASVS V9
 (Communications).
 """
@@ -30,76 +33,157 @@ from urllib.parse import urlsplit
 
 from cryptography import x509
 
+from .. import rule_loader
 from ..catalog import CVSS_TLS_CIPHER_BROKEN_BUT_ENCRYPTING
 from ..http_utils import USER_AGENT, url_host
 from ..models import Finding, Severity
 from ..request_options import proxy_credentials
-from ..rule_loader import is_interceptor_issuer
+from ..rule_loader import CipherGroup, TlsProbeRules, is_interceptor_issuer
+from . import tls_probe
 
 _WEAK_PROTOCOLS = {"SSLv2", "SSLv3", "TLSv1", "TLSv1.1"}
 _CERT_EXPIRY_WARN_DAYS = 30
 
-# FR-DET-17. Markers as they appear in OpenSSL suite names (what ssl.cipher() returns),
-# most serious reason first: a suite is reported under the first reason that matches, so
-# EXP-RC2-CBC-MD5 is reported as export grade rather than as RC2.
-# "no-encryption" and "unauthenticated" leave an on-path attacker a free hand, so they keep
-# the catalog's worst case; "broken" suites still encrypt, so they score lower (FR-MODEL-03).
-_WEAK_CIPHER_MARKERS: tuple[tuple[str, str, str], ...] = (
-    ("NULL", "no-encryption", "does not encrypt the traffic at all"),
-    # OpenSSL spells export suites EXP-RC4-MD5 / EXP1024-DES-CBC-SHA; IANA names carry EXPORT.
-    ("EXP-", "no-encryption", "is export grade, so its key is 40-56 bits by design"),
-    ("EXP1024", "no-encryption", "is export grade, so its key is 40-56 bits by design"),
-    ("EXPORT", "no-encryption", "is export grade, so its key is 40-56 bits by design"),
-    ("ADH-", "unauthenticated", "authenticates neither side, so an on-path attacker can take over the session"),
-    ("AECDH-", "unauthenticated", "authenticates neither side, so an on-path attacker can take over the session"),
-    ("RC4", "broken", "uses RC4, a stream cipher with practical plaintext-recovery attacks (RFC 7465)"),
-    ("RC2", "broken", "uses RC2, a 64-bit block cipher no longer considered safe"),
-    # Matches single DES (DES-CBC-SHA, 56-bit) and 3DES (DES-CBC3-SHA, 64-bit block, SWEET32).
-    ("DES", "broken", "uses DES/3DES: a 56-bit key or a 64-bit block (SWEET32)"),
-    ("IDEA", "broken", "uses IDEA, a 64-bit block cipher dropped from TLS 1.2 onwards"),
-    ("MD5", "broken", "authenticates records with MD5, which is no longer collision resistant"),
-)
+# FR-DET-17. What makes a suite weak, and why, is declared in rules/tls_probe.json: each group lists the
+# markers that recognise it in an OpenSSL suite name (what ssl.cipher() returns), most serious first, so a
+# suite is reported under the first group that matches (EXP-RC2-CBC-MD5 is export grade, not RC2).
+# "no-encryption" and "unauthenticated" leave an on-path attacker a free hand, so they keep the catalog's
+# worst case; "broken" suites still encrypt, so they score lower (FR-MODEL-03).
 _WORST_CASE_REASONS = ("no-encryption", "unauthenticated")
 
 
 def weak_cipher_reason(cipher_name: str) -> str | None:
     """``"no-encryption"``, ``"unauthenticated"``, ``"broken"``, or None if the suite is fine."""
-    return next((reason for marker, reason, _ in _WEAK_CIPHER_MARKERS if marker in cipher_name), None)
+    group = rule_loader.cipher_group_of(cipher_name)
+    return group.reason if group else None
 
 
-def _weak_cipher_explanation(cipher_name: str) -> str:
-    return next(text for marker, _, text in _WEAK_CIPHER_MARKERS if marker in cipher_name)
-
-
-def cipher_cvss_vector(cipher_name: str) -> str:
-    """Per-instance CVSS vector for a weak cipher (FR-MODEL-03).
+def _group_cvss_vector(group: CipherGroup) -> str:
+    """Per-instance CVSS vector for a weak cipher group (FR-MODEL-03).
 
     Empty means "keep the catalog's worst case": nothing left to break (no encryption, or
     nobody authenticated). Suites that are broken but still encrypting score lower.
     """
-    if weak_cipher_reason(cipher_name) in _WORST_CASE_REASONS:
-        return ""
-    return CVSS_TLS_CIPHER_BROKEN_BUT_ENCRYPTING
+    return "" if group.reason in _WORST_CASE_REASONS else CVSS_TLS_CIPHER_BROKEN_BUT_ENCRYPTING
 
 
-def _weak_cipher_findings(url: str, hostname: str, port: int, cipher) -> list[Finding]:
-    """FR-TLS-04: one finding when the negotiated suite is weak, saying why it is weak."""
+def cipher_cvss_vector(cipher_name: str) -> str:
+    group = rule_loader.cipher_group_of(cipher_name)
+    return _group_cvss_vector(group) if group else ""
+
+
+def _suite_label(group: CipherGroup, code: int) -> str:
+    name = next((s.name for s in group.suites if s.code == code), None)
+    return f"{name} (0x{code:04X})" if name else f"0x{code:04X}"
+
+
+def _weak_cipher_findings(
+    url: str,
+    hostname: str,
+    port: int,
+    cipher,
+    report: tls_probe.ProbeReport | None = None,
+    rules: TlsProbeRules | None = None,
+) -> list[Finding]:
+    """FR-TLS-04, FR-TLS-13: one finding per weak cipher group the server accepts.
+
+    A group is accepted when the connection that read the certificate negotiated one of its suites,
+    or when a probe offered only that group and the server chose a suite from it. Either way the
+    group is one finding, keyed ``host:port:<GROUP>``, and the evidence says how it was seen.
+    """
+    rules = rules or rule_loader.load_tls_probe()
     name = cipher[0] if cipher else ""
-    if not name or not weak_cipher_reason(name):
-        return []
-    return [
-        Finding(
-            id="TLS-WEAK-CIPHER",
-            title=f"Weak cipher suite negotiated: {name}",
-            severity=Severity.HIGH,
-            owasp_category="A02:2021 - Cryptographic Failures",
-            description=f"The negotiated cipher suite {_weak_cipher_explanation(name)}.",
-            recommendation="Restrict the server's cipher list to modern AEAD suites (e.g. AES-GCM, ChaCha20).",
-            evidence=f"Negotiated cipher suite: {name}",
-            url=url,
-            instance_key=f"{hostname}:{port}",
-            cvss_vector=cipher_cvss_vector(name),
+    negotiated = rule_loader.cipher_group_of(name) if name else None
+    findings = []
+    for group in rules.groups:
+        seen = []
+        if negotiated is not None and negotiated.id == group.id:
+            seen.append(f"Negotiated cipher suite: {name}")
+        result = report.groups.get(group.id) if report else None
+        if result is not None and result.outcome is tls_probe.Outcome.ACCEPTED:
+            seen.append(
+                "Accepted in a probe handshake: the server selected "
+                f"{_suite_label(group, result.suite or 0)} when offered only {group.title} suites"
+            )
+        if not seen:
+            continue
+        findings.append(
+            Finding(
+                id="TLS-WEAK-CIPHER",
+                title=f"Weak cipher suites enabled: {group.title}",
+                severity=Severity.HIGH,
+                owasp_category="A02:2021 - Cryptographic Failures",
+                description=f"A cipher suite the server accepts {group.description}.",
+                recommendation="Restrict the server's cipher list to modern AEAD suites (e.g. AES-GCM, ChaCha20).",
+                evidence="; ".join(seen),
+                url=url,
+                instance_key=f"{hostname}:{port}:{group.id}",
+                cvss_vector=_group_cvss_vector(group),
+            )
         )
+    return findings
+
+
+_PROTOCOL_NOTES = {
+    "SSLv3": "SSLv3 is broken (POODLE) and was retired by RFC 7568",
+    "TLSv1": "TLS 1.0 was deprecated by RFC 8996",
+    "TLSv1.1": "TLS 1.1 was deprecated by RFC 8996",
+}
+
+
+def _weak_protocol_findings(
+    url: str,
+    hostname: str,
+    port: int,
+    negotiated: str | None,
+    report: tls_probe.ProbeReport | None = None,
+    rules: TlsProbeRules | None = None,
+) -> list[Finding]:
+    """FR-TLS-03, FR-TLS-12: one finding per weak protocol version the server accepts."""
+    rules = rules or rule_loader.load_tls_probe()
+    names = [p.name for p in rules.protocols if p.weak]
+    if negotiated in _WEAK_PROTOCOLS and negotiated not in names:
+        names.append(negotiated)  # e.g. SSLv2: negotiated by a legacy server, never probed
+    findings = []
+    for name in names:
+        seen = []
+        if negotiated == name:
+            seen.append(f"Negotiated by the connection that read the certificate: {name}")
+        result = report.protocols.get(name) if report else None
+        if result is not None and result.outcome is tls_probe.Outcome.ACCEPTED:
+            seen.append(f"Accepted in a probe handshake: the server replied with a ServerHello for {name}")
+        if not seen:
+            continue
+        note = _PROTOCOL_NOTES.get(name, f"{name} is deprecated")
+        findings.append(
+            Finding(
+                id="TLS-WEAK-PROTOCOL",
+                title=f"Weak TLS protocol enabled: {name}",
+                severity=Severity.HIGH,
+                owasp_category="A02:2021 - Cryptographic Failures",
+                description=f"The server accepts {name}, which is insecure: {note}.",
+                recommendation="Disable protocols below TLS 1.2 (prefer TLS 1.3) in the server/load balancer config.",
+                evidence="; ".join(seen),
+                url=url,
+                instance_key=f"{hostname}:{port}:{name}",
+            )
+        )
+    return findings
+
+
+def _untested_notes(report: tls_probe.ProbeReport, hostname: str, port: int, rules: TlsProbeRules) -> list[str]:
+    """FR-TLS-14: what the probes could not test, once per reason, so a gap is never a silent pass."""
+    by_reason: dict[str, list[str]] = {}
+    for name, result in report.protocols.items():
+        if result.outcome is tls_probe.Outcome.ERROR:
+            by_reason.setdefault(result.detail, []).append(name)
+    titles = {g.id: g.title for g in rules.groups}
+    for group_id, result in report.groups.items():
+        if result.outcome is tls_probe.Outcome.ERROR:
+            by_reason.setdefault(result.detail, []).append(f"{titles[group_id]} cipher suites")
+    return [
+        f"Could not test whether {hostname}:{port} accepts {', '.join(what)} ({reason})"
+        for reason, what in by_reason.items()
     ]
 
 
@@ -199,8 +283,10 @@ def check_tls(
     trust: ssl.SSLContext | None = None,
     limiter=None,
     proxy: str | None = None,
+    probe: bool = True,
 ) -> list[Finding]:
-    """TLS checks; ``warnings`` receives a note when the handshake looks intercepted (FR-DET-16)."""
+    """TLS checks; ``warnings`` receives a note when the handshake looks intercepted (FR-DET-16)
+    and one for every probe that could not run (FR-TLS-14). ``probe=False`` skips the probes."""
     findings: list[Finding] = []
     url = f"https://{url_host(hostname)}:{port}"
 
@@ -219,21 +305,22 @@ def check_tls(
         )
         return findings
 
-    if protocol in _WEAK_PROTOCOLS:
-        findings.append(
-            Finding(
-                id="TLS-WEAK-PROTOCOL",
-                title=f"Weak TLS protocol negotiated: {protocol}",
-                severity=Severity.HIGH,
-                owasp_category="A02:2021 - Cryptographic Failures",
-                description=f"The server negotiated {protocol}, which is deprecated/insecure.",
-                recommendation="Disable protocols below TLS 1.2 (prefer TLS 1.3) in the server/load balancer config.",
-                url=url,
-                instance_key=f"{hostname}:{port}",
-            )
+    report = rules = None
+    if probe:
+        rules = rule_loader.load_tls_probe()  # looked up at call time so a test can substitute the rules
+        report = tls_probe.run_probes(
+            hostname,
+            port,
+            timeout,
+            rules,
+            connect=lambda host, tcp_port, seconds: _open_connection(host, tcp_port, seconds, proxy),
+            limiter=limiter,  # every probe is a connection: --rate-limit and --max-requests apply (FR-AUTHZ-05)
         )
+        if warnings is not None:
+            warnings.extend(_untested_notes(report, hostname, port, rules))
 
-    findings.extend(_weak_cipher_findings(url, hostname, port, cipher))
+    findings.extend(_weak_protocol_findings(url, hostname, port, protocol, report, rules))
+    findings.extend(_weak_cipher_findings(url, hostname, port, cipher, report, rules))
 
     issuer = ""
     cert_time_problem = False  # tracks whether an expiry/not-yet-valid finding already explains any trust failure

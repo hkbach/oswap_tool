@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TARGET_URL: https://staging.example.com  # the approved target
-      SCANNER_REF: v1.19.0                       # tag or commit of hkbach/oswap_tool to install
+      SCANNER_REF: v1.20.0                       # tag or commit of hkbach/oswap_tool to install
     steps:
       - uses: actions/setup-python@v5
         with:

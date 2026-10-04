@@ -330,6 +330,7 @@ class ScanUIHandler(BaseHTTPRequestHandler):
                 max_requests=self.server.scan_max_requests,
                 max_duration=self.server.scan_max_duration,
                 ca_bundle=self.server.scan_ca_bundle,
+                tls_probe=self.server.scan_tls_probe,
                 groups=groups,
             )
             report = build_report(result, fail_on=self.server.scan_fail_on)  # same pipeline as the CLI (FR-WEB-01)
@@ -384,6 +385,7 @@ def build_server(
     rate_limit: float | None = None,
     max_requests: int | None = None,
     max_duration: float | None = None,
+    tls_probe: bool = True,
 ) -> ThreadingHTTPServer:
     """``access_token``, if set, is required (header/query/cookie) on every request (FR-WEB-02).
 
@@ -403,6 +405,7 @@ def build_server(
     server.scan_rate_limit = rate_limit
     server.scan_max_requests = max_requests
     server.scan_max_duration = max_duration
+    server.scan_tls_probe = tls_probe  # set by the operator, like the limits: a browser cannot change it
     server.reports = OrderedDict()
     server.reports_lock = threading.Lock()
     return server
@@ -432,6 +435,12 @@ def main(argv=None) -> int:
         metavar="PATH",
         type=_ca_bundle,
         help="PEM file of CA certificates to trust instead of the OS store (default: env, else OS store)",
+    )
+    parser.add_argument(
+        "--no-tls-probe",
+        action="store_true",
+        help="Skip the TLS probes for every scan this server runs (about 11 extra standard "
+        "handshakes that ask which protocol versions and weak ciphers the server accepts)",
     )
     parser.add_argument(
         "--allow-remote",
@@ -465,6 +474,7 @@ def main(argv=None) -> int:
         rate_limit=args.rate_limit,
         max_requests=args.max_requests,
         max_duration=args.max_duration,
+        tls_probe=not args.no_tls_probe,
     )
     if not server.loopback_only:
         print(

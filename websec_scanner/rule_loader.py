@@ -180,6 +180,169 @@ def load_exclusions() -> ExclusionRules:
     return ExclusionRules(version.strip(), tuple(compiled))
 
 
+_TLS_PROBE_FILE = RULES_DIR / "tls_probe.json"
+_CIPHER_REASONS = ("no-encryption", "unauthenticated", "broken")
+_MAX_CONNECTIONS_CEILING = 100
+_CERTIFICATE_CONNECTIONS = 2  # the connection that reads the certificate and the one that checks trust
+
+
+@dataclass(frozen=True)
+class Suite:
+    code: int  # IANA value, e.g. 0x0005
+    name: str  # IANA name, e.g. TLS_RSA_WITH_RC4_128_SHA
+
+
+@dataclass(frozen=True)
+class ProtocolProbe:
+    name: str  # as ssl.SSLSocket.version() spells it: SSLv3, TLSv1, TLSv1.1, TLSv1.2, TLSv1.3
+    version: int  # 0x0301 is TLS 1.0
+    weak: bool
+    probe_suites: tuple[int, ...]  # offered to learn whether the version is enabled
+
+
+@dataclass(frozen=True)
+class CipherGroup:
+    id: str
+    reason: str  # no-encryption | unauthenticated | broken (FR-DET-17)
+    title: str
+    description: str  # completes "A cipher suite the server accepts ..."
+    markers: tuple[str, ...]  # substrings of the OpenSSL name of a negotiated suite
+    suites: tuple[Suite, ...]  # offered by the probe; empty means "recognised, not probed"
+
+    @property
+    def probed(self) -> bool:
+        return bool(self.suites)
+
+
+@dataclass(frozen=True)
+class TlsProbeRules:
+    version: str
+    max_connections: int  # for the whole TLS check, certificate connections included
+    pause_seconds: float
+    probe_timeout_seconds: float
+    protocols: tuple[ProtocolProbe, ...]
+    groups: tuple[CipherGroup, ...]
+
+    @property
+    def probe_count(self) -> int:
+        return len(self.protocols) + sum(1 for g in self.groups if g.probed)
+
+    @property
+    def connection_count(self) -> int:
+        """Connections a full TLS check opens: every probe plus the two certificate connections."""
+        return self.probe_count + _CERTIFICATE_CONNECTIONS
+
+
+def _hex(source: Path, where: str, field: str, value, digits: int = 4) -> int:
+    if not isinstance(value, str) or not re.fullmatch(rf"0x[0-9A-Fa-f]{{{digits}}}", value):
+        _fail(source, f"{where}: {field} must look like 0x0301 (0x and {digits} hex digits), got {value!r}")
+    return int(value, 16)
+
+
+def _number(source: Path, limits: dict, key: str, low: float, high: float) -> float:
+    value = limits.get(key)
+    if isinstance(value, bool) or not isinstance(value, int | float) or not low <= value <= high:
+        _fail(source, f"limits: {key} must be a number from {low} to {high}")
+    return float(value)
+
+
+def _parse_tls_probe(source: Path) -> TlsProbeRules:
+    data = json.loads(source.read_text(encoding="utf-8"))
+    version = data.get("version")
+    if not isinstance(version, str) or not version.strip():
+        _fail(source, "missing or empty 'version'")
+
+    limits = data.get("limits")
+    if not isinstance(limits, dict):
+        _fail(source, "'limits' must be an object")
+    max_connections = limits.get("max_connections")
+    if isinstance(max_connections, bool) or not isinstance(max_connections, int):
+        _fail(source, "limits: max_connections must be a whole number")
+    if max_connections > _MAX_CONNECTIONS_CEILING:
+        _fail(source, f"limits: max_connections {max_connections} is above the ceiling of {_MAX_CONNECTIONS_CEILING}")
+    pause = _number(source, limits, "pause_seconds", 0, 5)
+    probe_timeout = _number(source, limits, "probe_timeout_seconds", 1, 30)
+
+    raw_protocols = data.get("protocols")
+    if not isinstance(raw_protocols, list) or not raw_protocols:
+        _fail(source, "'protocols' must be a non-empty list")
+    protocols: list[ProtocolProbe] = []
+    for n, entry in enumerate(raw_protocols, 1):
+        name = entry.get("name")
+        if not isinstance(name, str) or not name.strip():
+            _fail(source, f"protocol {n}: missing or empty 'name'")
+        if any(p.name == name for p in protocols):
+            _fail(source, f"duplicate protocol {name!r}")
+        if not isinstance(entry.get("weak"), bool):
+            _fail(source, f"protocol {name}: 'weak' must be true or false")
+        suites = entry.get("probe_suites")
+        if not isinstance(suites, list) or not suites:
+            _fail(source, f"protocol {name}: 'probe_suites' must be a non-empty list")
+        codes = tuple(_hex(source, f"protocol {name}", "probe_suites entry", c) for c in suites)
+        if len(set(codes)) != len(codes):
+            _fail(source, f"protocol {name}: duplicate probe_suites entry")
+        protocols.append(
+            ProtocolProbe(name, _hex(source, f"protocol {name}", "version", entry.get("version")), entry["weak"], codes)
+        )
+
+    raw_groups = data.get("cipher_groups")
+    if not isinstance(raw_groups, list) or not raw_groups:
+        _fail(source, "'cipher_groups' must be a non-empty list")
+    groups: list[CipherGroup] = []
+    owner: dict[int, str] = {}
+    for n, entry in enumerate(raw_groups, 1):
+        group_id = entry.get("id")
+        if not isinstance(group_id, str) or not group_id.strip():
+            _fail(source, f"cipher group {n}: missing or empty 'id'")
+        if any(g.id == group_id for g in groups):
+            _fail(source, f"duplicate group {group_id!r}")
+        if entry.get("reason") not in _CIPHER_REASONS:
+            _fail(source, f"group {group_id}: reason must be one of {', '.join(_CIPHER_REASONS)}")
+        for key in ("title", "description"):
+            if not isinstance(entry.get(key), str) or not entry[key].strip():
+                _fail(source, f"group {group_id}: missing or empty '{key}'")
+        markers = entry.get("markers")
+        if not isinstance(markers, list) or not markers or not all(isinstance(m, str) and m for m in markers):
+            _fail(source, f"group {group_id}: 'markers' must be a non-empty list of strings")
+        suites: list[Suite] = []
+        for suite in entry.get("suites", []):
+            code = _hex(source, f"group {group_id}", "code", suite.get("code"))
+            name = suite.get("name")
+            if not isinstance(name, str) or not name.startswith("TLS_"):
+                _fail(source, f"group {group_id}: suite {code:#06x} needs an IANA 'name' starting with TLS_")
+            if code in owner:
+                _fail(source, f"suite {code:#06x} is in two groups ({owner[code]} and {group_id})")
+            owner[code] = group_id
+            suites.append(Suite(code, name))
+        groups.append(
+            CipherGroup(group_id, entry["reason"], entry["title"], entry["description"], tuple(markers), tuple(suites))
+        )
+
+    rules = TlsProbeRules(version.strip(), max_connections, pause, probe_timeout, tuple(protocols), tuple(groups))
+    if rules.max_connections < rules.connection_count:
+        _fail(
+            source,
+            f"limits: max_connections {rules.max_connections} does not cover the {rules.probe_count} probes "
+            f"plus the {_CERTIFICATE_CONNECTIONS} certificate connections",
+        )
+    return rules
+
+
+@functools.cache
+def load_tls_probe() -> TlsProbeRules:
+    """The protocol versions and weak cipher groups the TLS check probes, and its connection limits."""
+    return _parse_tls_probe(_TLS_PROBE_FILE)
+
+
+def cipher_group_of(cipher_name: str) -> CipherGroup | None:
+    """The weak group a negotiated suite belongs to, from its OpenSSL name; None for a sound suite.
+
+    Groups are in order of severity and the first match wins, so EXP-RC2-CBC-MD5 is export grade
+    rather than RC2 (FR-DET-17).
+    """
+    return next((g for g in load_tls_probe().groups if any(marker in cipher_name for marker in g.markers)), None)
+
+
 def is_interceptor_issuer(issuer: str) -> bool:
     """True if a certificate issuer name belongs to known TLS-intercepting software (FR-DET-16)."""
     issuer = issuer.lower()
@@ -192,4 +355,5 @@ def rules_version() -> str:
         f"sensitive_paths={load_sensitive_paths().version}"
         f";tls_interceptors={load_tls_interceptors().version}"
         f";exclusions={load_exclusions().version}"
+        f";tls_probe={load_tls_probe().version}"
     )

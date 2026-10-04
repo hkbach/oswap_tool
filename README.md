@@ -53,14 +53,21 @@ job that scans your own staging environment.
 The tool is not fully passive. For an `https://` target, one scan sends about
 **29 GET requests** (the home page, sensitive paths and directories, two
 random "soft-404" probes, `robots.txt`, `sitemap.xml`, one request with a test
-`Origin` header) and **2 TLS handshakes**. It sends no exploit payloads and
+`Origin` header) and **up to 13 TLS connections**. It sends no exploit payloads and
 changes no data on the target. Details are in SRS section 1.2.
+
+Eleven of those TLS connections are **probes** (FR-DET-04): each is one standard TLS
+hello that offers a single protocol version, or a single group of weak cipher suites, to
+learn whether the server accepts it. A probe reads the server's first reply and closes;
+no handshake is completed and no data is sent. Because they ask for old protocol
+versions on purpose, **an IDS or WAF may log them**. `--no-tls-probe` turns them off and
+leaves the two connections that read and verify the certificate.
 
 | Check | What it looks at | OWASP mapping |
 |---|---|---|
 | Security headers | HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, information-leaking headers (Server, X-Powered-By, ...) | A05:2021, A03:2021 |
 | Cookies | Missing Secure / HttpOnly / SameSite attributes | A05:2021 |
-| TLS/SSL | Weak negotiated protocol (below TLS 1.2), weak cipher, expired / expiring / not yet valid / untrusted certificate | A02:2021 |
+| TLS/SSL | Weak protocol versions the server accepts (SSLv3, TLS 1.0, TLS 1.1) and weak cipher suites it accepts (no encryption, export grade, anonymous, RC4, 3DES, single DES), found by probing; expired / expiring / not yet valid / untrusted certificate | A02:2021 |
 | HTTP to HTTPS | Whether plain HTTP is redirected to HTTPS | A02:2021 |
 | CORS | `Access-Control-Allow-Origin` wildcard or reflected origin, with or without credentials | A05:2021 |
 | Exposed files | `.git/`, `.env`, backups, `id_rsa`, `docker-compose.yml`, `phpinfo.php`, ... reported only when the content matches the file type | A01:2021 |
@@ -105,7 +112,7 @@ so a clean report of a partial scan is not mistaken for a full one.
 |---|---|---|
 | `headers` | Security headers | HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, headers that disclose server software |
 | `cookies` | Cookies | Secure, HttpOnly and SameSite attributes |
-| `tls` | TLS/SSL | Negotiated protocol and cipher, certificate validity period and trust (2 TLS handshakes) |
+| `tls` | TLS/SSL | Protocol versions and weak cipher suites the server accepts (standard handshakes, never completed), negotiated protocol and cipher, certificate validity period and trust (up to 13 TLS connections) |
 | `https-redirect` | HTTP to HTTPS redirect | Whether plain HTTP is redirected to HTTPS |
 | `cors` | CORS | `Access-Control-Allow-Origin` for a test Origin, with and without credentials |
 | `exposed-files` | Exposed files | `.git`, `.env`, backups, keys, ... reported only when the content matches |
@@ -124,10 +131,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.19.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.20.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.19.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.20.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -209,6 +216,7 @@ Every option below can also be set in a [config file](#config-file), except
 | `--checks GROUPS` | Comma-separated test targets to run, for example `headers,tls` (default: all). See [Test targets](#test-targets-check-groups) |
 | `--list-checks` | Print the test targets and exit (no target, no prompt) |
 | `--ca-bundle PATH` | PEM file of CA certificates to trust instead of the OS store, for the HTTP requests and the TLS check |
+| `--no-tls-probe` | Skip the TLS probes: about 11 extra standard handshakes that ask which protocol versions and weak cipher suites the server accepts (config key `tls_probe = false`) |
 | `--timeout SECONDS` | Per-request timeout (default `10`) |
 | `--workers N` | Concurrent requests for the path checks (default `5`) |
 | `--rate-limit N` | At most N requests per second, overall and per host (default: no limit) |
@@ -306,7 +314,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.19.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.20.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -449,6 +457,7 @@ them:
 | `--workers N` | Concurrent requests for the path checks (default `5`) |
 | `--fail-on LEVEL` | Threshold behind the page's gate status, same meaning as the CLI's (default `high`) |
 | `--ca-bundle PATH` | PEM file of CA certificates to trust instead of the OS store |
+| `--no-tls-probe` | Skip the TLS probes for every scan this server runs |
 | `--rate-limit N` | At most N requests per second per scan (default: no limit) |
 | `--max-requests N` / `--max-duration SECONDS` | Stop a scan after this many requests / seconds |
 
@@ -516,7 +525,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-81 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-82 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -687,6 +696,31 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog
+
+- **v1.20.0** (TLS probing). The TLS check now asks which protocol versions and weak
+  cipher suites a server accepts, instead of only reporting the one it negotiated. What
+  changes for you:
+  - **A server that offers TLS 1.2 and also TLS 1.0 is now reported.** Before, only a
+    server that *negotiated* a weak protocol was. `TLS-WEAK-PROTOCOL` (HIGH) now appears
+    once per enabled weak version (SSLv3, TLS 1.0, TLS 1.1), and `TLS-WEAK-CIPHER` (HIGH)
+    once per enabled weak cipher group (no encryption, export grade, anonymous, RC4,
+    3DES, single DES). **A pipeline gated on the default `--fail-on high` can start
+    failing for a target that used to pass.** That is the point of the change.
+  - **The `instance_key`, and so the fingerprint, of those two findings changes once**:
+    from `host:port` to `host:port:<protocol or group>` (for example
+    `example.com:443:TLSv1`). A baseline written before v1.20.0 shows them as new; write a
+    new one with `--json`. The point is that a baseline can now tell "3DES fixed, RC4
+    remains" apart. `schema_version` is unchanged.
+  - **Up to 11 more TLS connections per scan** (13 in total with the two certificate
+    connections, at most 30 by rule), 0.2 s apart. They go through `--proxy`, count against
+    `--rate-limit` and `--max-requests`, and are announced in the consent banner. Turn them
+    off with `--no-tls-probe`, `tls_probe = false` in a config file, or the web UI's own
+    `--no-tls-probe`.
+  - **A probe that cannot run is reported, not skipped**: a line in `errors` says what could
+    not be tested and why (unreachable, no reply, not TLS, budget reached).
+  - Not probed: SSLv2 (a different hello format that no current server speaks). A server
+    that rejects every cipher suite a probe offers is read as not accepting the version, so
+    an absent finding is not proof that a version is off.
 
 - **v1.19.0** (web UI). The local web UI no longer accepts credentials in any form.
   What changes for you:

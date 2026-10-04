@@ -50,6 +50,10 @@ CONSENT_BANNER = """
  security headers, TLS configuration, cookie flags, CORS behavior, and
  commonly-exposed sensitive files/paths.
 
+ The TLS check also opens up to 13 standard TLS connections, among them
+ handshakes for legacy protocol versions and weak cipher suites. They
+ are never completed, but they can appear in the target's logs.
+
  It does NOT attempt exploitation (no SQL injection payloads, no auth
  bruteforce, no fuzzing). Even so, only run it against systems you own,
  or for which you have explicit, documented authorization to test.
@@ -238,6 +242,7 @@ def run_scan(
     extra_cookies: dict[str, str] | None = None,
     proxy: str | None = None,
     user_agent_prefix: str | None = None,
+    tls_probe: bool = True,
     on_request=None,
 ) -> ScanResult:
     """Scan ``base_url``. ``groups`` selects check groups (catalog.GROUP_IDS); None means all.
@@ -282,6 +287,7 @@ def run_scan(
             trust=session.trust_context,  # same trust decision as the HTTP requests (FR-CI-10)
             limiter=limiter,  # TLS opens its own sockets, so it needs the limiter explicitly
             proxy=proxy,  # ...and the proxy, so it does not connect directly (FR-CI-07)
+            probe=tls_probe,  # FR-DET-04: which protocol versions and weak ciphers the server accepts
         )
 
     try:
@@ -525,6 +531,13 @@ def build_parser() -> argparse.ArgumentParser:
         "(default: REQUESTS_CA_BUNDLE / SSL_CERT_FILE, else the OS store)",
     )
     parser.add_argument(
+        "--no-tls-probe",
+        action="store_true",
+        help="Skip the TLS probes (FR-DET-04): about 11 extra standard handshakes that ask which "
+        "protocol versions and weak cipher suites the server accepts, never completed. "
+        "Only the certificate connections remain",
+    )
+    parser.add_argument(
         "--checks",
         metavar="GROUPS",
         type=_check_groups,
@@ -596,8 +609,8 @@ def _apply_config(parser: argparse.ArgumentParser, argv) -> None:
                 return _formats(",".join(raw))
             if key == "exclude":
                 return [_regex(pattern) for pattern in raw]
-            if key in ("default_excludes", "color"):
-                return not raw  # stored as --no-default-excludes / --no-color
+            if key in ("default_excludes", "color", "tls_probe"):
+                return not raw  # stored as --no-default-excludes / --no-color / --no-tls-probe
             if key == "proxy":
                 return request_options.validate_proxy(raw)
             if key == "user_agent":
@@ -776,6 +789,7 @@ def main(argv=None) -> int:
             extra_cookies=cookies,
             proxy=args.proxy,
             user_agent_prefix=args.user_agent,
+            tls_probe=not args.no_tls_probe,
             on_request=log_request if args.verbose else None,
         )
 
