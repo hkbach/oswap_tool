@@ -516,11 +516,16 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-80 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-81 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
 local software intercepts TLS.
+
+`benchmarks/` holds an accuracy benchmark that runs the scanner against OWASP Juice Shop
+and VAmPI in Docker and fails a change that makes it worse than a recorded baseline. It
+is a regression gate, not a detection rate, and runs in CI rather than under `pytest`. See
+[benchmarks/README.md](benchmarks/README.md).
 
 **Mock server.** `tests/mock_server.py` serves common misconfigurations
 (missing headers, cookie without attributes, exposed `.env` and `.git`,

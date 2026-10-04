@@ -1,0 +1,21 @@
+# Ground truth for OWASP Juice Shop (FR-QA-03b, decision D6).
+#
+# STATUS: NOT REVIEWED. reviewed_by is empty, so `python -m benchmarks.run` refuses to score.
+# Run `python -m benchmarks.run --capture` (or the "benchmark" workflow), read the findings it lists,
+# and classify every one of them below. A person with security knowledge must do that: the file is
+# the only source of what counts as a true or a false finding.
+#
+#   [[expect]]  an issue that really exists on this app. List the ones the scanner does NOT report
+#               yet as well (known_gap = true): without them recall can only ever be 100%.
+#   [[forbid]]  a finding that is wrong for this app (a false positive).
+#
+# Each entry is identified by `id` and `instance_key` exactly as the scanner prints them, plus the
+# check `group` (headers, cookies, cors, ...), and needs a `reason` that says why.
+#
+# The image below is what the numbers are valid for. If the digest in docker-compose.yml changes,
+# review this file again and change the digest here too.
+app = "juice-shop"
+image = "bkimminich/juice-shop@sha256:8739101ade29358abb5469ee66ae78e582c97ed0a5543a4ad102e5fa5193526b"
+target = "http://127.0.0.1:3000/"
+reviewed_by = ""
+reviewed_on = ""

@@ -1,0 +1,95 @@
+# Accuracy benchmark (FR-QA-03d, decision D6): runs the scanner against OWASP Juice Shop and VAmPI
+# in Docker, scores it against the reviewed ground truth, and fails when it is worse than the
+# committed baseline (benchmarks/baseline.json). See benchmarks/README.md.
+#
+# Runs weekly, on demand, and on a pull request that touches the scanner or the benchmark. The
+# apps are pinned by digest, so a run with no code change would only repeat the last one; the weekly
+# run exists to notice a change in the runner image or the Docker Hub images. Both apps are
+# intentionally vulnerable and are only reachable on 127.0.0.1 of the runner.
+#
+# While no ground truth has been reviewed yet, the default mode is "capture": the job lists what
+# the scanner found, for a person to label, and cannot fail on scores.
+name: benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "auto = capture while no ground truth is reviewed, score afterwards; capture = list findings for review; score = compare with the baseline; update-baseline = record a new baseline"
+        type: choice
+        options: [auto, score, capture, update-baseline]
+        default: auto
+  schedule:
+    - cron: "17 3 * * 1" # Mondays, 03:17 UTC
+  pull_request:
+    paths:
+      - "websec_scanner/**"
+      - "benchmarks/**"
+      - ".github/workflows/benchmark.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: python -m pip install -e .
+      - name: Pull the benchmark apps (one retry)
+        run: |
+          docker compose -f benchmarks/docker-compose.yml pull --quiet \
+            || { sleep 15; docker compose -f benchmarks/docker-compose.yml pull --quiet; }
+      - name: Start the benchmark apps
+        run: docker compose -f benchmarks/docker-compose.yml up -d
+      - name: Wait until the apps answer
+        run: |
+          for url in http://127.0.0.1:3000/ http://127.0.0.1:5000/; do
+            ok=0
+            for _ in $(seq 1 60); do
+              # Any HTTP answer counts (curl only fails on a transport error).
+              if curl -s -o /dev/null --max-time 5 "$url"; then ok=1; break; fi
+              sleep 2
+            done
+            if [ "$ok" != 1 ]; then
+              echo "::error::$url did not answer within two minutes"
+              docker compose -f benchmarks/docker-compose.yml logs --tail 50
+              exit 2
+            fi
+          done
+      - name: Run the benchmark
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          mode="${MODE:-auto}"
+          if [ "$mode" = auto ]; then
+            if grep -qE '^reviewed_by = ""' benchmarks/expected/*.toml; then mode=capture; else mode=score; fi
+          fi
+          echo "benchmark mode: $mode"
+          case "$mode" in
+            capture) python -m benchmarks.run --capture ;;
+            update-baseline) python -m benchmarks.run --update-baseline ;;
+            *) python -m benchmarks.run ;;
+          esac
+      - name: Publish the table
+        if: always()
+        run: |
+          if [ -f benchmarks/results/summary.md ]; then cat benchmarks/results/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-results
+          path: benchmarks/results/
+          if-no-files-found: ignore
+      - name: Stop the benchmark apps
+        if: always()
+        run: docker compose -f benchmarks/docker-compose.yml down -v

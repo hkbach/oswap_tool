@@ -1,0 +1,32 @@
+# Benchmark apps for the accuracy benchmark (FR-QA-03a, decision D6).
+#
+# Both apps are intentionally vulnerable. They are only ever scanned and only ever reachable from
+# this machine: every port is bound to 127.0.0.1, and nothing here is privileged. Do not change a
+# port to a bare "3000:3000" or "0.0.0.0": that would publish a deliberately vulnerable app to
+# the network. tests/test_benchmark_guards.py fails if any of that changes.
+#
+# Images are pinned by digest (the multi-arch image index), not by tag, so every run measures the
+# same app. Changing a digest means re-reviewing benchmarks/expected/<app>.toml for the new image:
+# `python -m benchmarks.run` refuses to run while the two disagree.
+#
+# Keep this file in its plain shape (services at two spaces, image: at four): benchmarks/scoring.py
+# reads it without a YAML parser.
+services:
+  juice-shop:
+    # OWASP Juice Shop (MIT) v20.2.0. Digest read from Docker Hub on 2026-10-04.
+    # (The `latest` tag pointed at a different digest on that date, so a version tag is pinned.)
+    image: bkimminich/juice-shop@sha256:8739101ade29358abb5469ee66ae78e582c97ed0a5543a4ad102e5fa5193526b
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:3000:3000"
+  vampi:
+    # VAmPI (MIT). Upstream publishes only the `latest` tag; its digest was read from Docker Hub
+    # on 2026-10-04. Vulnerable mode, as the OpenAPI scanning package (D9) will need.
+    image: erev0s/vampi@sha256:0a5a224b6e14ae7da6a6ea265178ff71286ff903aec74adee98f660bb0e4ca12
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      vulnerable: "1"
+    ports:
+      - "127.0.0.1:5000:5000"
