@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from urllib.parse import urljoin, urlsplit
 
-from ..http_utils import MAX_REDIRECTS, in_scope, safe_get, url_host
+from ..http_utils import MAX_REDIRECTS, in_scope, safe_get, site_root, url_host
 from ..models import Finding, Severity
 
 
@@ -20,7 +20,8 @@ def _finding(start_url: str, final_url: str) -> Finding:
         description=f"Requesting {start_url} did not result in an HTTPS URL (final URL: {final_url}).",
         recommendation="Redirect all HTTP traffic to HTTPS (301) at the web server/load balancer.",
         url=start_url,
-        instance_key=start_url,
+        # The site, not the page the scan started from: one fingerprint per site (FR-MODEL-07).
+        instance_key=site_root(start_url),
     )
 
 

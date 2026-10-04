@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.7",
+  "schema_version": "1.8",
   "scanner_version": "<VERSION>",
   "rules_version": "sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1;exclusions=2026.10.01.1",
   "scan_id": "<SCAN_ID>",
@@ -62,7 +62,9 @@
       "cvss_score": 7.5,
       "instance_key": ".env",
       "fingerprint": "<FINGERPRINT>",
-      "check": "sensitive-paths"
+      "check": "sensitive-paths",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "EXPOSURE-GIT-HEAD",
@@ -83,7 +85,9 @@
       "cvss_score": 7.5,
       "instance_key": ".git/HEAD",
       "fingerprint": "<FINGERPRINT>",
-      "check": "sensitive-paths"
+      "check": "sensitive-paths",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "TLS-NO-HTTPS-REDIRECT",
@@ -106,7 +110,9 @@
       "cvss_score": 6.8,
       "instance_key": "http://127.0.0.1:<PORT>/",
       "fingerprint": "<FINGERPRINT>",
-      "check": "http-to-https-redirect"
+      "check": "http-to-https-redirect",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "COOKIE-FLAGS-MISSING",
@@ -128,7 +134,9 @@
       "cvss_score": 5.3,
       "instance_key": "session",
       "fingerprint": "<FINGERPRINT>",
-      "check": "cookies"
+      "check": "cookies",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "EXPOSURE-DIR-LISTING",
@@ -149,7 +157,9 @@
       "cvss_score": 5.3,
       "instance_key": "images/",
       "fingerprint": "<FINGERPRINT>",
-      "check": "directory-listing"
+      "check": "directory-listing",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "HDR-CONTENT-SECURITY-POLICY-MISSING",
@@ -173,7 +183,9 @@
       "cvss_score": 4.2,
       "instance_key": "content-security-policy",
       "fingerprint": "<FINGERPRINT>",
-      "check": "security-headers"
+      "check": "security-headers",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "HDR-X-FRAME-OPTIONS-MISSING",
@@ -197,7 +209,9 @@
       "cvss_score": 4.3,
       "instance_key": "x-frame-options",
       "fingerprint": "<FINGERPRINT>",
-      "check": "security-headers"
+      "check": "security-headers",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "EXPOSURE-ROBOTS-HINTS",
@@ -218,7 +232,9 @@
       "cvss_score": null,
       "instance_key": "robots.txt",
       "fingerprint": "<FINGERPRINT>",
-      "check": "robots-sitemap"
+      "check": "robots-sitemap",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "HDR-REFERRER-POLICY-MISSING",
@@ -241,7 +257,9 @@
       "cvss_score": 3.1,
       "instance_key": "referrer-policy",
       "fingerprint": "<FINGERPRINT>",
-      "check": "security-headers"
+      "check": "security-headers",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "HDR-INFO-SERVER",
@@ -264,7 +282,9 @@
       "cvss_score": null,
       "instance_key": "server",
       "fingerprint": "<FINGERPRINT>",
-      "check": "security-headers"
+      "check": "security-headers",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "HDR-INFO-X-POWERED-BY",
@@ -287,7 +307,9 @@
       "cvss_score": null,
       "instance_key": "x-powered-by",
       "fingerprint": "<FINGERPRINT>",
-      "check": "security-headers"
+      "check": "security-headers",
+      "suppression": null,
+      "baseline_state": null
     },
     {
       "id": "HDR-PERMISSIONS-POLICY-MISSING",
@@ -310,7 +332,9 @@
       "cvss_score": null,
       "instance_key": "permissions-policy",
       "fingerprint": "<FINGERPRINT>",
-      "check": "security-headers"
+      "check": "security-headers",
+      "suppression": null,
+      "baseline_state": null
     }
   ],
   "errors": [],
@@ -319,6 +343,16 @@
   "gate": {
     "fail_on": "high",
     "failed": true,
-    "incomplete": false
-  }
+    "incomplete": false,
+    "incomplete_reason": null,
+    "basis": "all",
+    "counted": {
+      "CRITICAL": 2,
+      "HIGH": 1,
+      "MEDIUM": 4,
+      "LOW": 2,
+      "INFO": 3
+    }
+  },
+  "baseline": null
 }

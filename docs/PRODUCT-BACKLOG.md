@@ -273,9 +273,11 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
   `[CONFIRM]` Còn lại: vector vẫn gán theo *loại* finding (không theo từng target), và vẫn là thang **tách biệt** khỏi `Severity` nội bộ nên hai thang có thể không khớp. Cần **người làm bảo mật** rà lại lần cuối trước khi giao số cho khách hàng trả tiền (review 2026-10-01 do chủ sản phẩm cung cấp, chưa phải security review nội bộ).
 - [ ] **FR-MODEL-04** (P1 · Business) Ánh xạ tuân thủ dạng dữ liệu: OWASP Top 10:2021, OWASP API Top 10 (2023), OWASP ASVS, PCI DSS, ISO 27001 Annex A, SOC 2 (CC), NIST 800-53 (tùy chọn).
   AC: mapping ở file rules, báo cáo có mục "Compliance coverage"; nêu rõ đây là ánh xạ tham khảo, không phải chứng nhận tuân thủ.
-- [ ] **FR-MODEL-05** (P1 · Pro) Trạng thái finding trong model (`open`, `fixed`, `accepted_risk`, `false_positive`) dùng cho baseline/suppression (E13, E14).
-- [ ] **FR-MODEL-06** (P1 · Pro) Cơ chế **suppression** bằng file (`.scannerignore.yaml`): bỏ qua theo `id`/`fingerprint`/path kèm lý do bắt buộc và ngày hết hạn.
+- [ ] **FR-MODEL-05** (P1 · Pro) *(một phần ở Sprint 12: `baseline_state` (new/unchanged), `baseline.fixed`/`not_rechecked` và `suppression` đã phủ new / fixed / accepted cho CLI. Còn lại: một trường lifecycle thống nhất lưu được qua nhiều lần quét, kèm `false_positive` — cần lịch sử quét, thuộc E13/E14 ở Phase C)* Trạng thái finding trong model (`open`, `fixed`, `accepted_risk`, `false_positive`) dùng cho baseline/suppression (E13, E14).
+- [x] **FR-MODEL-06** (P1 · Pro) *(xong ở Sprint 12: `suppressions.py`, `--suppressions FILE`. Định dạng **TOML** thay cho YAML — quyết định chủ sản phẩm 2026-10-01: `tomllib` có sẵn trong Python nên không thêm dependency, và TOML cho phép comment để ghi lý do. Loader nghiêm ngặt: khoá lạ hoặc mục khớp-mọi-thứ làm hỏng cả file; SRS mục 4.13 FR-SUPP-01…04, AT-69)* Cơ chế **suppression** bằng file (`.scannerignore.toml`, ban đầu dự kiến `.yaml`): bỏ qua theo `id`/`fingerprint`/path kèm lý do bắt buộc và ngày hết hạn.
   AC: finding bị suppress vẫn xuất hiện ở mục riêng của báo cáo (không biến mất âm thầm).
+- [x] **FR-MODEL-07** (P0 · all) *(mở và xong ở Sprint 12: `http_utils.site_root()`, SRS mục 6.1, AT-67. Phát hiện khi lập kế hoạch FR-CI-02)* **Fingerprint ổn định theo site**: finding CORS và `TLS-NO-HTTPS-REDIRECT` từng dùng URL bắt đầu quét đầy đủ (gồm path và query) làm `instance_key`, trái với SRS 6.1 ("origin, không phải path"). Hệ quả: quét từ trang khác, hoặc query có token xoay vòng, cho fingerprint khác cho cùng một lỗi — khiến `--baseline` coi finding cũ là mới và chặn CI vô cớ.
+  AC: `instance_key` = `scheme://host[:port]/`, không path/query/fragment/thông tin đăng nhập; lần quét từ site root giữ nguyên fingerprint cũ; changelog ghi rõ khoá SARIF của các finding này đổi một lần với lần quét bắt đầu ngoài site root.
 
 ### E3. Báo cáo và định dạng đầu ra
 
@@ -288,10 +290,10 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
   Phụ thuộc: FR-MODEL-01, FR-AUTH-02.
 - [x] **FR-RPT-10** (P1 · Pro) *(xong ở Sprint 10 cùng đợt sửa bảng vector: `sarif._security_severity()`, SRS FR-REPORT-06 và AT-44. Điều kiện chờ đã thỏa — bảng vector được review ngày 2026-10-01 trước khi làm. Đã ghi changelog: GitHub code scanning sẽ xếp lại mức cảnh báo của finding cũ ở lần upload đầu tiên)* SARIF `properties.security-severity` lấy từ `cvss_score` (FR-MODEL-03) thay vì suy ra từ `Severity` nội bộ.
   AC: `security-severity` = `cvss_score` khi có; finding trong `catalog.NO_CVSS` quay về bảng theo severity; changelog ghi rõ mức cảnh báo trên GitHub sẽ thay đổi; cập nhật SRS FR-REPORT-06 và AT-44.
-- [ ] **FR-RPT-03** (P1 · Pro) Xuất **CSV** và **JUnit XML** (cho CI).
+- [x] **FR-RPT-03** (P1 · Pro) *(xong ở Sprint 12: `exports.py`, `--csv`, `--junit`. CSV chặn formula injection; JUnit có `failures` > 0 khi và chỉ khi exit code khác 0; SRS FR-OUT-01/02, AT-70)* Xuất **CSV** và **JUnit XML** (cho CI).
 - [ ] **FR-RPT-04** (P1 · Business) Xuất **PDF** (từ HTML) với trang bìa, mục lục, logo tùy biến (white-label).
 - [ ] **FR-RPT-05** (P1 · Business) Hai mẫu báo cáo: **Executive summary** (không kỹ thuật) và **Technical report** (cho developer).
-- [ ] **FR-RPT-06** (P1 · Pro) Báo cáo **so sánh** hai lần quét: mới / đã sửa / còn tồn tại (dựa trên `fingerprint`).
+- [x] **FR-RPT-06** (P1 · Pro) *(xong ở Sprint 12, gộp vào `--baseline`: mọi định dạng hiện mới / không đổi / đã sửa, không cần lệnh riêng. Finding biến mất chỉ được gọi là đã sửa khi check của nó đã chạy và lần quét hoàn tất, nếu không là `not_rechecked`; SRS FR-BASE-03, AT-68, AT-71)* Báo cáo **so sánh** hai lần quét: mới / đã sửa / còn tồn tại (dựa trên `fingerprint`).
 - [ ] **FR-RPT-07** (P2 · Enterprise) Báo cáo tuân thủ theo chuẩn (PCI DSS, ISO 27001...) với disclaimer rõ ràng, không thay thế đánh giá của chuyên gia.
 - [x] **FR-RPT-08** (P0 · all) *(xong ở Sprint 9: `output.SCOPE_NOTE`, dùng chung cho console và HTML; JSON có trường `disclaimer` từ v1.10.0 (`schema_version` 1.5); SRS AT-57)* Mọi báo cáo có phần **phạm vi & giới hạn** (những gì KHÔNG được kiểm tra) và **không dùng ngôn ngữ đảm bảo tuyệt đối** ("website an toàn").
 
@@ -300,7 +302,7 @@ Mục tiêu: giảm false positive/negative – yếu tố quyết định khác
 - [x] **FR-CI-01** (P0 · all) *(xong ở Sprint 5 cùng exit code `3` đã xác nhận; SRS FR-CLI-04, 7.3, AT-43)* Tham số `--fail-on {critical,high,medium,low,none}` để điều khiển exit code (mặc định `high` = giữ FR-CLI-04). Web UI dùng cùng logic cho `gate_failed`.
   AC: test cho từng ngưỡng; `gate_failed` của Web UI khớp exit code của CLI với cùng ngưỡng.
   `[CONFIRM]` Thêm exit code `3` = "quét không hoàn tất" (baseline thất bại hoặc có check lỗi), để pipeline không "xanh" khi không quét được gì (B2 trong `docs/srs-feedback.md`; SRS mục 13). Là thay đổi hợp đồng CLI, cần chủ SRS duyệt trước khi làm.
-- [ ] **FR-CI-02** (P0 · Pro) `--baseline FILE`: chỉ tính lỗi **mới** so với baseline (theo `fingerprint`) để không chặn pipeline vì nợ cũ.
+- [x] **FR-CI-02** (P0 · Pro) *(xong ở Sprint 12: `baseline.py`, `--baseline FILE`, chỉ CLI — quyết định chủ sản phẩm 2026-10-01. `summary` giữ nguyên nghĩa, gate đọc `gate.counted`; `schema_version` 1.8; SARIF `baselineState`. Cần sửa trước FR-MODEL-07 vì fingerprint CORS/redirect không ổn định; SRS FR-BASE-01…05, AT-68)* `--baseline FILE`: chỉ tính lỗi **mới** so với baseline (theo `fingerprint`) để không chặn pipeline vì nợ cũ.
   Phụ thuộc: FR-MODEL-01, FR-MODEL-02.
 - [x] **FR-CI-03** (P0 · all) *(xong ở Sprint 5: `examples/ci/`, AT-46; chưa chạy trên CI thật)* Template CI/CD: GitHub Actions, GitLab CI, Azure DevOps, Jenkins (trong `examples/ci/`), kèm hướng dẫn upload SARIF/artefact.
 - [x] **FR-CI-04** (P0 · Pro) *(xong ở Sprint 9: `Dockerfile` 2 giai đoạn, user không phải root, job CI `docker` build+smoke-test; sửa luôn Jenkinsfile dùng source archive thay vì `git+apt-get`. Publish lên `ghcr.io/hkbach/websec-scanner` thêm ở v1.10.0 theo yêu cầu chủ sản phẩm 2026-09-30 (job `docker-publish`, chỉ chạy khi push tag `v*`); SRS AT-59. Còn việc thủ công của admin: đặt visibility package công khai, xem README mục Docker)* Image Docker chính thức chạy được CLI (`docker run ... scan https://...`), user không phải root.
@@ -595,7 +597,8 @@ Thứ tự dựa trên phụ thuộc: `redact()` và `fingerprint`/`schema_versi
 | 8 | Nhóm mục tiêu kiểm thử: chọn nhóm khi quét (CLI `--checks`, Web UI), kết quả và báo cáo HTML nhóm theo test target / OWASP Top 10 | SRS 4.11 (FR-GRP-01…03), FR-UI-07, FR-UI-10, FR-UI-11 (yêu cầu của chủ sản phẩm ngày 2026-09-30) | Xong (v1.7.0) trên branch `feat/sprint-8`, chờ review |
 | 9 | Đóng Phase A: Web UI bắt buộc token khi bind ra ngoài, phạm vi & giới hạn trong mọi báo cáo, kiểm kê license, image Docker chính thức, rà lại README | FR-WEB-02, FR-RPT-08, FR-SEC-10, FR-CI-04, FR-DOC-01 | Xong (v1.8.0) trên branch `feat/sprint-9`, chờ review |
 | 10 | Điểm số CVSS v3.1 ước tính theo loại finding; báo cáo HTML đầy đủ (top issues, điểm rủi ro, cách tái hiện); Web UI hiện cùng điểm đó; sửa bảng vector theo review ngày 2026-10-01 và đưa điểm vào SARIF | FR-MODEL-03, FR-RPT-01, FR-RPT-10, FR-DET-17, SRS FR-UI-12 | Xong (v1.13.0) trên branch `feat/sprint-10`, chờ review |
-| 11 | Kiểm soát quét an toàn: giới hạn tốc độ/số request/thời lượng, tự giảm tốc khi target đẩy lùi, phạm vi khai báo nhiều host, loại trừ URL, header scan id | FR-AUTHZ-05, FR-AUTHZ-03, FR-AUTHZ-06, FR-AUTHZ-09, FR-QA-05 | Xong (v1.14.0) trên branch `feat/sprint-11`, chờ review |
+| 11 | Kiểm soát quét an toàn: giới hạn tốc độ/số request/thời lượng, tự giảm tốc khi target đẩy lùi, phạm vi khai báo nhiều host, loại trừ URL, header scan id | FR-AUTHZ-05, FR-AUTHZ-03, FR-AUTHZ-06, FR-AUTHZ-09, FR-QA-05 | Xong (v1.14.0) trên branch `feat/sprint-11`, chờ review; CI xanh trên GitHub |
+| 12 | CI với nợ cũ: baseline (chỉ fail vì finding mới), so sánh hai lần quét, suppression có hạn, CSV và JUnit; sửa fingerprint không ổn định | FR-CI-02, FR-RPT-06, FR-MODEL-06, FR-RPT-03, FR-MODEL-07 | Xong (v1.15.0) trên branch `feat/sprint-12`, chờ review |
 
 Ghi chú `[REC]`: có thể đưa phần cấu hình ruff của Sprint 6 lên làm ngay đầu Sprint 3 (rẻ, giúp mọi code mới sạch từ đầu); workflow CI đầy đủ giữ ở Sprint 6. FR-WEB-02 (an toàn server cục bộ) nên làm ngay sau Sprint 6 nếu Web UI sẽ được giao cho khách.
 
@@ -666,9 +669,9 @@ Thứ tự sprint chi tiết của Phase B (Sprint 9 trở đi): `docs/PHASE-B-R
 |---|---|---|---|---|
 | E0 | ☑ | – | – | FIX-01…11 xong (Sprint 2–3b) |
 | E1 | ☐ | ☐ | ☐ | DET-01, 02, 03 (P0) và DET-16 (P1) xong ở Sprint 4; DET-17 (P1) xong ở Sprint 10; còn DET-04 (P0) |
-| E2 | ☑ | ☐ | – | MODEL-01, 02 xong (Sprint 3); MODEL-03 (P1) xong (Sprint 10) |
-| E3 | ☑ | ☐ | ☐ | RPT-02, RPT-09 xong (Sprint 5); RPT-08 xong (Sprint 9); RPT-01, RPT-10 xong (Sprint 10) |
-| E4 | ☐ | ☐ | – | CI-01, CI-03, CI-10 xong (Sprint 5); CI-04 xong (Sprint 9); còn CI-02 |
+| E2 | ☑ | ☐ | – | MODEL-01, 02 xong (Sprint 3); MODEL-03 (P1) xong (Sprint 10); MODEL-06 (P1), MODEL-07 (P0) xong (Sprint 12); MODEL-05 một phần |
+| E3 | ☑ | ☐ | ☐ | RPT-02, RPT-09 xong (Sprint 5); RPT-08 xong (Sprint 9); RPT-01, RPT-10 xong (Sprint 10); RPT-03, RPT-06 xong (Sprint 12) |
+| E4 | ☑ | ☐ | – | CI-01, CI-03, CI-10 xong (Sprint 5); CI-04 xong (Sprint 9); CI-02 xong (Sprint 12) |
 | E5 | ☐ | ☐ | – | AUTHZ-03 (D4 ở Sprint 3b, phần còn lại ở Sprint 11), AUTHZ-05, AUTHZ-06, AUTHZ-09 xong (Sprint 11); còn AUTHZ-01, 02, 04, 07, 08, 10 |
 | E6 | ☐ | ☐ | ☐ | |
 | E7 | ☐ | ☐ | ☐ | |

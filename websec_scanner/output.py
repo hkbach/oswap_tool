@@ -7,9 +7,11 @@ the Web UI response and the HTML report cannot drift apart.
 
 from __future__ import annotations
 
+from .baseline import Baseline, compare
 from .catalog import CHECK_GROUPS, group_of_check
 from .models import SEVERITY_ORDER, ScanResult
 from .redact import redact
+from .suppressions import Suppressions
 
 # FR-CI-01: --fail-on threshold -> severities that fail the gate (default "high" = FR-CLI-04).
 FAIL_ON_SEVERITIES = {
@@ -43,21 +45,62 @@ CVSS_NOTE = (
 _REDACTED_FINDING_FIELDS = ("title", "description", "evidence", "url", "instance_key")
 
 
-def build_report(result: ScanResult, *, show_secrets: bool = False, fail_on: str = DEFAULT_FAIL_ON) -> dict:
+def build_report(
+    result: ScanResult,
+    *,
+    show_secrets: bool = False,
+    fail_on: str = DEFAULT_FAIL_ON,
+    baseline: Baseline | None = None,
+    suppressions: Suppressions | None = None,
+) -> dict:
     """The report dict (SRS 6.2) every output format is rendered from.
 
     Secrets are redacted unless ``show_secrets`` is true (D2). Only the CLI may pass
     ``show_secrets=True`` (``--show-secrets``); the Web UI never does.
+
+    ``baseline`` (FR-CI-02) and ``suppressions`` (FR-MODEL-06) decide which findings count
+    toward the gate; ``summary`` still counts every finding, so its meaning never changes.
     """
     report = result.to_dict()
     report["disclaimer"] = SCOPE_NOTE  # FR-RPT-08: scope & limitations, in the JSON report too
     report["secrets_redacted"] = not show_secrets
+
+    # Why the findings may not be the whole picture: the home page could not be fetched, or a
+    # traffic limit stopped the scan part way through (FR-AUTHZ-05).
+    stopped_by = result.limits.get("stopped_by")
+    incomplete_reason = "home-page" if not result.baseline_fetched else stopped_by
+    report["gate"] = {"fail_on": fail_on, "incomplete": incomplete_reason is not None}
+
+    if suppressions is not None:
+        suppressions.apply(report)
+    else:
+        for finding in report["findings"]:
+            finding["suppression"] = None
+    report["baseline"] = compare(report, baseline)
+    if baseline is not None and baseline.predates_fingerprint_fix:
+        report["errors"].append(
+            f"The baseline was written by scanner {baseline.scanner_version or 'of unknown version'}; "
+            "1.15.0 changed the fingerprints of CORS and HTTP-redirect findings for scans that did not "
+            "start at the site root, so those may show as new. Regenerate the baseline with --json."
+        )
+
+    counted = _counts(
+        report["findings"],
+        [
+            i
+            for i, f in enumerate(report["findings"])
+            if f["suppression"] is None and f["baseline_state"] != "unchanged"
+        ],
+    )
     report["gate"] = {
         "fail_on": fail_on,
-        "failed": gate_failed(report, fail_on),
-        # The home page could not be fetched, or a traffic limit stopped the scan part way
-        # through (FR-AUTHZ-05): either way the findings are not the whole picture.
-        "incomplete": not result.baseline_fetched or result.limits.get("stopped_by") is not None,
+        "failed": any(counted[sev] for sev in FAIL_ON_SEVERITIES[fail_on]),
+        "incomplete": incomplete_reason is not None,
+        "incomplete_reason": incomplete_reason,
+        # "all": every finding counts; "new": only findings absent from the --baseline.
+        # Suppressed findings never count, in either case.
+        "basis": "all" if baseline is None else "new",
+        "counted": counted,
     }
     if show_secrets:
         return report
@@ -79,8 +122,13 @@ def build_report(result: ScanResult, *, show_secrets: bool = False, fail_on: str
 
 
 def gate_failed(report: dict, fail_on: str = DEFAULT_FAIL_ON) -> bool:
-    """True when a finding is at or above the ``fail_on`` threshold (CLI exit code 1, Web UI ``gate_failed``)."""
-    return any(report["summary"].get(sev, 0) for sev in FAIL_ON_SEVERITIES[fail_on])
+    """True when a finding that counts is at or above ``fail_on`` (CLI exit code 1, Web UI ``gate_failed``).
+
+    What counts is ``gate.counted`` once ``build_report()`` has set it (suppressed findings and,
+    with a baseline, unchanged ones are left out); a bare dict with only ``summary`` counts all.
+    """
+    counts = (report.get("gate") or {}).get("counted") or report["summary"]
+    return any(counts.get(sev, 0) for sev in FAIL_ON_SEVERITIES[fail_on])
 
 
 def gate_message(gate: dict) -> tuple[str, str]:
@@ -90,18 +138,23 @@ def gate_message(gate: dict) -> tuple[str, str]:
     threshold and the CLI exit code, so both views say the same thing.
     """
     threshold = f"--fail-on {gate['fail_on']}"
+    new = gate.get("basis") == "new"  # a --baseline is in use: only new findings count
     if gate["failed"]:
-        return "fail", f"Findings at or above the {threshold} threshold: the CLI exits with code 1 (fails the CI gate)."
+        what = "New findings" if new else "Findings"
+        return "fail", f"{what} at or above the {threshold} threshold: the CLI exits with code 1 (fails the CI gate)."
     if gate["incomplete"]:
         code = "0 (--fail-on none)" if gate["fail_on"] == "none" else "3"
-        return (
-            "warn",
-            f"The target home page could not be fetched, so most checks did not run. The CLI exits with code {code}. "
-            "See the errors below.",
-        )
+        reason = gate.get("incomplete_reason")
+        if reason in ("max-requests", "max-duration"):
+            # Not the home page: a limit the operator set stopped the scan (FR-AUTHZ-05).
+            why = f"The scan was stopped early by --{reason}, so some checks did not run."
+        else:
+            why = "The target home page could not be fetched, so most checks did not run."
+        return "warn", f"{why} The CLI exits with code {code}. See the errors below."
     if gate["fail_on"] == "none":
         return "pass", "--fail-on none: the gate never fails; the CLI exits with code 0."
-    return "pass", f"No findings at or above the {threshold} threshold: the CLI exits with code 0."
+    what = "No new findings" if new else "No findings"
+    return "pass", f"{what} at or above the {threshold} threshold: the CLI exits with code 0."
 
 
 def _counts(findings: list[dict], indexes: list[int]) -> dict[str, int]:

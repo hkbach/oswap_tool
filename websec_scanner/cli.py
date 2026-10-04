@@ -22,8 +22,10 @@ from urllib.parse import urlparse, urlsplit, urlunsplit
 import requests
 
 from . import catalog
+from .baseline import Baseline, BaselineError, load_baseline
 from .catalog import enrich
 from .checks import cookies, cors_check, exposure, headers, redirect_check, tls_check
+from .exports import to_csv, to_junit
 from .html_report import render_html
 from .http_utils import build_session
 from .limits import ScanLimiter, ScanLimitReached
@@ -34,6 +36,7 @@ from .report import print_report, write_json
 from .rule_loader import load_exclusions
 from .sarif import to_sarif
 from .soft404 import build_profile
+from .suppressions import SuppressionError, Suppressions, load_suppressions
 
 CONSENT_BANNER = """
 ==========================================================================
@@ -125,6 +128,22 @@ def _regex(value: str) -> str:
     except re.error as exc:
         raise argparse.ArgumentTypeError(f"invalid regular expression {value!r}: {exc}") from exc
     return value
+
+
+def _baseline(value: str) -> Baseline:
+    """argparse type for --baseline: load it now, so a bad file fails before any request."""
+    try:
+        return load_baseline(value)
+    except BaselineError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def _suppressions(value: str) -> Suppressions:
+    """argparse type for --suppressions: same reasoning as --baseline."""
+    try:
+        return load_suppressions(value)
+    except SuppressionError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def _ca_bundle(value: str) -> str:
@@ -313,6 +332,23 @@ def main(argv=None) -> int:
     parser.add_argument("--json", metavar="PATH", help="Write full JSON report to PATH")
     parser.add_argument("--sarif", metavar="PATH", help="Write a SARIF 2.1.0 report to PATH (e.g. for code scanning)")
     parser.add_argument("--html", metavar="PATH", help="Write a standalone HTML report to PATH")
+    parser.add_argument("--csv", metavar="PATH", help="Write the findings as CSV to PATH")
+    parser.add_argument(
+        "--junit", metavar="PATH", help="Write a JUnit XML report to PATH (fails exactly when the exit code is not 0)"
+    )
+    history = parser.add_argument_group("compare with earlier scans (FR-CI-02, FR-MODEL-06)")
+    history.add_argument(
+        "--baseline",
+        type=_baseline,
+        metavar="FILE",
+        help="JSON report of a previous scan: only findings new since then fail the gate",
+    )
+    history.add_argument(
+        "--suppressions",
+        type=_suppressions,
+        metavar="FILE",
+        help="TOML file of accepted findings, each with a reason and an expiry date (e.g. .scannerignore.toml)",
+    )
     parser.add_argument("--timeout", type=int, default=10, help="Per-request timeout in seconds (default: 10)")
     parser.add_argument("--workers", type=int, default=5, help="Concurrent requests for path checks (default: 5)")
     parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors in CLI output")
@@ -423,7 +459,13 @@ def main(argv=None) -> int:
             "Do not share this output.",
             file=sys.stderr,
         )
-    report = build_report(result, show_secrets=args.show_secrets, fail_on=args.fail_on)
+    report = build_report(
+        result,
+        show_secrets=args.show_secrets,
+        fail_on=args.fail_on,
+        baseline=args.baseline,
+        suppressions=args.suppressions,
+    )
     print_report(report, use_color=not args.no_color)
 
     if args.json:
@@ -437,6 +479,14 @@ def main(argv=None) -> int:
         with open(args.html, "w", encoding="utf-8") as fh:
             fh.write(render_html(report))
         print(f"HTML report written to: {args.html}")
+    if args.csv:
+        with open(args.csv, "w", encoding="utf-8", newline="") as fh:
+            fh.write(to_csv(report))
+        print(f"CSV report written to: {args.csv}")
+    if args.junit:
+        with open(args.junit, "w", encoding="utf-8") as fh:
+            fh.write(to_junit(report))
+        print(f"JUnit report written to: {args.junit}")
 
     return exit_code(report)
 

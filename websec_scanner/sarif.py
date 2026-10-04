@@ -55,7 +55,7 @@ def _result(finding: dict, rule_index: int, target: str) -> dict:
     message = f"{finding['title']}: {finding['description']}"
     if finding.get("evidence"):
         message += f" Evidence: {finding['evidence']}"
-    return {
+    result = {
         "ruleId": finding["id"],
         "ruleIndex": rule_index,
         "level": _LEVEL.get(finding["severity"], "note"),
@@ -68,6 +68,21 @@ def _result(finding: dict, rule_index: int, target: str) -> dict:
             "instance_key": finding.get("instance_key", ""),
         },
     }
+    # SARIF 2.1.0 has native fields for both, so code-scanning tools can use them directly:
+    # baselineState (section 3.27.24) for --baseline, suppressions (3.27.23) for --suppressions.
+    # Findings that are gone ("absent") are not emitted as results: some tools would raise them
+    # as open alerts. They are listed in the report's "baseline.fixed" instead.
+    if finding.get("baseline_state"):
+        result["baselineState"] = finding["baseline_state"]
+    if finding.get("suppression"):
+        result["suppressions"] = [
+            {
+                "kind": "external",
+                "status": "accepted",
+                "justification": f"{finding['suppression']['reason']} (until {finding['suppression']['expires']})",
+            }
+        ]
+    return result
 
 
 def to_sarif(report: dict) -> dict:

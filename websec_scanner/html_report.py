@@ -79,6 +79,12 @@ table.groups a { color:inherit; }
 .status.clean { background:var(--pass-bg); color:var(--pass); }
 .status.not-run { background:var(--warn-bg); color:var(--warn); }
 .status.not-selected { background:var(--bg); color:var(--muted); border:1px solid var(--border); }
+.state { display:inline-block; font-size:11px; font-weight:700; padding:1px 8px; border-radius:999px; margin-left:8px;
+  vertical-align:middle; }
+.state.new { background:var(--fail-bg); color:var(--fail); }
+.state.unchanged { background:var(--bg); color:var(--muted); border:1px solid var(--border); }
+.state.suppressed { background:var(--warn-bg); color:var(--warn); }
+table.compare td, table.compare th { padding:4px 14px 4px 0; text-align:left; }
 h3.group { font-size:16px; margin:22px 0 4px; } h3.group .status { margin-left:8px; vertical-align:middle; }
 p.group-desc { margin:0 0 10px; }
 .finding h4 { display:inline; font-size:15px; margin:0; }
@@ -91,6 +97,45 @@ def _e(value) -> str:
     return escape(str(value if value is not None else ""), quote=True)
 
 
+def _state_pills(f: dict) -> str:
+    """Where a finding stands against --baseline and --suppressions (FR-CI-02, FR-MODEL-06)."""
+    pills = []
+    if f.get("baseline_state") in ("new", "unchanged"):
+        state = f["baseline_state"]
+        pills.append(f'<span class="state {state}">{"New" if state == "new" else "Unchanged"}</span>')
+    if f.get("suppression"):
+        pills.append('<span class="state suppressed">Suppressed</span>')
+    return "".join(pills)
+
+
+def _comparison(baseline: dict | None) -> str:
+    """FR-RPT-06: what is new, unchanged and fixed since the baseline."""
+    if not baseline:
+        return ""
+    counts = baseline["counts"]
+
+    def listing(title: str, items: list[dict]) -> str:
+        if not items:
+            return ""
+        rows = "".join(f"<li>[{_e(f['severity'])}] {_e(f['title'])}</li>" for f in items)
+        return f'<p>{_e(title)}</p><ul class="errors">{rows}</ul>'
+
+    since = baseline.get("started_at") or "an unknown time"
+    return (
+        "<h2>Compared with baseline</h2>"
+        f'<div class="card"><p class="muted">Baseline from {_e(since)} ({_e(baseline["source"])}).</p>'
+        '<table class="compare"><tr><th>New</th><th>Unchanged</th><th>Fixed</th><th>Not rechecked</th></tr>'
+        f"<tr><td>{counts['new']}</td><td>{counts['unchanged']}</td><td>{counts['fixed']}</td>"
+        f"<td>{counts['not_rechecked']}</td></tr></table>"
+        + listing("Fixed since the baseline:", baseline["fixed"])
+        + listing(
+            "Not rechecked (their check did not run, or the scan did not finish), so not counted as fixed:",
+            baseline["not_rechecked"],
+        )
+        + "</div>"
+    )
+
+
 def _finding(f: dict, index: int) -> str:
     sev = f.get("severity", "INFO")
     sev_class = sev if sev in _SEVERITIES else "INFO"
@@ -101,6 +146,9 @@ def _finding(f: dict, index: int) -> str:
         rows.append(f"<dt>Recommendation</dt><dd>{_e(f['recommendation'])}</dd>")
     if f.get("url"):
         rows.append(f"<dt>URL</dt><dd><code>{_e(f['url'])}</code></dd>")
+    if f.get("suppression"):
+        s = f["suppression"]
+        rows.append(f"<dt>Suppressed</dt><dd>until {_e(s['expires'])}: {_e(s['reason'])}</dd>")
     if f.get("cvss_vector"):
         rows.append(
             f"<dt>CVSS 3.1 base (estimated)</dt><dd>{f['cvss_score']} &middot; <code>{_e(f['cvss_vector'])}</code></dd>"
@@ -128,7 +176,7 @@ def _finding(f: dict, index: int) -> str:
     )
     return (
         f'<section class="card finding sev-{sev_class}" id="finding-{index}">'
-        f'<span class="badge">{_e(sev)}</span><h4>{_e(f.get("title"))}</h4>'
+        f'<span class="badge">{_e(sev)}</span><h4>{_e(f.get("title"))}</h4>{_state_pills(f)}'
         f'<p class="muted">{classification}</p>'
         f"<p>{_e(f.get('description'))}</p>{details}</section>"
     )
@@ -266,6 +314,7 @@ def render_html(report: dict) -> str:
 <table class="summary"><tr>{summary_cells}</tr></table>
 </div>
 {_top_issues(findings)}
+{_comparison(report.get("baseline"))}
 {errors_html}
 {findings_html}
 <footer>

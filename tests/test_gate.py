@@ -79,16 +79,24 @@ def test_findings_over_the_threshold_win_over_incomplete(https_server):
 def test_json_records_the_gate(medium_only, tmp_path, closed_port):
     out = tmp_path / "r.json"
     cli.main([medium_only, "--yes", "--no-color", "--fail-on", "medium", "--json", str(out)])
-    assert json.loads(out.read_text(encoding="utf-8"))["gate"] == {
+    gate = json.loads(out.read_text(encoding="utf-8"))["gate"]
+    assert gate == {
         "fail_on": "medium",
         "failed": True,
         "incomplete": False,
+        "incomplete_reason": None,
+        "basis": "all",  # no --baseline: every finding counts
+        "counted": gate["counted"],  # the per-severity numbers are checked below
     }
+    assert gate["counted"]["MEDIUM"] > 0
     cli.main([f"http://127.0.0.1:{closed_port}/", "--yes", "--no-color", "--timeout", "2", "--json", str(out)])
     assert json.loads(out.read_text(encoding="utf-8"))["gate"] == {
         "fail_on": "high",
         "failed": False,
         "incomplete": True,
+        "incomplete_reason": "home-page",
+        "basis": "all",
+        "counted": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0},
     }
 
 
