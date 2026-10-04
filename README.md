@@ -130,10 +130,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.24.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.25.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.24.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.25.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -355,7 +355,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.24.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.25.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -526,7 +526,15 @@ checks on each page it finds, within the limits the server was started with
 `robots.txt` is always followed, and the box cannot raise a limit or turn that off.
 The box is disabled when neither the Security headers nor the Cookies test target is
 selected. The result then shows what the crawl covered and, for a finding seen on several
-pages, the other pages. Then click **Scan**. The results show the counts by
+pages, the other pages.
+
+The result has two tabs under the summary. **Findings** is the list described below and
+opens first. **Scanned URLs** lists the pages the scan fetched, one row each: the URL, the
+HTTP status, how many links deep it was (0 is the target page), whether the headers and
+cookies checks were applied to it, and how many findings apply to it. Without the crawl
+box it has the target page only. Pages that are not HTML, or that answered with an error
+or a redirect, are listed but not checked. The tabs work with the keyboard (arrow keys,
+*Home*, *End*). Then click **Scan**. The results show the counts by
 severity, the gate status (the same decision as the CLI exit code), which test
 targets were not tested, non-fatal errors, and the findings:
 
@@ -576,7 +584,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-86 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-87 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -779,6 +787,17 @@ python -m websec_scanner https://example.com --crawl --crawl-depth 2 --crawl-max
 - The local web UI crawls only when its checkbox is ticked, within the limits the server was started with (see "Local web UI").
 
 ## Changelog
+
+- **v1.25.0** (scanned pages). The result of a scan has two tabs, and the JSON report lists the
+  pages the scan fetched. What changes for you:
+  - **Web UI: tabs *Findings* and *Scanned URLs*.** *Findings* is what the page showed before and
+    opens first. *Scanned URLs* is a table of the pages fetched: URL, status, depth, whether the
+    headers and cookies checks were applied, and the number of findings that apply to the page.
+  - **New JSON field `pages`**, in every report (one entry without `--crawl`, an empty list when
+    the target could not be fetched), at most 500 entries. `schema_version` becomes `1.11`.
+    Nothing was removed or renamed; a consumer that validates against the schema needs the new
+    `docs/report.schema.json`. URLs in it are masked like every other URL in the report.
+  - Not in this release: the same table in the HTML report and on the console.
 
 - **v1.24.0** (crawl from the web UI). The page you enter the target URL on has a checkbox,
   **Also crawl the site and check the pages it links to**. What changes for you:

@@ -95,8 +95,13 @@
         <ul id="error-list"></ul>
       </div>
 
+      <div class="tabs" role="tablist" aria-label="Scan result">
+        <button id="tab-findings" class="tab" type="button" role="tab" aria-selected="true" aria-controls="panel-findings" tabindex="0">Findings</button>
+        <button id="tab-urls" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-urls" tabindex="-1">Scanned URLs</button>
+      </div>
+
+      <div id="panel-findings" role="tabpanel" aria-labelledby="tab-findings">
       <div class="findings-head">
-        <h2>Findings</h2>
         <div class="controls">
           <label class="filter">Group by
             <select id="group-by">
@@ -118,6 +123,17 @@
       </div>
       <p id="no-findings" class="empty" hidden>No findings.</p>
       <div id="groups" class="groups"></div>
+      </div>
+
+      <div id="panel-urls" role="tabpanel" aria-labelledby="tab-urls" hidden>
+        <div id="pages-notes" class="pages-notes"></div>
+        <div class="table-wrap">
+          <table id="pages-table" class="pages-table">
+            <thead><tr><th>URL</th><th>Status</th><th>Depth</th><th>Checked</th><th>Findings</th></tr></thead>
+            <tbody id="pages-body"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <footer class="page-footer">

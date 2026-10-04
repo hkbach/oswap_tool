@@ -10,7 +10,7 @@ websec-scan:
   image: python:3.12-slim
   variables:
     TARGET_URL: https://staging.example.com  # the approved target
-    SCANNER_REF: v1.24.0                       # tag or commit of hkbach/oswap_tool to install
+    SCANNER_REF: v1.25.0                       # tag or commit of hkbach/oswap_tool to install
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
     - pip install "git+https://github.com/hkbach/oswap_tool@${SCANNER_REF}"

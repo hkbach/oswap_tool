@@ -282,6 +282,69 @@ function renderFindings() {
   $("no-findings").textContent = findings.length === 0 ? "No findings." : "No findings at this severity.";
 }
 
+// --- tabs and the list of scanned pages (FR-UI-15) ---------------------------------
+
+const TABS = ["findings", "urls"];
+
+function selectTab(name) {
+  for (const tab of TABS) {
+    const selected = tab === name;
+    $(`tab-${tab}`).setAttribute("aria-selected", String(selected));
+    $(`tab-${tab}`).tabIndex = selected ? 0 : -1;
+    $(`panel-${tab}`).hidden = !selected;
+  }
+}
+
+// The keyboard pattern of a tab list: arrows move (and wrap), Home and End jump.
+function tabKeydown(event) {
+  const current = TABS.findIndex((tab) => $(`tab-${tab}`).getAttribute("aria-selected") === "true");
+  let next = null;
+  if (event.key === "ArrowRight") next = (current + 1) % TABS.length;
+  else if (event.key === "ArrowLeft") next = (current + TABS.length - 1) % TABS.length;
+  else if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = TABS.length - 1;
+  if (next === null) return;
+  event.preventDefault();
+  selectTab(TABS[next]);
+  $(`tab-${TABS[next]}`).focus();
+}
+
+// What the table does not say by itself: why it may be short, and why a page was not checked.
+function pagesNotes(result, pages, visited) {
+  if (pages.length === 0) return ["No page was fetched, so nothing was checked."];
+  const notes = [];
+  if (!result.crawl) {
+    notes.push("Only the target page was scanned. Tick the crawl box above the Scan button to scan the pages it links to.");
+  }
+  if (visited > pages.length) notes.push(`Showing the first ${pages.length} of ${visited} pages.`);
+  if (pages.some((page) => !page.checked)) {
+    notes.push("Pages that are not HTML, or that answered with an error or a redirect, were fetched but not checked.");
+  }
+  return notes;
+}
+
+function renderPages(result) {
+  const pages = result.pages || [];
+  const visited = result.crawl ? Math.max(result.crawl.pages_visited, pages.length) : pages.length;
+  $("tab-findings").textContent = `Findings (${result.findings.length})`;
+  $("tab-urls").textContent = `Scanned URLs (${visited})`;
+  $("pages-body").replaceChildren(
+    ...pages.map((page) => {
+      const row = el("tr");
+      row.append(
+        el("td", null, page.url),
+        el("td", null, String(page.status)),
+        el("td", null, String(page.depth)),
+        el("td", null, page.checked ? "Yes" : "No"),
+        el("td", null, String(page.findings)),
+      );
+      return row;
+    }),
+  );
+  $("pages-table").hidden = pages.length === 0;
+  $("pages-notes").replaceChildren(...pagesNotes(result, pages, visited).map((note) => el("p", "meta", note)));
+}
+
 function renderResult(result) {
   lastResult = result;
   $("result-target").textContent = result.target;
@@ -296,6 +359,8 @@ function renderResult(result) {
   renderErrors(result);
   $("severity-filter").value = "ALL";
   renderFindings();
+  renderPages(result);
+  selectTab("findings"); // a new result always opens on its findings
   showReportLink(result);
   $("results").hidden = false;
 }
@@ -362,6 +427,10 @@ $("scan-form").addEventListener("submit", runScan);
 $("severity-filter").addEventListener("change", renderFindings);
 $("group-by").addEventListener("change", renderFindings);
 $("download-json").addEventListener("click", downloadJson);
+for (const tab of TABS) {
+  $(`tab-${tab}`).addEventListener("click", () => selectTab(tab));
+  $(`tab-${tab}`).addEventListener("keydown", tabKeydown);
+}
 $("groups-all").addEventListener("click", () => setAllGroups(true));
 $("groups-none").addEventListener("click", () => setAllGroups(false));
 loadGroups();

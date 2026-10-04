@@ -218,6 +218,7 @@ def test_at12_json_report(http_server, tmp_path):
         "baseline",  # FR-CI-02
         "api",  # FR-SPEC-05
         "crawl",  # FR-CRAWL-01
+        "pages",  # FR-REPORT-10
     }  # fmt: skip
     assert set(data["summary"]) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
     assert set(data["findings"][0]) == {

@@ -26,10 +26,11 @@
     "errors",
     "baseline",
     "api",
-    "crawl"
+    "crawl",
+    "pages"
   ],
   "properties": {
-    "schema_version": { "const": "1.10" },
+    "schema_version": { "const": "1.11" },
     "scanner_version": { "type": "string", "minLength": 1 },
     "rules_version": { "type": "string", "minLength": 1 },
     "scan_id": {
@@ -102,6 +103,12 @@
     "crawl": {
       "description": "What the crawl of --crawl did (FR-CRAWL-01): settings and counts, no URLs; null without --crawl",
       "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/crawl" }]
+    },
+    "pages": {
+      "description": "The pages the scan fetched (FR-REPORT-10): the target page first, then the pages a crawl visited, at most 500; empty when the target could not be fetched",
+      "type": "array",
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/page" }
     },
     "baseline": {
       "description": "Comparison with the previous scan given by --baseline (FR-CI-02, FR-RPT-06); null without one",
@@ -201,6 +208,18 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
     },
     "count": { "type": "integer", "minimum": 0 },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "status", "depth", "checked", "findings"],
+      "properties": {
+        "url": { "type": "string", "minLength": 1 },
+        "status": { "description": "HTTP status of the answer", "type": "integer", "minimum": 100, "maximum": 599 },
+        "depth": { "description": "0 for the target page, 1 for a page it links to", "type": "integer", "minimum": 0 },
+        "checked": { "description": "The headers/cookies checks were applied to this page", "type": "boolean" },
+        "findings": { "description": "Findings of those checks that apply to this page", "type": "integer", "minimum": 0 }
+      }
+    },
     "crawl": {
       "type": "object",
       "additionalProperties": false,

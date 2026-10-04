@@ -8,10 +8,13 @@ Skipped when Node is not installed.
 
 from __future__ import annotations
 
+import atexit
 import json
+import queue
 import re
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -23,12 +26,59 @@ HARNESS = Path(__file__).with_name("ui_harness.js")
 APP_JS = Path(__file__).resolve().parents[1] / "websec_scanner" / "static" / "app.js"
 
 
+class _Harness:
+    """One long-lived Node process: starting Node once instead of once per test. Each expression still gets a
+    fresh fake DOM and a fresh load of app.js inside it (see ui_harness.js), so tests cannot affect each other."""
+
+    TIMEOUT = 60  # seconds for one expression
+
+    def __init__(self) -> None:
+        self._process = subprocess.Popen(  # noqa: S603 - Node on this repository's own harness, a fixed argument list
+            [NODE, str(HARNESS), str(APP_JS), "--serve"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+        self._replies: queue.Queue[str | None] = queue.Queue()
+        threading.Thread(target=self._read, daemon=True).start()
+        atexit.register(self.close)
+
+    def _read(self) -> None:
+        for line in self._process.stdout:
+            self._replies.put(line)
+        self._replies.put(None)  # the process ended
+
+    def evaluate(self, expression: str):
+        self._process.stdin.write(json.dumps({"expression": expression}) + "\n")
+        self._process.stdin.flush()
+        try:
+            line = self._replies.get(timeout=self.TIMEOUT)
+        except queue.Empty:
+            self.close()
+            raise AssertionError(f"Node did not answer within {self.TIMEOUT} s for: {expression[:200]}") from None
+        assert line is not None, f"Node ended: {self._process.stderr.read()}"
+        reply = json.loads(line)
+        assert reply["ok"], reply["error"]
+        return reply["value"]
+
+    def close(self) -> None:
+        if self._process.poll() is None:
+            self._process.kill()
+        for stream in (self._process.stdin, self._process.stdout, self._process.stderr):
+            if stream:
+                stream.close()
+
+
+_harness: _Harness | None = None
+
+
 def run(expression: str):
-    done = subprocess.run(  # noqa: S603 - Node on this repository's own harness, a fixed argument list
-        [NODE, str(HARNESS), str(APP_JS), expression], capture_output=True, text=True, timeout=60, check=False
-    )
-    assert done.returncode == 0, done.stderr
-    return json.loads(done.stdout)
+    global _harness
+    if _harness is None or _harness._process.poll() is not None:
+        _harness = _Harness()
+    return _harness.evaluate(expression)
 
 
 def finding(**overrides):
@@ -286,3 +336,189 @@ def test_a_result_without_a_crawl_hides_the_crawl_line_left_by_an_earlier_scan()
         "{hidden: __byId('crawl-line').hidden, text: __byId('crawl-line').textContent})"
     )
     assert run(expression) == {"hidden": True, "text": ""}
+
+
+# --- the two tabs (FR-UI-15) ---------------------------------------------------------------------------------------
+
+STATE = (
+    "{findings: [__byId('tab-findings').getAttribute('aria-selected'), __byId('tab-findings').tabIndex, "
+    "__byId('panel-findings').hidden], urls: [__byId('tab-urls').getAttribute('aria-selected'), "
+    "__byId('tab-urls').tabIndex, __byId('panel-urls').hidden]}"
+)
+
+
+def test_selecting_a_tab_shows_its_panel_and_hides_the_other():
+    assert run(f"(selectTab('urls'), {STATE})") == {
+        "findings": ["false", -1, True],
+        "urls": ["true", 0, False],
+    }
+    assert run(f"(selectTab('urls'), selectTab('findings'), {STATE})") == {
+        "findings": ["true", 0, False],
+        "urls": ["false", -1, True],
+    }
+
+
+def press(key: str, start: str = "findings"):
+    expression = (
+        f"(selectTab('{start}'), (() => {{ let prevented = false; "
+        f"tabKeydown({{key: '{key}', preventDefault() {{ prevented = true; }}}}); return prevented; }})(), "
+        f"{STATE}.urls[0] === 'true' ? 'urls' : 'findings')"
+    )
+    return run(expression)
+
+
+def test_the_arrow_keys_move_between_the_tabs_and_wrap():
+    assert press("ArrowRight", "findings") == "urls"
+    assert press("ArrowRight", "urls") == "findings"
+    assert press("ArrowLeft", "findings") == "urls"
+    assert press("ArrowLeft", "urls") == "findings"
+
+
+def test_home_and_end_go_to_the_first_and_last_tab():
+    assert press("End", "findings") == "urls"
+    assert press("Home", "urls") == "findings"
+
+
+def test_the_tab_that_is_reached_by_key_gets_the_focus():
+    focused = run(
+        "(selectTab('findings'), tabKeydown({key: 'ArrowRight', preventDefault() {}}), __byId('tab-urls').focused)"
+    )
+    assert focused is True
+
+
+def test_other_keys_do_nothing_and_are_not_swallowed():
+    expression = (
+        "(selectTab('findings'), (() => { let prevented = false; "
+        "tabKeydown({key: 'a', preventDefault() { prevented = true; }}); return prevented; })())"
+    )
+    assert run(expression) is False
+    assert press("a", "urls") == "urls"
+
+
+PAGES = [
+    {"url": "http://t.test/", "status": 200, "depth": 0, "checked": True, "findings": 4},
+    {"url": "http://t.test/a", "status": 200, "depth": 1, "checked": True, "findings": 6},
+    {"url": "http://t.test/doc.pdf", "status": 200, "depth": 1, "checked": False, "findings": 0},
+    {"url": "http://t.test/gone", "status": 404, "depth": 1, "checked": False, "findings": 0},
+]
+CRAWL = {"pages_visited": 4, "stopped_reason": "complete"}
+
+
+def rows(result):
+    tree = run(f"(renderPages({json.dumps(result)}), dump(__byId('pages-body')))")
+    return [[cell["text"] for cell in row["children"]] for row in tree["children"]]
+
+
+def test_each_page_is_a_row_with_its_url_status_depth_check_and_findings():
+    result = {**RESULT, "pages": PAGES, "crawl": CRAWL}
+    assert rows(result) == [
+        ["http://t.test/", "200", "0", "Yes", "4"],
+        ["http://t.test/a", "200", "1", "Yes", "6"],
+        ["http://t.test/doc.pdf", "200", "1", "No", "0"],
+        ["http://t.test/gone", "404", "1", "No", "0"],
+    ]
+
+
+def test_the_tab_labels_carry_the_counts():
+    labels = run(
+        f"(renderPages({json.dumps({**RESULT, 'pages': PAGES, 'crawl': CRAWL, 'findings': [{}, {}, {}]})}), "
+        "[__byId('tab-findings').textContent, __byId('tab-urls').textContent])"
+    )
+    assert labels == ["Findings (3)", "Scanned URLs (4)"]
+
+
+def test_a_url_from_the_site_is_a_text_cell_never_markup():
+    hostile = "http://t.test/<img src=x onerror=alert(1)>"
+    result = {**RESULT, "pages": [{**PAGES[0], "url": hostile}], "crawl": None}
+    tree = run(f"(renderPages({json.dumps(result)}), dump(__byId('pages-body')))")
+    blob = json.dumps(tree)
+    assert hostile in blob
+    assert '"tag": "img"' not in blob
+
+
+def notes(result):
+    tree = run(f"(renderPages({json.dumps(result)}), dump(__byId('pages-notes')))")
+    return [child["text"] for child in tree["children"]]
+
+
+def test_without_a_crawl_the_tab_says_only_the_target_page_was_scanned():
+    result = {**RESULT, "pages": PAGES[:1], "crawl": None}
+    assert notes(result) == [
+        "Only the target page was scanned. Tick the crawl box above the Scan button to scan the pages it links to."
+    ]
+
+
+def test_with_a_complete_crawl_there_is_no_such_note():
+    assert not any("Only the target page" in n for n in notes({**RESULT, "pages": PAGES, "crawl": CRAWL}))
+
+
+def test_pages_that_were_fetched_but_not_checked_are_explained():
+    text = notes({**RESULT, "pages": PAGES, "crawl": CRAWL})
+    assert (
+        "Pages that are not HTML, or that answered with an error or a redirect, were fetched but not checked." in text
+    )
+    only_checked = notes({**RESULT, "pages": PAGES[:2], "crawl": {**CRAWL, "pages_visited": 2}})
+    assert not any("fetched but not checked" in n for n in only_checked)
+
+
+def test_a_list_cut_short_says_how_many_pages_there_were():
+    result = {**RESULT, "pages": PAGES[:2], "crawl": {**CRAWL, "pages_visited": 900}}
+    assert "Showing the first 2 of 900 pages." in notes(result)
+    label = run(f"(renderPages({json.dumps(result)}), __byId('tab-urls').textContent)")
+    assert label == "Scanned URLs (900)"
+
+
+def test_no_pages_means_no_table_and_a_note():
+    result = {**RESULT, "pages": [], "crawl": None}
+    assert notes(result) == ["No page was fetched, so nothing was checked."]
+    assert run(f"(renderPages({json.dumps(result)}), __byId('pages-table').hidden)") is True
+    assert (
+        run(f"(renderPages({json.dumps({**RESULT, 'pages': PAGES[:1], 'crawl': None})}), __byId('pages-table').hidden)")
+        is False
+    )
+
+
+def test_a_result_from_a_server_without_pages_does_not_break_the_page():
+    older = {k: v for k, v in RESULT.items() if k != "pages"}
+    assert rows(older) == []
+
+
+def test_a_new_result_brings_the_user_back_to_the_findings_tab():
+    expression = (
+        f"(selectTab('urls'), renderResult({json.dumps({**RESULT, 'pages': PAGES[:1], 'crawl': None})}), "
+        "[__byId('tab-findings').getAttribute('aria-selected'), __byId('panel-urls').hidden])"
+    )
+    assert run(expression) == ["true", True]
+
+
+def test_the_tabs_are_wired_to_the_clicks_and_the_keys():
+    clicked = run(f"(__byId('tab-urls').listeners.click(), {STATE})")
+    assert clicked["urls"] == ["true", 0, False]
+    back = run(f"(__byId('tab-urls').listeners.click(), __byId('tab-findings').listeners.click(), {STATE})")
+    assert back["findings"] == ["true", 0, False]
+    keyed = run(
+        "(selectTab('findings'), __byId('tab-findings').listeners.keydown({key: 'ArrowRight', preventDefault() {}}), "
+        f"{STATE})"
+    )
+    assert keyed["urls"][0] == "true"
+    keyed_on_the_other = run(
+        "(selectTab('urls'), __byId('tab-urls').listeners.keydown({key: 'ArrowLeft', preventDefault() {}}), "
+        f"{STATE})"
+    )
+    assert keyed_on_the_other["findings"][0] == "true"
+
+
+def test_a_key_the_tabs_use_is_not_left_to_scroll_the_page():
+    for key in ("ArrowRight", "ArrowLeft", "Home", "End"):
+        expression = (
+            "(selectTab('findings'), (() => { let prevented = false; "
+            f"tabKeydown({{key: '{key}', preventDefault() {{ prevented = true; }}}}); return prevented; }})())"
+        )
+        assert run(expression) is True, key
+
+
+def test_a_finished_scan_fills_the_scanned_urls_tab_through_renderResult():
+    result = {**RESULT, "pages": PAGES, "crawl": CRAWL}
+    label = run(f"(renderResult({json.dumps(result)}), __byId('tab-urls').textContent)")
+    assert label == "Scanned URLs (4)"
+    assert run(f"(renderResult({json.dumps(result)}), __byId('pages-body').children.length)") == 4

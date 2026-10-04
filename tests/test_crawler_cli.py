@@ -41,7 +41,7 @@ def load(path):
 def test_crawl_flag_adds_pages_and_the_report_says_so(http_server, tmp_path):
     code, base, out = scan(http_server, tmp_path, "--crawl")
     report = load(out["json"])
-    assert report["schema_version"] == SCHEMA_VERSION == "1.10"
+    assert report["schema_version"] == SCHEMA_VERSION == "1.11"
     assert report["crawl"]["pages_visited"] == 3
     assert report["crawl"]["stopped_reason"] == "complete"
     csp = next(f for f in report["findings"] if f["id"] == "HDR-CONTENT-SECURITY-POLICY-MISSING")

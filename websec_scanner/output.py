@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from . import models
 from .baseline import Baseline, compare
 from .catalog import CHECK_GROUPS, group_of_check
 from .models import SEVERITY_ORDER, ScanResult
@@ -139,6 +140,17 @@ def build_report(
     report["api"] = result.api.to_dict(None if show_secrets else redact) if result.api is not None else None
     # FR-CRAWL-01: settings and counts only; no URL of a crawled page is in this object.
     report["crawl"] = result.crawl.to_dict() if result.crawl is not None else None
+    # FR-REPORT-10: the pages fetched; their URLs come from the scanned site, so they are redacted.
+    report["pages"] = [
+        {
+            "url": page.url if show_secrets else redact(page.url),
+            "status": page.status,
+            "depth": page.depth,
+            "checked": page.checked,
+            "findings": page.findings,
+        }
+        for page in result.pages[: models.MAX_REPORT_PAGES]
+    ]
     if show_secrets:
         return _scrub(report, tuple(secrets))
 
