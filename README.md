@@ -27,6 +27,7 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
 
 - [`docs/SRS-websec-scanner.md`](./docs/SRS-websec-scanner.md) — requirements
   specification; the single requirements document, checked against the code and tests.
+- [`tutorial.md`](./tutorial.md) — step-by-step integration: the agency API, and the scanner in a customer's CI/CD.
 - [`CLAUDE.md`](./CLAUDE.md) — working rules for this repository.
 - [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema of the `--json`
   report (`schema_version` 1.11).
