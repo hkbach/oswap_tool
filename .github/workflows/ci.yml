@@ -44,7 +44,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install -e ".[dev]"
+      - run: python -m pip install -e ".[dev,service]"
       # The suite only talks to mock servers on 127.0.0.1.
       - run: python -m pytest -q -rs
 
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: python -m pip install -e ".[dev]" "requests==2.32.3" "urllib3==2.0.0" "cryptography==42.0.0" "pyyaml==6.0.1"
+      - run: python -m pip install -e ".[dev,service]" "requests==2.32.3" "urllib3==2.0.0" "cryptography==42.0.0" "pyyaml==6.0.1" "fastapi==0.115.0" "uvicorn==0.30.0"
       - run: python -m pytest -q -rs
 
   audit:
@@ -70,6 +70,14 @@ jobs:
       - run: python -m pip install "pip-audit==2.10.1"
       # Resolves and audits the runtime dependencies declared in pyproject.toml.
       - run: python -m pip_audit --progress-spinner off .
+      # The agency API (decision D12) is the first part of the product meant to face a network, so the
+      # optional `service` dependencies are audited too, in an environment of their own.
+      - name: Audit the service dependencies
+        run: |
+          python -m venv /tmp/service-env
+          /tmp/service-env/bin/python -m pip install --upgrade pip
+          /tmp/service-env/bin/python -m pip install ".[service]"
+          python -m pip_audit --progress-spinner off --path "$(echo /tmp/service-env/lib/python*/site-packages)"
 
   docker:
     # FR-CI-04: the official image builds, runs as a non-root user, and can complete a scan.

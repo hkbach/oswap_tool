@@ -130,10 +130,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.25.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.26.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.25.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.26.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -355,7 +355,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.25.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.26.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -584,7 +584,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-87 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-88 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -738,6 +738,7 @@ websec_scanner/
   rule_loader.py    # loads and validates rules/*.json
   rules/            # sensitive paths and content signatures, known TLS interceptors, TLS probes
   api/              # --api-spec: a safe OpenAPI/Swagger loader and the inventory built from it
+  service/          # the agency API (optional extra [service]); nothing else imports it
   crawler/          # --crawl: link extraction and the same-origin crawl
   web.py            # local web UI server (python -m websec_scanner.web)
   static/           # index.html, app.js, app.css of the web UI
@@ -786,7 +787,44 @@ python -m websec_scanner https://example.com --crawl --crawl-depth 2 --crawl-max
   visited, not that the site has no other pages.
 - The local web UI crawls only when its checkbox is ticked, within the limits the server was started with (see "Local web UI").
 
+## Agency API (hosted service)
+
+For agencies that sell scans to their own clients, the scanner also runs as a **service**: the agency's backend
+sends scan requests to an HTTP API and reads the results. It is an optional part of the package and is not needed
+for the command line or the local web UI.
+
+```bash
+pip install "websec-scanner[service]"
+export WEBSEC_SERVICE_DATA_DIR=/var/lib/websec-service
+python -m websec_scanner.service.admin create-agency "Agency One"        # prints ag_...
+python -m websec_scanner.service.admin create-key ag_... --name backend  # prints the key ONCE
+python -m websec_scanner.service                                         # 127.0.0.1:8780, behind your TLS proxy
+```
+
+```bash
+curl -H "Authorization: Bearer wsk_..." http://127.0.0.1:8780/v1/options
+curl -H "Authorization: Bearer wsk_..." -H "Content-Type: application/json" \
+     -d '{"display_name": "Acme Ltd", "external_ref": "acme-1"}' http://127.0.0.1:8780/v1/clients
+```
+
+- **The contract** is `docs/openapi.yaml` (also served at `/v1/openapi.json`); a test keeps it equal to the code.
+- **Call it from your backend, never from a browser.** A key in a web page is a key anyone can read. The service
+  grants no cross-origin access. It listens on plain HTTP: put a reverse proxy that terminates TLS in front of it.
+- **Every key belongs to one agency** and sees only that agency's data. Keys are stored only as a hash and are shown
+  once. An id of another agency is answered exactly like an id that does not exist.
+- **Errors** are `application/problem+json` documents with a stable `code`; nothing you sent is echoed back.
+- **What exists today (phase 1):** clients (`/v1/clients`), what a scan request can ask for (`/v1/options`) and the
+  health check. **Not yet:** the scan endpoints themselves, quotas and rate limits, storing and deleting results.
+  Until the scan endpoints exist the service cannot scan anything.
+
 ## Changelog
+
+- **v1.26.0** (agency API, phase 1). A hosted service for agencies, in its own package. What changes for you:
+  - **Nothing changes for the command line and the local web UI.** The service is a separate, optional part
+    (`pip install websec-scanner[service]`, which adds FastAPI and uvicorn); the rest of the product never imports it.
+  - **New: `python -m websec_scanner.service`** (the API), **`python -m websec_scanner.service.admin`** (agencies and
+    API keys) and the contract `docs/openapi.yaml`. See "Agency API" above for what exists in this phase.
+  - Not in this release: the scan endpoints, quotas, rate limits.
 
 - **v1.25.0** (scanned pages). The result of a scan has two tabs, and the JSON report lists the
   pages the scan fetched. What changes for you:
