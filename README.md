@@ -1,7 +1,7 @@
 # Non-intrusive Web Security Scanner
 
-A Python tool (CLI + local web UI) that scans the security configuration of a
-website and compares it with OWASP guidance:
+A Python tool (CLI, local web UI, and an optional hosted API for agencies) that scans the security
+configuration of a website and compares it with OWASP guidance:
 [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/),
 [OWASP Top 10:2021](https://owasp.org/Top10/) and part of
 [OWASP ASVS](https://owasp.org/www-project-application-security-verification-standard/).
@@ -17,6 +17,7 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
 [Usage](#usage) ·
 [CI/CD integration](#cicd-integration) ·
 [Local web UI](#local-web-ui) ·
+[Agency API](#agency-api-hosted-service) ·
 [Development](#development) ·
 [Branch protection for `main`](#branch-protection-for-main) ·
 [Project layout](#project-layout) ·
@@ -28,7 +29,9 @@ ordinary GET requests and TLS handshakes, no attack payloads (see
   specification; the single requirements document, checked against the code and tests.
 - [`CLAUDE.md`](./CLAUDE.md) — working rules for this repository.
 - [`docs/report.schema.json`](./docs/report.schema.json) — JSON Schema of the `--json`
-  report (`schema_version` 1.8).
+  report (`schema_version` 1.11).
+- [`docs/openapi.yaml`](./docs/openapi.yaml) — the OpenAPI contract of the agency API (see
+  [Agency API](#agency-api-hosted-service)).
 - [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md) — license of every
   runtime and dev dependency, direct and transitive.
 
@@ -62,6 +65,11 @@ no handshake is completed and no data is sent. Because they ask for old protocol
 versions on purpose, **an IDS or WAF may log them**. `--no-tls-probe` turns them off and
 leaves the two connections that read and verify the certificate.
 
+With `--crawl` the scan also follows the links of the page on the same origin: up to
+`--crawl-max-pages` pages in all (50 by default), plus `robots.txt`, each one an ordinary GET that is
+checked for headers and cookies. It is off unless you ask; see
+[Crawling several pages](#crawling-several-pages).
+
 | Check | What it looks at | OWASP mapping |
 |---|---|---|
 | Security headers | HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, information-leaking headers (Server, X-Powered-By, ...) | A05:2021, A03:2021 |
@@ -85,9 +93,15 @@ sent; each blocked host is listed in `errors`.
   the application level, IDOR or SSRF. For those, use specialised tools such as
   OWASP ZAP or Burp Suite, or a manual penetration test, with a clear scope and
   permission.
-- Most checks look at the home page only; there is no crawler yet.
-- The TLS check looks at the protocol and cipher that were **negotiated**. It
-  does not probe which older protocol versions the server still accepts.
+- By default only the home page is checked for headers and cookies. `--crawl` (or the crawl box of the
+  web UI) checks the pages it links to on the same origin, but it does not run JavaScript, so a
+  single-page application shows few or no links, and it does not read forms, iframes or sitemaps. The
+  other checks (TLS, CORS, redirect, exposed files) look at the site as a whole, not at each crawled
+  page.
+- The TLS check asks which older protocol versions and weak cipher suites the server accepts, with
+  standard handshakes that are never completed. SSLv2 is not probed, and the probes are skipped when
+  the first connection fails. They were developed against local test servers and have not yet been
+  checked against a public reference server, so read a missing finding as "not seen", not as proof.
 - Findings from `robots.txt` and `sitemap.xml` are hints (`confidence: low`).
   Content signatures for exposed files are heuristics.
 - If software on the scanning machine re-signs TLS (antivirus web shields, TLS
@@ -118,7 +132,8 @@ so a clean report of a partial scan is not mistaken for a full one.
 | `directory-listing` | Directory listing | Common directories that return a browsable file index |
 | `robots-sitemap` | robots.txt / sitemap.xml | Sensitive-sounding paths advertised to crawlers (hints, low confidence) |
 
-The home page is always fetched, because most checks read it.
+The home page is always fetched, because most checks read it. `--crawl` adds pages to the `headers` and
+`cookies` test targets only.
 `python -m websec_scanner --list-checks` prints this list.
 
 ## Installation
@@ -313,6 +328,34 @@ sends anything, with exit code `2` and a message that names the file, when it:
 The console shows the first 100 endpoints; the JSON report has all of them. The local web UI does
 not accept a spec: a browser request carries at most 4,096 bytes, and `api_spec` is refused like
 any other field the page does not send.
+
+### Crawling several pages
+
+By default only the home page is checked for security headers and cookies. `--crawl` follows the
+links of the page (`<a>` and `<area>`) on the target's own origin and runs the same two checks on
+each HTML page it finds, so a missing header on `/login` is no longer invisible.
+
+```bash
+python -m websec_scanner https://example.com --crawl --crawl-depth 2 --crawl-max-pages 50 --yes
+```
+
+- **The same issue on many pages is one finding.** It lists the pages it was seen on
+  (`affected_urls`, at most 20) and how many there were (`affected_count`). Its fingerprint is the
+  same as without a crawl, so `--baseline` and `--suppressions` keep working. The evidence shown is
+  the first page's.
+- **It stays polite and inside the scope.** Only `GET`; the same session as the rest of the scan,
+  so `--exclude`, the default exclusions (logout, delete, ...), `--rate-limit`, `--max-requests`,
+  `--proxy`, `--header` and `--cookie` all apply. It never requests another origin, follows a
+  redirect that leaves the origin, or follows a link that carries credentials.
+- **`robots.txt` is read first and followed.** If it cannot be read (a server error), the crawl stops
+  and says so instead of guessing; `--ignore-robots` crawls without it, for a site you own.
+- **Limits, so a crawl stays small:** 2 levels, 50 pages, 60 seconds by default; at most 5 query
+  variants of one path. The report says why the crawl stopped (`crawl.stopped_reason`) and how many
+  links it left alone.
+- **Not covered:** pages that only exist after JavaScript runs (single-page apps), forms, and
+  links in iframes or sitemaps. A clean crawl means these checks found nothing on the pages that were
+  visited, not that the site has no other pages.
+- The local web UI crawls only when its checkbox is ticked, within the limits the server was started with (see "Local web UI").
 
 ### Exit codes
 
@@ -574,12 +617,43 @@ targets were not tested, non-fatal errors, and the findings:
   static HTML/CSS/JS in `websec_scanner/static/` that loads nothing from the
   internet.
 
+## Agency API (hosted service)
+
+For agencies that sell scans to their own clients, the scanner also runs as a **service**: the agency's backend
+sends scan requests to an HTTP API and reads the results. It is an optional part of the package and is not needed
+for the command line or the local web UI.
+
+```bash
+pip install "websec-scanner[service]"
+export WEBSEC_SERVICE_DATA_DIR=/var/lib/websec-service
+python -m websec_scanner.service.admin create-agency "Agency One"        # prints ag_...
+python -m websec_scanner.service.admin create-key ag_... --name backend  # prints the key ONCE
+python -m websec_scanner.service                                         # 127.0.0.1:8780, behind your TLS proxy
+```
+
+```bash
+curl -H "Authorization: Bearer wsk_..." http://127.0.0.1:8780/v1/options
+curl -H "Authorization: Bearer wsk_..." -H "Content-Type: application/json" \
+     -d '{"display_name": "Acme Ltd", "external_ref": "acme-1"}' http://127.0.0.1:8780/v1/clients
+```
+
+- **The contract** is `docs/openapi.yaml` (also served at `/v1/openapi.json`); a test keeps it equal to the code.
+- **Call it from your backend, never from a browser.** A key in a web page is a key anyone can read. The service
+  grants no cross-origin access. It listens on plain HTTP: put a reverse proxy that terminates TLS in front of it.
+- **Every key belongs to one agency** and sees only that agency's data. Keys are stored only as a hash and are shown
+  once. An id of another agency is answered exactly like an id that does not exist.
+- **Errors** are `application/problem+json` documents with a stable `code`; nothing you sent is echoed back.
+- **What exists today (phase 1):** clients (`/v1/clients`), what a scan request can ask for (`/v1/options`) and the
+  health check. **Not yet:** the scan endpoints themselves, quotas and rate limits, storing and deleting results.
+  Until the scan endpoints exist the service cannot scan anything. There is no Docker image for it yet.
+- Requirements are in the SRS, section 4.17 (`docs/SRS-websec-scanner.md`).
+
 ## Development
 
 Run the same steps as CI on your machine:
 
 ```bash
-pip install -r requirements-dev.txt   # the package in editable mode + ruff, pytest, jsonschema
+pip install -r requirements-dev.txt   # the package in editable mode + ruff, pytest, jsonschema, and the service extra
 ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
@@ -588,7 +662,9 @@ The test suite covers the acceptance scenarios AT-01 to AT-88 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
-local software intercepts TLS.
+local software intercepts TLS. The JavaScript of the web page is tested by running the real
+`app.js` under Node against a small fake DOM (`tests/ui_harness.js`); those tests skip themselves when
+Node is not installed.
 
 `benchmarks/` holds an accuracy benchmark that runs the scanner against OWASP Juice Shop
 and VAmPI in Docker and fails a change that makes it worse than a recorded baseline. It
@@ -624,8 +700,8 @@ on version tags (`v*`):
 |---|---|---|
 | `lint` | `lint` | `ruff check .` and `ruff format --check .` |
 | `test` | `test (ubuntu-24.04, 3.12)`, `test (ubuntu-24.04, 3.14)`, `test (windows-latest, 3.14)` | Offline `pytest` on Ubuntu 24.04 (Python 3.12, the oldest supported, and 3.14) and Windows (3.14). |
-| `min-deps` | `min-deps` | Offline `pytest` on Python 3.12 with the lowest dependency versions `pyproject.toml` allows |
-| `audit` | `audit` | `pip-audit` of the runtime dependencies declared in `pyproject.toml` |
+| `min-deps` | `min-deps` | Offline `pytest` on Python 3.12 with the lowest dependency versions `pyproject.toml` allows (runtime and the `service` extra) |
+| `audit` | `audit` | `pip-audit` of the runtime dependencies declared in `pyproject.toml`, and of the optional `service` dependencies in an environment of their own |
 | `docker` | `docker` | Builds the official image, checks it runs as a non-root user, and scans `tests/mock_server.py` from inside the container over `--network host` |
 | `docker-publish` | *(tag pushes only; not a required check — see below)* | Only on a `v*` tag, after `docker` passes: pushes the same image to `ghcr.io/hkbach/websec-scanner` as `:<tag>` and `:latest`. |
 | `secrets` | `secrets` | gitleaks over the whole git history, binary checksum verified. The allowlist in `.gitleaks.toml` covers only two fake values used by the redaction tests. |
@@ -727,7 +803,14 @@ GitHub plans; private repositories need a paid plan.
 websec_scanner/
   cli.py            # CLI entry point, runs the checks (run_scan)
   output.py         # the single output pipeline: redaction, sorting, gate, exit code
-  models.py         # Finding / ScanResult / Severity
+  models.py         # Finding / ScanResult / ScannedPage / Severity, SCHEMA_VERSION
+  config.py         # --config TOML file
+  baseline.py       # --baseline: new / unchanged / fixed findings
+  suppressions.py   # --suppressions: accepted findings with a reason and an expiry date
+  limits.py         # --rate-limit, --max-requests, --max-duration
+  request_options.py  # --header, --cookie, --proxy, --user-agent
+  exports.py        # CSV and JUnit output
+  cvss.py           # estimated CVSS 3.1 base scores
   catalog.py        # CWE, confidence, references and fingerprint for each finding id
   redact.py         # secret redaction
   report.py         # terminal output and JSON
@@ -738,8 +821,8 @@ websec_scanner/
   rule_loader.py    # loads and validates rules/*.json
   rules/            # sensitive paths and content signatures, known TLS interceptors, TLS probes
   api/              # --api-spec: a safe OpenAPI/Swagger loader and the inventory built from it
-  service/          # the agency API (optional extra [service]); nothing else imports it
   crawler/          # --crawl: link extraction and the same-origin crawl
+  service/          # the agency API (optional extra [service]); nothing else imports it
   web.py            # local web UI server (python -m websec_scanner.web)
   static/           # index.html, app.js, app.css of the web UI
   checks/
@@ -753,69 +836,11 @@ websec_scanner/
 examples/ci/        # CI templates for GitHub Actions, GitLab CI, Azure Pipelines, Jenkins
 benchmarks/         # accuracy benchmark against Juice Shop and VAmPI (runs in CI, see its README)
 tests/              # offline test suite, mock servers, golden files
-docs/               # SRS, JSON Schema of the report
+docs/               # SRS, JSON Schema of the report, OpenAPI contract of the agency API
 Dockerfile          # official CLI image, non-root, not published to a registry yet
 .dockerignore       # keeps the Docker build context to the package itself
 THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
-
-### Crawling several pages
-
-By default only the home page is checked for security headers and cookies. `--crawl` follows the
-links of the page (`<a>` and `<area>`) on the target's own origin and runs the same two checks on
-each HTML page it finds, so a missing header on `/login` is no longer invisible.
-
-```bash
-python -m websec_scanner https://example.com --crawl --crawl-depth 2 --crawl-max-pages 50 --yes
-```
-
-- **The same issue on many pages is one finding.** It lists the pages it was seen on
-  (`affected_urls`, at most 20) and how many there were (`affected_count`). Its fingerprint is the
-  same as without a crawl, so `--baseline` and `--suppressions` keep working. The evidence shown is
-  the first page's.
-- **It stays polite and inside the scope.** Only `GET`; the same session as the rest of the scan,
-  so `--exclude`, the default exclusions (logout, delete, ...), `--rate-limit`, `--max-requests`,
-  `--proxy`, `--header` and `--cookie` all apply. It never requests another origin, follows a
-  redirect that leaves the origin, or follows a link that carries credentials.
-- **`robots.txt` is read first and followed.** If it cannot be read (a server error), the crawl stops
-  and says so instead of guessing; `--ignore-robots` crawls without it, for a site you own.
-- **Limits, so a crawl stays small:** 2 levels, 50 pages, 60 seconds by default; at most 5 query
-  variants of one path. The report says why the crawl stopped (`crawl.stopped_reason`) and how many
-  links it left alone.
-- **Not covered:** pages that only exist after JavaScript runs (single-page apps), forms, and
-  links in iframes or sitemaps. A clean crawl means these checks found nothing on the pages that were
-  visited, not that the site has no other pages.
-- The local web UI crawls only when its checkbox is ticked, within the limits the server was started with (see "Local web UI").
-
-## Agency API (hosted service)
-
-For agencies that sell scans to their own clients, the scanner also runs as a **service**: the agency's backend
-sends scan requests to an HTTP API and reads the results. It is an optional part of the package and is not needed
-for the command line or the local web UI.
-
-```bash
-pip install "websec-scanner[service]"
-export WEBSEC_SERVICE_DATA_DIR=/var/lib/websec-service
-python -m websec_scanner.service.admin create-agency "Agency One"        # prints ag_...
-python -m websec_scanner.service.admin create-key ag_... --name backend  # prints the key ONCE
-python -m websec_scanner.service                                         # 127.0.0.1:8780, behind your TLS proxy
-```
-
-```bash
-curl -H "Authorization: Bearer wsk_..." http://127.0.0.1:8780/v1/options
-curl -H "Authorization: Bearer wsk_..." -H "Content-Type: application/json" \
-     -d '{"display_name": "Acme Ltd", "external_ref": "acme-1"}' http://127.0.0.1:8780/v1/clients
-```
-
-- **The contract** is `docs/openapi.yaml` (also served at `/v1/openapi.json`); a test keeps it equal to the code.
-- **Call it from your backend, never from a browser.** A key in a web page is a key anyone can read. The service
-  grants no cross-origin access. It listens on plain HTTP: put a reverse proxy that terminates TLS in front of it.
-- **Every key belongs to one agency** and sees only that agency's data. Keys are stored only as a hash and are shown
-  once. An id of another agency is answered exactly like an id that does not exist.
-- **Errors** are `application/problem+json` documents with a stable `code`; nothing you sent is echoed back.
-- **What exists today (phase 1):** clients (`/v1/clients`), what a scan request can ask for (`/v1/options`) and the
-  health check. **Not yet:** the scan endpoints themselves, quotas and rate limits, storing and deleting results.
-  Until the scan endpoints exist the service cannot scan anything.
 
 ## Changelog
 
