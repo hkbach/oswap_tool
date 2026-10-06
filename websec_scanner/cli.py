@@ -17,7 +17,7 @@ import os
 import re
 import ssl
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from urllib.parse import urlparse, urlsplit, urlunsplit
@@ -283,11 +283,18 @@ def run_scan(
     api_inventory: ApiInventory | None = None,
     crawl: CrawlOptions | None = None,
     on_request=None,
+    connect_guard: Callable[[str], bool] | None = None,
 ) -> ScanResult:
     """Scan ``base_url``. ``groups`` selects check groups (catalog.GROUP_IDS); None means all.
 
     The baseline GET always runs; a group that is not selected sends no request of its own.
+
+    ``connect_guard(ip) -> bool`` (the hosted service's protection against scanning internal addresses) is asked
+    about every connection, HTTP and TLS, after it is made and before anything is sent; it cannot be combined with
+    ``proxy``, which would hide the real address from it.
     """
+    if connect_guard is not None and proxy:
+        raise ValueError("connect_guard cannot be combined with a proxy: the guard would only see the proxy")
     parsed = urlparse(base_url)
     hostname = parsed.hostname or base_url
     selected = catalog.normalize_groups(groups) if groups is not None else list(catalog.GROUP_IDS)
@@ -311,6 +318,7 @@ def run_scan(
         cookies=extra_cookies,
         proxy=proxy,
         on_request=on_request,
+        connect_guard=connect_guard,
     )
 
     def run_tls(url: str) -> None:
@@ -327,6 +335,7 @@ def run_scan(
             limiter=limiter,  # TLS opens its own sockets, so it needs the limiter explicitly
             proxy=proxy,  # ...and the proxy, so it does not connect directly (FR-CI-07)
             probe=tls_probe,  # FR-DET-04: which protocol versions and weak ciphers the server accepts
+            connect_guard=connect_guard,
         )
 
     try:

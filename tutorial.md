@@ -2,16 +2,16 @@
 
 This tutorial covers two ways to put the WebSec Scanner into your own systems:
 
-- **[Part A – The agency API](#part-a--the-agency-api).** Your **backend** calls a hosted HTTP API to manage your clients
-  and (in a later release) to request scans and read results. Choose this if you sell scans to your own customers and
+- **[Part A – The agency API](#part-a--the-agency-api).** Your **backend** calls a hosted HTTP API to manage your clients,
+  request scans and read their results. Choose this if you sell scans to your own customers and
   want them inside your own web application.
 - **[Part B – CI/CD](#part-b--cicd).** A pipeline runs the scanner against a site and fails the build on findings. Choose
   this if you or your customer want a scan on every release or on a schedule.
 
 You can use either one, or both. They run the same scanner.
 
-> This tutorial is for version **1.26.0**. Everything marked **Verified** was run on 2026-10-05 against local test servers
-> (a mock site and a local copy of the service); [what was and was not verified](#what-was-and-was-not-verified) is listed
+> This tutorial is for version **1.27.0**. Everything marked **Verified** was run on 2026-10-05 and 2026-10-06 against local
+> test servers (a mock site and a local copy of the service); [what was and was not verified](#what-was-and-was-not-verified) is listed
 > at the end. Read it before you rely on a part.
 
 ## Before you start
@@ -46,18 +46,16 @@ You can use either one, or both. They run the same scanner.
 
 ## A2. What exists today
 
-| Available now (phase 1) | Not available yet |
+| Available now | Not available yet |
 |---|---|
-| Health check (`GET /healthz`) | The scan endpoints: requesting a scan and reading its result |
-| What a scan request can ask for (`GET /v1/options`) | Quotas and rate limits per agency |
-| Your clients: create, read, list, change, delete (`/v1/clients`) | Storing, querying and deleting scan results |
-| API keys with scopes, expiry and revocation | Webhooks |
+| Health check (`GET /healthz`) | Quotas and rate limits per agency (only limits on how many scans run and wait) |
+| What a scan request can ask for (`GET /v1/options`) | Cancelling or deleting a scan, a retention period, deleting a client's data |
+| Your clients: create, read, list, change, delete (`/v1/clients`) | Webhooks, comparing two scans |
+| **Scans: request, follow, list, read the report as JSON or HTML (`/v1/scans`)** | A Docker image of the service |
+| API keys with scopes, expiry and revocation | |
 
-**Until the scan endpoints exist, the service cannot scan anything.** You can build and test everything around them now
-(authentication, your client records, the form built from `/v1/options`). When the scan endpoints are released the
-contract in `docs/openapi.yaml` will be extended and this tutorial updated; the scan request is planned to carry the
-fields your demo page already has (target URL, which test targets to run, crawl on/off), but that contract is **not final**
-and nothing below depends on it.
+The contract is [`docs/openapi.yaml`](./docs/openapi.yaml) (version 1.1.0 of the API); the examples in this part were run against
+a local copy of the service.
 
 ## A3. Get access
 
@@ -87,7 +85,7 @@ export KEY=wsk_...        # from your secret store
 
 # 1. Is it up? (no key needed)
 curl -s $API/healthz
-# {"status":"ok","service_version":"1.26.0"}
+# {"status":"ok","service_version":"1.27.0"}
 
 # 2. What can a scan request ask for? Draw your form from this.
 curl -s -H "Authorization: Bearer $KEY" $API/v1/options
@@ -99,7 +97,7 @@ curl -s -H "Authorization: Bearer $KEY" $API/v1/options
 ```json
 {
   "api_version": "v1",
-  "scanner_version": "1.26.0",
+  "scanner_version": "1.27.0",
   "report_schema_version": "1.11",
   "check_groups": [
     {"id": "headers", "title": "Security headers", "description": "HSTS, CSP, ..."},
@@ -143,7 +141,144 @@ curl -s -o /dev/null -w "%{http_code}\n" -X DELETE -H "Authorization: Bearer $KE
   `cursor` until it is `null`. `limit` is 1 to 100 (default 50). Pages never repeat or skip a client. A cursor the service did
   not give you is a 400 `invalid_cursor`.
 
-## A6. Errors
+## A6. Requesting and reading a scan   *(Verified)*
+
+**The flow:** `POST /v1/scans` answers at once (`202`) and the scan runs in the background; poll `GET /v1/scans/{scan_id}`
+until `status` is `completed` or `failed`; then read `/report` (JSON) or `/report.html`. Scopes: `scans:write` to request,
+`scans:read` for everything else.
+
+```bash
+BODY='{"client_id": "cli_...", "target": "https://shop.example/", "checks": ["headers", "cookies", "exposed-files"],
+       "crawl": false, "attestation": {"confirmed": true, "statement_version": "v1"}}'
+
+curl -s -i -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+     -H "Idempotency-Key: order-1001" -d "$BODY" $API/v1/scans
+# HTTP/1.1 202 Accepted
+# location: /v1/scans/scn_01m48kgddp39m16z9a69wxfp2q
+# {"scan_id":"scn_01m48kgddp39m16z9a69wxfp2q","client_id":"cli_01m48kgd04124957tx0e87p4s2","target":"...","status":"queued",
+#  "checks":["headers","cookies","exposed-files"],"crawl":false,"created_at":"2026-10-06T12:37:38.868Z",
+#  "started_at":null,"finished_at":null,"summary":null,"error":null,"report_available":false}
+
+curl -s -H "Authorization: Bearer $KEY" $API/v1/scans/scn_01m48kgddp39m16z9a69wxfp2q          # poll
+curl -s -H "Authorization: Bearer $KEY" $API/v1/scans/scn_01m48kgddp39m16z9a69wxfp2q/report   # the report, JSON
+curl -s -H "Authorization: Bearer $KEY" $API/v1/scans/scn_01m48kgddp39m16z9a69wxfp2q/report.html
+```
+
+*(These calls were run against a local test site, so the target there was `http://127.0.0.1:8899/`; see "What a target must
+be" below for why you cannot scan that address on a production service.)* Once the scan has finished, the same `GET` answers:
+
+```json
+{
+  "scan_id": "scn_01m48kgddp39m16z9a69wxfp2q",
+  "status": "completed",
+  "started_at": "2026-10-06T12:37:38.885Z",
+  "finished_at": "2026-10-06T12:37:39.053Z",
+  "summary": {
+    "findings": 9,
+    "severity": {"CRITICAL": 2, "HIGH": 0, "MEDIUM": 3, "LOW": 1, "INFO": 3},
+    "gate": {"fail_on": "high", "failed": true, "incomplete": false},
+    "pages_scanned": 1
+  },
+  "error": null,
+  "report_available": true
+}
+```
+
+### The request
+
+| Field | Required | Meaning |
+|---|---|---|
+| `client_id` | yes | One of your clients (`cli_...`). A client that is not yours is a `404`, the same as one that does not exist |
+| `target` | yes | An `http://` or `https://` URL, or a host name (`shop.example` becomes `https://shop.example/`). No user name or password in it. At most 2048 characters |
+| `checks` | no | Check group ids from `GET /v1/options`; leave it out to run them all |
+| `crawl` | no | `true` or `false` (default `false`). A crawl follows the links of the page on the same origin and checks each page, within the operator's limits; it only adds pages to the `headers` and `cookies` groups. It must be a JSON boolean, not the text `"true"` |
+| `attestation` | yes | `{"confirmed": true, "statement_version": "v1"}`. See below |
+
+Unknown fields are refused (`422`), so there is no way to ask for a different speed, number of requests or time limit: **those
+are the operator's, not the request's.**
+
+**The attestation.** By sending `confirmed: true` you state that you are authorized to have this target scanned. You vouch
+for your own clients; the service supplies the scanner and the API and **keeps your statement with the scan** (which key, from
+which address, when, for which host). Keep your own record of who in your organisation confirmed what. The wording of
+statement `v1` is for TECHVIFY's legal reviewers to write; ask them for the current text before you rely on it.
+
+### What a target must be
+
+The service scans **public internet addresses only**. A target that is, or resolves to, a loopback, private, link-local,
+multicast or cloud-metadata address is refused, however it is written. This was run against a service with default settings:
+
+```text
+http://127.0.0.1:8899/                        422 target_not_allowed - The target resolves to an address this service does not scan (not a public internet address).
+http://169.254.169.254/latest/meta-data/      422 target_not_allowed - ...
+http://localhost/                             422 target_not_allowed - ...
+http://10.0.0.5/                              422 target_not_allowed - ...
+http://[::1]/                                 422 target_not_allowed - ...
+```
+
+The check runs when you request the scan and **again at every connection** (redirects, crawled pages and TLS handshakes
+included), so a name that changes its answer after the first check cannot lead the scanner inside. If a name does not resolve
+you get `422 target_unresolvable`; a web address with a user name or password is `422 credential_not_accepted`; something that
+is not a web address is `422 invalid_target`. None of these answers repeats what you sent.
+
+### Statuses
+
+| `status` | Meaning |
+|---|---|
+| `queued` | Waiting for a free slot |
+| `running` | Being scanned |
+| `completed` | Finished. `summary` and the report are available. **A scan that could not reach the site is also `completed`**: `summary.gate.incomplete` is `true` and the report's `errors` say why (the command line exits with code 3 in the same case) |
+| `failed` | The scan broke inside the service (`error.code` is `scan_error`) or the service stopped while it ran (`interrupted`). There is no report; request it again |
+
+`gate.failed` is `true` when a finding is at or above `fail_on` (`high`): the same decision the command line takes for its exit
+code. `summary` counts every finding; the report has the details, `evidence` and `recommendation` of each.
+
+**Polling.** Do not assume a duration. A scan of a small local site took under a second here; against a real site, its speed and
+the scan's speed limit (10 requests per second by default) decide, and a `crawl` takes longer. Poll every few seconds and let
+the pause grow; the clients below do this. A report asked for before the scan finished is `409 scan_not_finished`; for a failed scan, `409 scan_failed`.
+
+### The report
+
+`/report` is **the same JSON as the command line's `--json`** (`schema_version` 1.11, described by
+[`docs/report.schema.json`](./docs/report.schema.json)), with secrets already masked. It is stored as written, so reading
+it twice gives the same bytes. `/report.html` is the same report as a standalone page (no scripts, works offline, printable);
+it is sent with a restrictive `Content-Security-Policy`. If you show it inside your own application, treat it as content from
+another origin; embedding it was not tested for this tutorial.
+
+### Retrying safely
+
+Send an `Idempotency-Key` (1 to 64 characters of `A-Z a-z 0-9 . _ : -`; a UUID is fine) with every `POST /v1/scans`, and keep it
+with your own record of the order. If a request times out, send **the same request with the same key**:
+
+- the same key with the same request returns the **first scan** (`202`, header `Idempotent-Replayed: true`) and queues nothing;
+- the same key with a different request is `409 idempotency_key_reused`;
+- the service remembers a key for 24 hours, per agency.
+
+```bash
+curl -s -i -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -H "Idempotency-Key: order-1001" -d "$BODY" $API/v1/scans
+# HTTP/1.1 202 Accepted
+# idempotent-replayed: true
+# location: /v1/scans/scn_01m48kgddp39m16z9a69wxfp2q
+```
+
+### Finding scans again
+
+```bash
+curl -s -H "Authorization: Bearer $KEY" "$API/v1/scans?client_id=cli_...&status=completed&limit=20"
+# {"items":[{...}],"next_cursor":null}
+```
+
+Newest first, `limit` 1 to 100 (default 50), pass `next_cursor` back as `cursor` until it is `null`. You can filter by `client_id`
+and by `status`. This is how your site finds a client's earlier scans; each result is kept as one JSON file under the
+operator's data directory.
+
+### Limits you will meet
+
+- **At most 4 scans run at once, 2 per agency, and one at a time against the same host**; the rest wait their turn (oldest first).
+- **At most 100 scans wait in total and 20 per agency.** A request beyond that is `429 queue_full` with `Retry-After: 30`; nothing
+  is queued and your `Idempotency-Key` is not used up, so you can send the same request again.
+- **Per scan:** 10 requests per second, 500 requests, 300 seconds (the operator may change these).
+
+## A7. Errors
 
 Every error is a JSON document of type `application/problem+json` with a stable `code`. **Branch on `code`, not on the text**,
 and log the `request_id` (it is also the `X-Request-Id` response header); support will ask for it.
@@ -173,25 +308,38 @@ Nothing you sent is echoed back (`errors` says *where* and *what*, never the val
 | 404 | `not_found` | No such record **for your agency** | Includes ids that belong to someone else |
 | 405 | `method_not_allowed` | Wrong HTTP method for the route | |
 | 409 | `external_ref_taken` | One of your active clients already has this `external_ref` | Look it up instead |
+| 409 | `idempotency_key_reused` | That `Idempotency-Key` was used for a different request | Use a new key for a new request |
+| 409 | `scan_not_finished` | The report was asked for before the scan finished | Poll the scan |
+| 409 | `scan_failed` | The scan failed, so there is no report | Request the scan again |
 | 413 | `body_too_large` | The request body is over 64 KiB | |
 | 422 | `validation_error` | The request is not valid | Read `errors` |
+| 422 | `invalid_target` | The target is not a web address or host name | |
+| 422 | `credential_not_accepted` | The target has a user name or password | Remove it |
+| 422 | `target_not_allowed` | The target is not a public internet address | |
+| 422 | `target_unresolvable` | The target's name did not resolve in time | Check the name, retry |
+| 422 | `invalid_checks` | A check group id is not one of `GET /v1/options` | |
+| 422 | `unsupported_statement_version` | The attestation's `statement_version` is not accepted | Use a version the message names |
+| 429 | `queue_full` | Too many scans are waiting | Wait for `Retry-After` seconds and send the same request |
 | 500 | `internal_error` | The service failed; no detail is given | Retry later; quote `request_id` |
 | 503 | `unavailable` | The service cannot reach its database | Retry later |
 
 **Retrying.** Retry network errors, 500 and 503 with exponential backoff and a limit. `GET`, `PATCH` and `DELETE` are safe to
-retry. `POST /v1/clients` has no idempotency key yet: after a timeout, look the client up by `external_ref` before creating it
-again (the examples below do this).
+retry. `POST /v1/scans` is safe to retry **with the same `Idempotency-Key`** (A6). `POST /v1/clients` has no idempotency key:
+after a timeout, look the client up by `external_ref` before creating it again (the examples below do this).
 
-## A7. Python client   *(Verified)*
+## A8. Python client   *(Verified, Python 3.14)*
 
 ```python
 """A small client for the WebSec Scanner service API (backend use). Needs: pip install requests"""
+
 import os
+import time
+import uuid
 
 import requests
 
-BASE_URL = os.environ["WEBSEC_API_URL"]   # e.g. https://scanner.example.com
-API_KEY = os.environ["WEBSEC_API_KEY"]    # wsk_..., kept in your secret store, never in code or a web page
+BASE_URL = os.environ["WEBSEC_API_URL"]  # e.g. https://scanner.example.com
+API_KEY = os.environ["WEBSEC_API_KEY"]  # wsk_..., kept in your secret store, never in code or a web page
 
 
 class ApiProblem(Exception):
@@ -229,23 +377,80 @@ def find_or_create_client(external_ref, display_name):
         raise
 
 
-def all_clients():
-    """Every client, following next_cursor until it is null."""
+def request_scan(client_id, target, checks=None, crawl=False, idempotency_key=None):
+    """Queue a scan. Keep the key you pass (or the one returned) and send it again if you have to retry."""
+    key = idempotency_key or str(uuid.uuid4())
+    body = {
+        "client_id": client_id,
+        "target": target,
+        "crawl": crawl,
+        # You confirm that you are authorized to have this target scanned. Keep your own record of who confirmed it.
+        "attestation": {"confirmed": True, "statement_version": "v1"},
+    }
+    if checks:
+        body["checks"] = checks
+    return call("POST", "/v1/scans", json=body, headers={"Idempotency-Key": key})
+
+
+def wait_for_scan(scan_id, timeout=900, poll=2.0):
+    """Poll until the scan is completed or failed. The pause grows a little, so a long scan is not hammered."""
+    deadline = time.monotonic() + timeout
+    while True:
+        scan = call("GET", f"/v1/scans/{scan_id}")
+        if scan["status"] in ("completed", "failed"):
+            return scan
+        if time.monotonic() > deadline:
+            raise TimeoutError(f"scan {scan_id} is still {scan['status']} after {timeout} s")
+        time.sleep(poll)
+        poll = min(poll * 1.5, 15.0)
+
+
+def scan_report(scan_id):
+    """The report of a completed scan: the same JSON the command line writes with --json."""
+    return call("GET", f"/v1/scans/{scan_id}/report")
+
+
+def scans_of_client(client_id, status=None):
+    """Every scan of one client, newest first, following next_cursor until it is null."""
     cursor = None
     while True:
-        page = call("GET", "/v1/clients", params={"limit": 100, **({"cursor": cursor} if cursor else {})})
+        params = {"client_id": client_id, "limit": 100, **({"status": status} if status else {}), **({"cursor": cursor} if cursor else {})}
+        page = call("GET", "/v1/scans", params=params)
         yield from page["items"]
         cursor = page["next_cursor"]
         if cursor is None:
             return
+
+
+if __name__ == "__main__":
+    target = os.environ["WEBSEC_DEMO_TARGET"]  # a site you are authorized to scan
+    acme = find_or_create_client("acme-py", "Acme (Python demo)")
+    first = request_scan(acme["client_id"], target, checks=["headers", "cookies"], idempotency_key="demo-py-1")
+    again = request_scan(acme["client_id"], target, checks=["headers", "cookies"], idempotency_key="demo-py-1")
+    print("same scan after a retry:", first["scan_id"] == again["scan_id"], "| first status:", first["status"])
+    done = wait_for_scan(first["scan_id"], timeout=60, poll=0.2)
+    print("finished:", done["status"], "| findings:", done["summary"]["findings"], "| gate failed:", done["summary"]["gate"]["failed"])
+    report = scan_report(first["scan_id"])
+    print("report:", report["schema_version"], [f["id"] for f in report["findings"][:3]])
+    print("scans of this client:", [(s["scan_id"][-6:], s["status"]) for s in scans_of_client(acme["client_id"])])
+    try:
+        request_scan(acme["client_id"], target, checks=["tls"], idempotency_key="demo-py-1")  # same key, another request
+    except ApiProblem as problem:
+        print("reusing a key for another request:", problem.status, problem.code)
+    try:
+        call("GET", f"/v1/scans/{first['scan_id']}/report", headers={"Authorization": "Bearer wsk_nope"})
+    except ApiProblem as problem:
+        print("a wrong key:", problem.status, problem.code)
 ```
 
-## A8. Node.js client   *(Verified, Node 24)*
+## A9. Node.js client   *(Verified, Node 24)*
 
 ```javascript
-// Needs Node 18+ (global fetch).
+// A small client for the WebSec Scanner service API (backend use). Needs Node 18+ (global fetch).
+import { randomUUID } from "node:crypto";
+
 const BASE_URL = process.env.WEBSEC_API_URL; // e.g. https://scanner.example.com
-const API_KEY = process.env.WEBSEC_API_KEY;  // wsk_..., from your secret store, never in code or a web page
+const API_KEY = process.env.WEBSEC_API_KEY; // wsk_..., from your secret store, never in code or a web page
 
 class ApiProblem extends Error {
   constructor(status, body) {
@@ -254,12 +459,12 @@ class ApiProblem extends Error {
   }
 }
 
-async function call(method, path, { query, json } = {}) {
+async function call(method, path, { query, json, headers } = {}) {
   const url = new URL(path, BASE_URL);
   for (const [key, value] of Object.entries(query ?? {})) url.searchParams.set(key, value);
   const response = await fetch(url, {
     method,
-    headers: { Authorization: `Bearer ${API_KEY}`, ...(json ? { "Content-Type": "application/json" } : {}) },
+    headers: { Authorization: `Bearer ${API_KEY}`, ...(json ? { "Content-Type": "application/json" } : {}), ...headers },
     body: json ? JSON.stringify(json) : undefined,
     signal: AbortSignal.timeout(30_000),
   });
@@ -269,17 +474,66 @@ async function call(method, path, { query, json } = {}) {
   return body;
 }
 
-async function* allClients() {
+// Queue a scan. Keep the key (or the one returned) and send it again if you have to retry.
+async function requestScan(clientId, target, { checks, crawl = false, idempotencyKey = randomUUID() } = {}) {
+  const json = {
+    client_id: clientId,
+    target,
+    crawl,
+    // You confirm that you are authorized to have this target scanned. Keep your own record of who confirmed it.
+    attestation: { confirmed: true, statement_version: "v1" },
+    ...(checks ? { checks } : {}),
+  };
+  return call("POST", "/v1/scans", { json, headers: { "Idempotency-Key": idempotencyKey } });
+}
+
+// Poll until the scan is completed or failed; the pause grows a little so a long scan is not hammered.
+async function waitForScan(scanId, { timeoutMs = 900_000, pollMs = 2000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const scan = await call("GET", `/v1/scans/${scanId}`);
+    if (scan.status === "completed" || scan.status === "failed") return scan;
+    if (Date.now() > deadline) throw new Error(`scan ${scanId} is still ${scan.status}`);
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    pollMs = Math.min(pollMs * 1.5, 15_000);
+  }
+}
+
+// The report of a completed scan: the same JSON the command line writes with --json.
+const scanReport = (scanId) => call("GET", `/v1/scans/${scanId}/report`);
+
+async function* scansOfClient(clientId, status) {
   let cursor;
   do {
-    const page = await call("GET", "/v1/clients", { query: { limit: 100, ...(cursor ? { cursor } : {}) } });
+    const page = await call("GET", "/v1/scans", {
+      query: { client_id: clientId, limit: 100, ...(status ? { status } : {}), ...(cursor ? { cursor } : {}) },
+    });
     yield* page.items;
     cursor = page.next_cursor;
   } while (cursor);
 }
+
+const target = process.env.WEBSEC_DEMO_TARGET; // a site you are authorized to scan
+const found = (await call("GET", "/v1/clients", { query: { external_ref: "acme-node" } })).items;
+const client = found[0] ?? (await call("POST", "/v1/clients", { json: { display_name: "Acme (Node demo)", external_ref: "acme-node" } }));
+const first = await requestScan(client.client_id, target, { checks: ["headers", "cookies"], idempotencyKey: "demo-node-1" });
+const again = await requestScan(client.client_id, target, { checks: ["headers", "cookies"], idempotencyKey: "demo-node-1" });
+console.log("same scan after a retry:", first.scan_id === again.scan_id, "| first status:", first.status);
+const done = await waitForScan(first.scan_id, { timeoutMs: 60_000, pollMs: 200 });
+console.log("finished:", done.status, "| findings:", done.summary.findings, "| gate failed:", done.summary.gate.failed);
+const report = await scanReport(first.scan_id);
+console.log("report:", report.schema_version, report.findings.slice(0, 3).map((f) => f.id));
+const mine = [];
+for await (const scan of scansOfClient(client.client_id)) mine.push(`${scan.scan_id.slice(-6)}:${scan.status}`);
+console.log("scans of this client:", mine);
+try {
+  await requestScan(client.client_id, target, { checks: ["tls"], idempotencyKey: "demo-node-1" });
+} catch (error) {
+  console.log("reusing a key for another request:", error.status, error.code);
+}
 ```
 
-## A9. Building your form from `/v1/options`
+## A10. Building your form from `/v1/options`
 
 Your page should look like the demo page: a target URL, the test targets as checkboxes, and a crawl checkbox. Do not hard-code
 the list of test targets; draw it from `check_groups` so a new one appears without a release of your front end. The notes
@@ -293,9 +547,11 @@ below describe how the demo page behaves, so your pages feel the same:
 - Require the user to confirm that they are authorized to scan the target, and keep that confirmation on your side: you
   vouch for your clients' authorization, so keep a record of who confirmed what and when.
 
-Your front end sends this to **your backend**, which validates it and calls the service with its key.
+Your front end sends this to **your backend**, which validates it, adds the `attestation`, and calls `POST /v1/scans` with its
+key and an `Idempotency-Key`. Show the scan's progress by polling **your own backend**, which polls the service; never give the key,
+or a link that carries it, to the browser.
 
-## A10. Production checklist
+## A11. Production checklist
 
 - [ ] The key is in a secret store or environment variable of your backend; it is not in the repository, in a front-end
       bundle, in logs or in error reports.
@@ -308,8 +564,12 @@ Your front end sends this to **your backend**, which validates it and calls the 
 - [ ] Your code handles `401` (stop and alert: the key was revoked, expired or your agency was suspended) differently from
       `5xx` (retry).
 - [ ] You page through lists with `next_cursor` rather than assuming one page.
+- [ ] Every `POST /v1/scans` carries an `Idempotency-Key` that you keep, so a retry cannot queue a second scan.
+- [ ] You record who confirmed the attestation, for which target and when, on your side too.
+- [ ] You treat a `completed` scan whose `summary.gate.incomplete` is `true` as "not checked", not as "clean".
+- [ ] You handle `429 queue_full` by waiting `Retry-After` seconds, and `failed` scans by requesting them again.
 
-## A11. For the operator of the service
+## A12. For the operator of the service
 
 This is for whoever hosts the service (TECHVIFY or an agency that runs its own).
 
@@ -328,13 +588,25 @@ python -m websec_scanner.service.admin activate-agency ag_...
 python -m websec_scanner.service --port 8780                                      # 127.0.0.1 only by default
 ```
 
-*(Verified: creating an agency and keys, starting the service, and the calls in A4, A7 and A8.)*
+*(Verified: creating an agency and keys, starting the service, and the calls in A4, A6, A8 and A9.)*
 
-- **Settings** are environment variables: `WEBSEC_SERVICE_DATA_DIR` (default `./websec-service-data`, or `--data-dir`),
-  and the crawl limits `WEBSEC_SERVICE_CRAWL_DEPTH`, `WEBSEC_SERVICE_CRAWL_MAX_PAGES`, `WEBSEC_SERVICE_CRAWL_MAX_DURATION`
-  (defaults 2, 50, 60). A bad value stops the service at start.
-- **Data.** The data directory holds one SQLite database (`service.db`) and, later, the scan results (`results/`). Back up the
-  whole directory. Keys are stored only as hashes. The database records an audit trail of changes (who, which key, from which
+- **Settings** are environment variables. A bad or non-positive value stops the service at start.
+
+  | Variable | Default | Meaning |
+  |---|---|---|
+  | `WEBSEC_SERVICE_DATA_DIR` (or `--data-dir`) | `./websec-service-data` | The database and the results |
+  | `..._CRAWL_DEPTH`, `..._CRAWL_MAX_PAGES`, `..._CRAWL_MAX_DURATION` | 2, 50, 60 | What a crawl may do when a request asks for one |
+  | `..._MAX_CONCURRENT_SCANS` | 4 | Scans running at once |
+  | `..._MAX_CONCURRENT_PER_AGENCY` | 2 | Of those, for one agency |
+  | `..._MAX_QUEUED_SCANS`, `..._MAX_QUEUED_PER_AGENCY` | 100, 20 | Scans waiting, in total and per agency |
+  | `..._SCAN_RATE_LIMIT` | 10 | Requests per second of one scan |
+  | `..._SCAN_MAX_REQUESTS`, `..._SCAN_MAX_DURATION` | 500, 300 | Requests and seconds of one scan |
+  | `..._TLS_PROBE` | true | The scanner's TLS probes (about 11 extra handshakes with old protocol versions, which a target's IDS may log) |
+  | `..._ALLOW_PRIVATE_TARGETS` | false | **Development only.** Lets a scan reach loopback and private addresses; the service warns when it starts |
+
+  All names start with `WEBSEC_SERVICE_`. Agencies cannot change any of these.
+- **Data.** The data directory holds one SQLite database (`service.db`) and the scan results
+  (`results/<agency>/<client>/<year>/<month>/<scan>.json`). Back up the whole directory. Nothing deletes a result yet. Keys are stored only as hashes. The database records an audit trail of changes (who, which key, from which
   address), without secrets or client names.
 - **TLS.** Put a reverse proxy in front that terminates TLS and forwards to `127.0.0.1:8780`. Bind to another interface only
   if you must (`--host`). *(No proxy configuration was tested for this tutorial.)*
@@ -342,8 +614,12 @@ python -m websec_scanner.service --port 8780                                    
   of the data.
 - **Upgrades.** The database is migrated at start. A database written by a *newer* version than the service understands
   makes it refuse to start.
-- **Not yet in place** (planned for later phases): limits on repeated wrong keys, per-agency quotas and rate limits.
-  Until then, put rate limiting on the reverse proxy.
+- **Scans and restarts.** The queue is in the database. When the service starts again, a scan that was running is marked
+  `failed` (`interrupted`) and the waiting scans run. Scans are threads of the service process: run **one** instance per data
+  directory.
+- **Never expose a service started with `ALLOW_PRIVATE_TARGETS`.** It would let an agency scan your internal network.
+- **Not yet in place** (planned for later phases): limits on repeated wrong keys, per-agency quotas and rate limits, deleting
+  results. Until then, put rate limiting on the reverse proxy.
 
 ---
 
@@ -365,7 +641,7 @@ pip install "git+https://github.com/hkbach/oswap_tool@<ref>"
 ```
 
 `<ref>` is a release tag or a commit. **Use a commit SHA until release tags are published:** at the time of writing the
-repository has **no release tags**, so the `v1.26.0` in the templates under [`examples/ci/`](./examples/ci/) does not exist
+repository has **no release tags**, so the `v1.27.0` in the templates under [`examples/ci/`](./examples/ci/) does not exist
 yet and `pip install` would fail on it. A pinned commit works:
 
 ```bash
@@ -576,7 +852,7 @@ gets its own files, named after the target; `--baseline-dir` compares each targe
 | Behind a corporate proxy | `--proxy http://host:port` (`http://` only). Without it the HTTP requests honour `HTTP_PROXY`/`HTTPS_PROXY`, but the TLS check connects directly |
 | Many `429`/`503` answers, or the scan is cut short | The target is rate-limiting you: lower `--rate-limit`; `limits.slowdowns` in the JSON counts how often the scanner backed off. A WAF may also block it: ask the owner to allow the runner |
 | The target's logs show odd TLS handshakes | The TLS probes ask for old protocol versions on purpose (about 11 extra handshakes, never completed). Turn them off with `--no-tls-probe` |
-| `pip install` fails on `@v1.26.0` | There is no such tag yet; use a commit (B2) |
+| `pip install` fails on `@v1.27.0` | There is no such tag yet; use a commit (B2) |
 | A finding you accept keeps failing the build | Add a suppression with a reason and an expiry date (B5), or record a baseline |
 | The job takes too long | A crawl adds time: lower `--crawl-max-pages`, or set `--max-duration`. Run it on a schedule, not on every commit |
 
@@ -614,10 +890,12 @@ gets its own files, named after the target; `--baseline-dir` compares each targe
 
 | Part | Status |
 |---|---|
-| Service: create agency and keys, start it, `healthz`, `options`, create/list/find/rename/delete clients, the error answers shown (409, 422, 401, 403, 404), the Python and Node clients | **Run** on 2026-10-05 against a local copy of the service on loopback, with Python 3.14 and Node 24 |
+| Service: create agency and keys, start it, `healthz`, `options`, create/list/find/rename/delete clients, the error answers shown (409, 422, 401, 403, 404) | **Run** on 2026-10-05 against a local copy of the service on loopback, with Python 3.14 and Node 24 |
 | CLI: the scan step and its reports, exit codes 0, 1, 2 and 3, `--baseline`, `--suppressions` (including an expired one), `--crawl` with limits, `--config`, `--quiet` | **Run** against the repository's local mock site, not a real target |
 | Installing from a pinned commit with `pip` | **Run** (`--dry-run`) |
 | The four pipeline templates, the JUnit publishing snippets | **Not run** on GitHub, GitLab, Azure or Jenkins |
 | Docker image, GHCR tags | **Not tested**; no Docker daemon was available, and no release tag has been published |
 | Reverse proxy and TLS in front of the service, running the service for real traffic or load | **Not tested** |
-| The scan endpoints of the API | **Do not exist yet** |
+| The scan endpoints: requesting a scan, the replay with the same key, polling, the status, the JSON report, the HTML report, the list, the `409` for a reused key, the `422` for a missing attestation, the `404` for an unknown id, a crawl, and the refusal of five internal targets by a service with default settings | **Run** on 2026-10-06 against local copies of the service (one in development mode, one with default settings) and the repository's mock site; the Python and Node clients of A8 and A9 as well |
+| Scanning a **real public site** through the API | **Not done**: the tests and these examples only scan a local site, because this repository's rules forbid scanning hosts that are not ours |
+| The behaviour of the connection check against a real DNS-rebinding attack on the internet | **Not tested**: it is tested with a name that is made to look public and a local server, which proves the check but is not an attack |

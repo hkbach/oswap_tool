@@ -13,7 +13,7 @@ import pytest
 
 from websec_scanner.service import config, db, ids, security
 
-# --- ids ---------------------------------------------------------------------------------------------------
+# --- ids ------------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(("kind", "prefix"), [("agency", "ag"), ("client", "cli"), ("scan", "scn"), ("key", "key")])
@@ -56,7 +56,7 @@ def test_the_time_in_an_id_is_now():
     assert before <= ids.created_ms(value) <= int(time.time() * 1000)
 
 
-# --- API keys ------------------------------------------------------------------------------------------------
+# --- API keys -------------------------------------------------------------------------------------
 
 
 def test_a_key_has_a_handle_and_a_secret():
@@ -107,7 +107,7 @@ def test_scopes_come_back_in_the_documented_order_and_unknown_ones_are_refused()
         security.parse_scopes(["clients:read", "admin"])
 
 
-# --- settings -------------------------------------------------------------------------------------------------
+# --- settings -------------------------------------------------------------------------------------
 
 
 def test_settings_default_to_the_cli_crawl_limits(tmp_path):
@@ -159,7 +159,7 @@ def test_the_data_directory_defaults_to_a_local_folder():
     assert config.Settings.from_env({}).data_dir.name == "websec-service-data"
 
 
-# --- the database ------------------------------------------------------------------------------------------------
+# --- the database ---------------------------------------------------------------------------------
 
 
 class Clock:
@@ -188,7 +188,7 @@ def repo(tmp_path, clock):
 def test_migrating_twice_changes_nothing(repo):
     assert repo.migrate() == repo.migrate() == db.SCHEMA_VERSION
     with sqlite3.connect(repo.path) as raw:
-        assert raw.execute("SELECT version FROM schema_migrations").fetchall() == [(1,)]
+        assert raw.execute("SELECT version FROM schema_migrations").fetchall() == [(1,), (2,)]  # one row per migration
 
 
 def test_a_database_newer_than_the_service_is_not_touched(repo):
@@ -404,3 +404,133 @@ def test_a_second_touch_inside_the_window_does_not_even_open_the_database(repo, 
     monkeypatch.setattr(repo, "_connect", lambda *a, **k: opened.append(1) or real(*a, **k))
     repo.touch_key(record["key_id"], 60)
     assert opened == []
+
+
+# --- the scan settings (phase 2) ------------------------------------------------------------------
+
+
+def test_the_scan_settings_default_to_the_documented_limits():
+    s = config.Settings.from_env({})
+    assert (s.max_concurrent_scans, s.max_concurrent_per_agency, s.max_queued_scans, s.max_queued_per_agency) == (
+        4,
+        2,
+        100,
+        20,
+    )
+    assert (s.scan_rate_limit, s.scan_max_requests, s.scan_max_duration, s.scan_timeout) == (10.0, 500, 300.0, 10)
+    assert s.tls_probe is True and s.allow_private_targets is False  # the safe way round
+    assert s.attestation_versions == ("v1",) and s.idempotency_ttl_seconds == 86400
+
+
+def test_the_scan_settings_are_read_from_the_environment():
+    env = {
+        "WEBSEC_SERVICE_MAX_CONCURRENT_SCANS": "8",
+        "WEBSEC_SERVICE_MAX_CONCURRENT_PER_AGENCY": "3",
+        "WEBSEC_SERVICE_MAX_QUEUED_SCANS": "50",
+        "WEBSEC_SERVICE_MAX_QUEUED_PER_AGENCY": "5",
+        "WEBSEC_SERVICE_SCAN_RATE_LIMIT": "2.5",
+        "WEBSEC_SERVICE_SCAN_MAX_REQUESTS": "99",
+        "WEBSEC_SERVICE_SCAN_MAX_DURATION": "30",
+        "WEBSEC_SERVICE_TLS_PROBE": "0",
+        "WEBSEC_SERVICE_ALLOW_PRIVATE_TARGETS": "yes",
+    }
+    s = config.Settings.from_env(env)
+    assert (s.max_concurrent_scans, s.max_concurrent_per_agency, s.max_queued_scans, s.max_queued_per_agency) == (
+        8,
+        3,
+        50,
+        5,
+    )
+    assert (s.scan_rate_limit, s.scan_max_requests, s.scan_max_duration) == (2.5, 99, 30.0)
+    assert s.tls_probe is False and s.allow_private_targets is True
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "Yes", "on", " on "])
+def test_a_flag_can_be_written_as_true_in_several_ways(value):
+    assert config.Settings.from_env({"WEBSEC_SERVICE_ALLOW_PRIVATE_TARGETS": value}).allow_private_targets is True
+
+
+@pytest.mark.parametrize("value", ["0", "false", "No", "off"])
+def test_a_flag_can_be_written_as_false_in_several_ways(value):
+    assert config.Settings.from_env({"WEBSEC_SERVICE_TLS_PROBE": value}).tls_probe is False
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("WEBSEC_SERVICE_ALLOW_PRIVATE_TARGETS", "maybe"),
+        ("WEBSEC_SERVICE_TLS_PROBE", "2"),
+        ("WEBSEC_SERVICE_MAX_CONCURRENT_SCANS", "many"),
+        ("WEBSEC_SERVICE_SCAN_RATE_LIMIT", "fast"),
+        ("WEBSEC_SERVICE_SCAN_MAX_REQUESTS", "1.5"),
+    ],
+)
+def test_a_bad_scan_setting_is_an_error_at_start(name, value):
+    with pytest.raises(ValueError, match=name):
+        config.Settings.from_env({name: value})
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "MAX_CONCURRENT_SCANS",
+        "MAX_CONCURRENT_PER_AGENCY",
+        "MAX_QUEUED_SCANS",
+        "MAX_QUEUED_PER_AGENCY",
+        "SCAN_RATE_LIMIT",
+        "SCAN_MAX_REQUESTS",
+        "SCAN_MAX_DURATION",
+    ],
+)
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_a_limit_of_nothing_is_refused_not_taken_as_no_limit(name, value):
+    with pytest.raises(ValueError, match="greater than 0"):
+        config.Settings.from_env({f"WEBSEC_SERVICE_{name}": value})
+
+
+# --- queued scans: the order they start in, and starting exactly once -----------------------------
+
+
+@pytest.fixture
+def two_scans(repo):
+    agency = repo.create_agency("A")["agency_id"]
+    client = repo.create_client(agency, "C", None, {})["client_id"]
+    common = {
+        "checks": ["headers"],
+        "crawl": False,
+        "statement_version": "v1",
+        "idempotency_key": None,
+        "body_hash": "x",
+        "max_queued": 10,
+        "max_queued_per_agency": 10,
+        "idempotency_ttl_seconds": 60,
+    }
+    first, _ = repo.create_scan(agency, client, target="http://one.example/", target_host="one.example", **common)
+    second, _ = repo.create_scan(agency, client, target="http://two.example/", target_host="two.example", **common)
+    return repo, sorted([first["scan_id"], second["scan_id"]])  # ids made in one millisecond still sort in some order
+
+
+def test_queued_scans_are_listed_oldest_first(two_scans):
+    repo, (older, newer) = two_scans
+    assert [s["scan_id"] for s in repo.queued_scans()] == [older, newer]
+
+
+def test_a_scan_starts_only_once(two_scans):
+    repo, (older, _) = two_scans
+    assert repo.mark_running(older) is True
+    assert repo.mark_running(older) is False  # already running
+    repo.finish_scan(older, {"findings": 0}, "x/y.json")
+    assert repo.mark_running(older) is False  # and not again once it is done
+    assert repo.count_scans("completed") == 1 and repo.count_scans("running") == 0
+
+
+def test_a_finished_or_failed_scan_cannot_be_changed_by_a_late_call(two_scans):
+    repo, (older, newer) = two_scans
+    repo.mark_running(older)
+    repo.fail_scan(older, "scan_error")
+    repo.finish_scan(older, {"findings": 0}, "x/y.json")  # a late result does not undo the failure
+    assert [s for s in repo.list_scans(repo.list_agencies()[0]["agency_id"]) if s["scan_id"] == older][0][
+        "status"
+    ] == "failed"
+    repo.fail_scan(older, "interrupted")  # nor does a second failure change the reason
+    assert repo.get_scan(repo.list_agencies()[0]["agency_id"], older)["error_code"] == "scan_error"

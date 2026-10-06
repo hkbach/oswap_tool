@@ -42,6 +42,11 @@ def main(argv: list[str] | None = None) -> int:
     except (ValueError, RuntimeError) as exc:
         sys.stderr.write(f"error: {exc}\n")
         return 2
+    if settings.allow_private_targets:
+        sys.stderr.write(
+            "WARNING: WEBSEC_SERVICE_ALLOW_PRIVATE_TARGETS is on: scans may connect to loopback and private addresses. "
+            "This is for development only; never run a service that agencies can reach like this.\n"
+        )
     uvicorn.run(app, host=args.host, port=args.port, log_level="info", server_header=False)
     return 0
 

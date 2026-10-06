@@ -16,7 +16,7 @@ import ipaddress
 import os
 import re
 import ssl
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from urllib.parse import urljoin, urlsplit
 
 import requests
@@ -34,6 +34,51 @@ MAX_REDIRECTS = 10
 MAX_BODY_BYTES = 8192
 # robots.txt and sitemap.xml are read as lists of paths, so they get a larger but still bounded cap.
 HINT_FILE_MAX_BYTES = 512 * 1024
+
+
+class ConnectBlocked(OSError):
+    """A connect guard refused the address a connection ended up at; nothing was sent over it."""
+
+
+def check_peer(sock, guard: Callable[[str], bool] | None):
+    """Return ``sock``, or close it and raise ``ConnectBlocked`` when ``guard`` refuses the address it is connected to.
+
+    The address is read from the connected socket, after DNS and after any redirect, so a name that resolved to a
+    public address a moment ago and to an internal one now (DNS rebinding) is caught. The message names no address.
+    """
+    if guard is None:
+        return sock
+    try:
+        peer = sock.getpeername()[0].split("%", 1)[0]  # an IPv6 scope id ("fe80::1%12") is not part of the address
+    except OSError:
+        sock.close()
+        raise
+    if not guard(peer):
+        sock.close()
+        raise ConnectBlocked("the address of this host is not one this scan may connect to")
+    return sock
+
+
+def _guarded_pool_classes(guard: Callable[[str], bool]) -> dict:
+    """urllib3 pool classes whose connections go through ``check_peer`` before anything is sent."""
+    from urllib3.connection import HTTPConnection, HTTPSConnection
+    from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
+
+    class _Http(HTTPConnection):
+        def _new_conn(self):
+            return check_peer(super()._new_conn(), guard)
+
+    class _Https(HTTPSConnection):
+        def _new_conn(self):
+            return check_peer(super()._new_conn(), guard)
+
+    class _HttpPool(HTTPConnectionPool):
+        ConnectionCls = _Http
+
+    class _HttpsPool(HTTPSConnectionPool):
+        ConnectionCls = _Https
+
+    return {"http": _HttpPool, "https": _HttpsPool}
 
 
 def _canonical_host(host: str | None) -> str:
@@ -180,8 +225,11 @@ class _TrustAdapter(HTTPAdapter):
     retries happen below it.
     """
 
-    def __init__(self, ssl_context: ssl.SSLContext, limiter=None, on_request=None, **kwargs) -> None:
+    def __init__(
+        self, ssl_context: ssl.SSLContext, limiter=None, on_request=None, connect_guard=None, **kwargs
+    ) -> None:
         self._ssl_context = ssl_context
+        self._connect_guard = connect_guard  # set before super().__init__, which builds the pool manager
         self._limiter = limiter
         # FR-CI-07 --verbose: called once per request actually sent, with (method, url, status, error).
         self._on_request = on_request
@@ -201,6 +249,11 @@ class _TrustAdapter(HTTPAdapter):
         if self._limiter is not None:
             self._limiter.note_response(request.url, response.status_code, response.headers.get("Retry-After"))
         return response
+
+    def init_poolmanager(self, *args, **kwargs):
+        super().init_poolmanager(*args, **kwargs)
+        if self._connect_guard is not None:
+            self.poolmanager.pool_classes_by_scheme = _guarded_pool_classes(self._connect_guard)
 
     def build_connection_pool_key_attributes(self, request, verify, cert=None):
         host_params, pool_kwargs = super().build_connection_pool_key_attributes(request, verify, cert)
@@ -231,8 +284,14 @@ def build_session(
     cookies: dict[str, str] | None = None,
     proxy: str | None = None,
     on_request=None,
+    connect_guard: Callable[[str], bool] | None = None,
 ) -> ScopedSession:
-    """``extra_headers``, ``cookies``, ``proxy`` and ``user_agent`` are already validated (request_options)."""
+    """``extra_headers``, ``cookies``, ``proxy`` and ``user_agent`` are already validated (request_options).
+
+    ``connect_guard(ip) -> bool`` is asked about the address of every connection the session makes, once it is
+    connected and before any byte is sent; False aborts the request (``ConnectBlocked``). The hosted service uses
+    it to keep scans away from internal addresses. With ``proxy`` the guard would only ever see the proxy.
+    """
     session = ScopedSession(scope_host, allowed_hosts, exclusions, excluded_hosts)
     # The operator's headers first, so they can never displace the scanner's identity (NFR-SEC-03).
     session.headers.update(extra_headers or {})
@@ -261,7 +320,9 @@ def build_session(
         status_forcelist=(),  # do not retry on 4xx/5xx; that's signal, not noise
         raise_on_status=False,
     )
-    adapter = _TrustAdapter(session.trust_context, limiter=limiter, on_request=on_request, max_retries=retry)
+    adapter = _TrustAdapter(
+        session.trust_context, limiter=limiter, on_request=on_request, connect_guard=connect_guard, max_retries=retry
+    )
     session.mount("http://", adapter)
     session.mount("https://", adapter)
     session.request = _with_default_timeout(session.request, timeout)  # type: ignore
