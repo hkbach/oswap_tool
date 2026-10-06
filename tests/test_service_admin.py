@@ -229,3 +229,16 @@ def test_no_file_outside_the_service_imports_it():
         if re.search(r"^\s*(from|import)\s+[.\w]*service\b", text, flags=re.MULTILINE):
             offenders.append(str(relative))
     assert offenders == []
+
+
+def test_the_service_warns_when_it_is_told_scans_may_reach_private_addresses(monkeypatch, tmp_path, capsys):
+    pytest.importorskip("uvicorn")
+    from websec_scanner.service import __main__ as entry
+
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: None)
+    monkeypatch.setenv("WEBSEC_SERVICE_ALLOW_PRIVATE_TARGETS", "1")
+    assert entry.main(["--data-dir", str(tmp_path)]) == 0
+    assert "WARNING" in capsys.readouterr().err
+    monkeypatch.delenv("WEBSEC_SERVICE_ALLOW_PRIVATE_TARGETS")
+    assert entry.main(["--data-dir", str(tmp_path)]) == 0
+    assert "WARNING" not in capsys.readouterr().err  # said only when it is true

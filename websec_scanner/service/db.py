@@ -19,7 +19,7 @@ from pathlib import Path
 
 from . import ids, security
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 _MIGRATIONS: dict[int, str] = {
     1: """
     CREATE TABLE agencies (
@@ -66,11 +66,49 @@ _MIGRATIONS: dict[int, str] = {
     );
     CREATE INDEX audit_by_agency ON audit_log (agency_id, id);
     """,
+    2: """
+    CREATE TABLE scans (
+        scan_id         TEXT PRIMARY KEY,
+        agency_id       TEXT NOT NULL REFERENCES agencies (agency_id),
+        client_id       TEXT NOT NULL REFERENCES clients (client_id),
+        target          TEXT NOT NULL,
+        target_host     TEXT NOT NULL,
+        checks          TEXT NOT NULL,
+        crawl           INTEGER NOT NULL,
+        status          TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+        created_at      TEXT NOT NULL,
+        started_at      TEXT,
+        finished_at     TEXT,
+        summary         TEXT,
+        error_code      TEXT,
+        result_path     TEXT,
+        attestation     TEXT NOT NULL
+    );
+    CREATE INDEX scans_by_agency ON scans (agency_id, scan_id);
+    CREATE INDEX scans_by_client ON scans (agency_id, client_id, scan_id);
+    CREATE INDEX scans_by_status ON scans (status, scan_id);
+    CREATE TABLE idempotency (
+        agency_id  TEXT NOT NULL REFERENCES agencies (agency_id),
+        key        TEXT NOT NULL,
+        body_hash  TEXT NOT NULL,
+        scan_id    TEXT NOT NULL REFERENCES scans (scan_id),
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (agency_id, key)
+    );
+    """,
 }
 
 
 class DuplicateExternalRef(Exception):
     """An active client of this agency already has this ``external_ref``."""
+
+
+class QueueFull(Exception):
+    """Too many scans are waiting (in total, or for this agency)."""
+
+
+class IdempotencyConflict(Exception):
+    """An Idempotency-Key was used before for a request with a different body."""
 
 
 class NotFound(Exception):
@@ -369,6 +407,198 @@ class Repository:
             if not changed:
                 raise NotFound(client_id)
             self._audit(db, "client.delete", agency_id=agency_id, key_id=key_id, subject=client_id, ip=ip)
+
+    # --- scans -----------------------------------------------------------------------------------
+
+    @staticmethod
+    def _scan(row: sqlite3.Row) -> dict:
+        return {
+            "scan_id": row["scan_id"],
+            "agency_id": row["agency_id"],
+            "client_id": row["client_id"],
+            "target": row["target"],
+            "target_host": row["target_host"],
+            "checks": json.loads(row["checks"]),
+            "crawl": bool(row["crawl"]),
+            "status": row["status"],
+            "created_at": row["created_at"],
+            "started_at": row["started_at"],
+            "finished_at": row["finished_at"],
+            "summary": json.loads(row["summary"]) if row["summary"] else None,
+            "error_code": row["error_code"],
+            "result_path": row["result_path"],
+            "attestation": json.loads(row["attestation"]),
+        }
+
+    def create_scan(
+        self,
+        agency_id: str,
+        client_id: str,
+        *,
+        target: str,
+        target_host: str,
+        checks: list[str],
+        crawl: bool,
+        statement_version: str,
+        idempotency_key: str | None,
+        body_hash: str,
+        max_queued: int,
+        max_queued_per_agency: int,
+        idempotency_ttl_seconds: int,
+        key_id: str | None = None,
+        ip: str | None = None,
+    ) -> tuple[dict, bool]:
+        """Queue a scan; ``(scan, replayed)``. One transaction, so two requests with the same key cannot both queue one.
+
+        Raises ``NotFound`` (the client is not this agency's), ``IdempotencyConflict`` (the key was used with another
+        body) or ``QueueFull``. A repeated key with the same body returns the first scan and queues nothing.
+        """
+        now = self._clock()
+        with self._connect() as db:
+            if not db.execute(
+                "SELECT 1 FROM clients WHERE agency_id = ? AND client_id = ? AND status = 'active'",
+                (agency_id, client_id),
+            ).fetchone():
+                raise NotFound(client_id)
+            if idempotency_key is not None:
+                cutoff = to_iso(now - timedelta(seconds=idempotency_ttl_seconds))
+                db.execute("DELETE FROM idempotency WHERE created_at <= ?", (cutoff,))
+                seen = db.execute(
+                    "SELECT body_hash, scan_id FROM idempotency WHERE agency_id = ? AND key = ?",
+                    (agency_id, idempotency_key),
+                ).fetchone()
+                if seen is not None:
+                    if seen["body_hash"] != body_hash:
+                        raise IdempotencyConflict(idempotency_key)
+                    row = db.execute("SELECT * FROM scans WHERE scan_id = ?", (seen["scan_id"],)).fetchone()
+                    return self._scan(row), True
+            queued = db.execute("SELECT COUNT(*) FROM scans WHERE status = 'queued'").fetchone()[0]
+            mine = db.execute(
+                "SELECT COUNT(*) FROM scans WHERE status = 'queued' AND agency_id = ?", (agency_id,)
+            ).fetchone()[0]
+            if queued >= max_queued or mine >= max_queued_per_agency:
+                raise QueueFull(agency_id)
+            scan_id = ids.new_id("scan")
+            created = to_iso(now)
+            attestation = {
+                "confirmed": True,
+                "statement_version": statement_version,
+                "key_id": key_id,
+                "ip": ip,
+                "at": created,
+                "target_host": target_host,
+            }
+            db.execute(
+                "INSERT INTO scans (scan_id, agency_id, client_id, target, target_host, checks, crawl, status,"
+                " created_at,"
+                " attestation) VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)",
+                (
+                    scan_id,
+                    agency_id,
+                    client_id,
+                    target,
+                    target_host,
+                    json.dumps(checks),
+                    1 if crawl else 0,
+                    created,
+                    json.dumps(attestation),
+                ),
+            )
+            if idempotency_key is not None:
+                db.execute(
+                    "INSERT INTO idempotency (agency_id, key, body_hash, scan_id, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (agency_id, idempotency_key, body_hash, scan_id, created),
+                )
+            self._audit(
+                db,
+                "scan.create",
+                agency_id=agency_id,
+                key_id=key_id,
+                subject=scan_id,
+                ip=ip,
+                detail={"client_id": client_id, "statement_version": statement_version, "crawl": crawl},
+            )
+            return self._scan(db.execute("SELECT * FROM scans WHERE scan_id = ?", (scan_id,)).fetchone()), False
+
+    def get_scan(self, agency_id: str, scan_id: str) -> dict:
+        with self._connect(write=False) as db:
+            row = db.execute("SELECT * FROM scans WHERE agency_id = ? AND scan_id = ?", (agency_id, scan_id)).fetchone()
+        if row is None:
+            raise NotFound(scan_id)
+        return self._scan(row)
+
+    def list_scans(
+        self,
+        agency_id: str,
+        *,
+        client_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        before: str | None = None,
+    ) -> list[dict]:
+        """Up to ``limit`` + 1 scans of the agency, newest first (the extra one says there is more)."""
+        query = "SELECT * FROM scans WHERE agency_id = ?"
+        params: list = [agency_id]
+        if client_id is not None:
+            query += " AND client_id = ?"
+            params.append(client_id)
+        if status is not None:
+            query += " AND status = ?"
+            params.append(status)
+        if before is not None:
+            query += " AND scan_id < ?"
+            params.append(before)
+        query += " ORDER BY scan_id DESC LIMIT ?"
+        params.append(limit + 1)
+        with self._connect(write=False) as db:
+            return [self._scan(row) for row in db.execute(query, params)]
+
+    def queued_scans(self, limit: int = 1000) -> list[dict]:
+        """Scans waiting to run, oldest first, from every agency (the runner decides which may start)."""
+        with self._connect(write=False) as db:
+            rows = db.execute(
+                "SELECT * FROM scans WHERE status = 'queued' ORDER BY scan_id LIMIT ?", (limit,)
+            ).fetchall()
+        return [self._scan(row) for row in rows]
+
+    def count_scans(self, status: str) -> int:
+        with self._connect(write=False) as db:
+            return db.execute("SELECT COUNT(*) FROM scans WHERE status = ?", (status,)).fetchone()[0]
+
+    def mark_running(self, scan_id: str) -> bool:
+        """queued -> running; False when the scan is not queued any more."""
+        with self._connect() as db:
+            return bool(
+                db.execute(
+                    "UPDATE scans SET status = 'running', started_at = ? WHERE scan_id = ? AND status = 'queued'",
+                    (self._now(), scan_id),
+                ).rowcount
+            )
+
+    def finish_scan(self, scan_id: str, summary: dict, result_path: str) -> None:
+        with self._connect() as db:
+            db.execute(
+                "UPDATE scans SET status = 'completed', finished_at = ?, summary = ?, result_path = ?"
+                " WHERE scan_id = ? AND status = 'running'",
+                (self._now(), json.dumps(summary), result_path, scan_id),
+            )
+
+    def fail_scan(self, scan_id: str, error_code: str) -> None:
+        with self._connect() as db:
+            db.execute(
+                "UPDATE scans SET status = 'failed', finished_at = ?, error_code = ?"
+                " WHERE scan_id = ? AND status IN ('queued', 'running')",
+                (self._now(), error_code, scan_id),
+            )
+
+    def recover_interrupted(self) -> int:
+        """Scans left ``running`` by a service that stopped are failed (``interrupted``); returns how many."""
+        with self._connect() as db:
+            return db.execute(
+                "UPDATE scans SET status = 'failed', finished_at = ?, error_code = 'interrupted'"
+                " WHERE status = 'running'",
+                (self._now(),),
+            ).rowcount
 
     # --- audit -----------------------------------------------------------------------------------
 

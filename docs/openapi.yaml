@@ -25,10 +25,25 @@ info:
     Nothing you sent is echoed back in an error.
 
 
-    **Ids.** Ids are made by the service: `cli_...` for a client. Attach your own reference to a client with `external_ref`.
+    **Ids.** Ids are made by the service: `cli_...` for a client, `scn_...` for a scan. Attach your own reference
+    to a
+
+    client with `external_ref`.
+
+
+    **Scans.** `POST /v1/scans` queues a scan and answers `202` at once; poll `GET /v1/scans/{scan_id}` until `status`
+    is
+
+    `completed` or `failed`, then read `/report` (JSON, the same report as the command line) or `/report.html`.
+    Send an
+
+    `Idempotency-Key` so that a retry after a timeout does not queue a second scan. You confirm, in `attestation`,
+    that you
+
+    are authorized to have the target scanned; the service scans public internet addresses only.
 
     '
-  version: 1.0.0
+  version: 1.1.0
 paths:
   /healthz:
     get:
@@ -106,7 +121,7 @@ paths:
             application/problem+json:
               schema: *id001
         '409':
-          description: The request conflicts with an existing record.
+          description: The request conflicts with an existing record, or the report is not ready.
           content:
             application/problem+json:
               schema: *id001
@@ -323,8 +338,342 @@ paths:
           content:
             application/problem+json:
               schema: *id001
+  /v1/scans:
+    post:
+      tags:
+      - scans
+      summary: Request a scan
+      description: 'Required scope: `scans:write`. Queues the scan and answers at once; the scan runs in the background.
+
+
+        A repeated `Idempotency-Key` with the same body returns the first scan; with a different body it is a 409.
+
+        Errors that say why a target is refused: `invalid_target`, `credential_not_accepted`, `target_not_allowed`
+
+        (not a public internet address), `target_unresolvable`; and `unsupported_statement_version`, `invalid_checks`.'
+      operationId: createScan
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^[A-Za-z0-9._:-]{1,64}$
+          - type: 'null'
+          description: 'Your own key for this request (1 to 64 of `A-Z a-z 0-9 . _ : -`), kept for 24 hours.'
+          title: Idempotency-Key
+        description: 'Your own key for this request (1 to 64 of `A-Z a-z 0-9 . _ : -`), kept for 24 hours.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScanCreate'
+      responses:
+        '202':
+          description: 'The scan is queued. `Location` is its address; `Idempotent-Replayed: true` means an earlier
+            request with the same `Idempotency-Key` already queued it.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scan'
+          headers:
+            Location:
+              schema:
+                type: string
+              description: '`/v1/scans/{scan_id}`'
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                - 'true'
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+        '403':
+          description: The API key does not have the scope this call needs.
+          content:
+            application/problem+json:
+              schema: *id001
+        '404':
+          description: No such record for your agency.
+          content:
+            application/problem+json:
+              schema: *id001
+        '409':
+          description: The request conflicts with an existing record, or the report is not ready.
+          content:
+            application/problem+json:
+              schema: *id001
+        '413':
+          description: The request body is too large.
+          content:
+            application/problem+json:
+              schema: *id001
+        '422':
+          description: The request is not valid; `errors` says where.
+          content:
+            application/problem+json:
+              schema: *id001
+        '429':
+          description: Too many scans are waiting; retry after the time in `Retry-After`.
+          content:
+            application/problem+json:
+              schema: *id001
+    get:
+      tags:
+      - scans
+      summary: List your scans
+      description: 'Required scope: `scans:read`. Newest first, in pages.'
+      operationId: listScans
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: client_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^cli_[0-9a-hjkmnp-tv-z]{26}$
+          - type: 'null'
+          description: Only the scans of this client.
+          title: Client Id
+        description: Only the scans of this client.
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - queued
+            - running
+            - completed
+            - failed
+            type: string
+          - type: 'null'
+          description: Only the scans in this state.
+          title: Status
+        description: Only the scans in this state.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: Page size.
+          default: 50
+          title: Limit
+        description: Page size.
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: '`next_cursor` of the previous page.'
+          title: Cursor
+        description: '`next_cursor` of the previous page.'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanList'
+        '400':
+          description: The request is malformed (for example an unusable cursor).
+          content:
+            application/problem+json:
+              schema: *id001
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+        '403':
+          description: The API key does not have the scope this call needs.
+          content:
+            application/problem+json:
+              schema: *id001
+        '422':
+          description: The request is not valid; `errors` says where.
+          content:
+            application/problem+json:
+              schema: *id001
+  /v1/scans/{scan_id}:
+    get:
+      tags:
+      - scans
+      summary: Read a scan's state
+      description: 'Required scope: `scans:read`. Poll this until `status` is `completed` or `failed`.'
+      operationId: getScan
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: scan_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Scan Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scan'
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+        '403':
+          description: The API key does not have the scope this call needs.
+          content:
+            application/problem+json:
+              schema: *id001
+        '404':
+          description: No such record for your agency.
+          content:
+            application/problem+json:
+              schema: *id001
+        '422':
+          description: The request is not valid; `errors` says where.
+          content:
+            application/problem+json:
+              schema: *id001
+  /v1/scans/{scan_id}/report:
+    get:
+      tags:
+      - scans
+      summary: Read a scan's report (JSON)
+      description: 'Required scope: `scans:read`. 409 `scan_not_finished` while queued or running, `scan_failed`
+        if it failed.'
+      operationId: getScanReport
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: scan_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Scan Id
+      responses:
+        '200':
+          description: 'The report: the same JSON as the command line''s `--json` (`schema_version` 1.11, described
+            by `docs/report.schema.json`). Secrets are masked.'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+        '403':
+          description: The API key does not have the scope this call needs.
+          content:
+            application/problem+json:
+              schema: *id001
+        '404':
+          description: No such record for your agency.
+          content:
+            application/problem+json:
+              schema: *id001
+        '409':
+          description: The request conflicts with an existing record, or the report is not ready.
+          content:
+            application/problem+json:
+              schema: *id001
+        '422':
+          description: The request is not valid; `errors` says where.
+          content:
+            application/problem+json:
+              schema: *id001
+  /v1/scans/{scan_id}/report.html:
+    get:
+      tags:
+      - scans
+      summary: Read a scan's report (HTML)
+      description: 'Required scope: `scans:read`. The same report as the JSON one, drawn as a page.'
+      operationId: getScanReportHtml
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: scan_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Scan Id
+      responses:
+        '200':
+          description: A standalone HTML page (no scripts, works offline, printable).
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+        '403':
+          description: The API key does not have the scope this call needs.
+          content:
+            application/problem+json:
+              schema: *id001
+        '404':
+          description: No such record for your agency.
+          content:
+            application/problem+json:
+              schema: *id001
+        '409':
+          description: The request conflicts with an existing record, or the report is not ready.
+          content:
+            application/problem+json:
+              schema: *id001
+        '422':
+          description: The request is not valid; `errors` says where.
+          content:
+            application/problem+json:
+              schema: *id001
 components:
   schemas:
+    Attestation:
+      properties:
+        confirmed:
+          type: boolean
+          title: Confirmed
+          description: 'Must be true: you confirm that you are authorized to have this target scanned.'
+        statement_version:
+          type: string
+          maxLength: 16
+          minLength: 1
+          title: Statement Version
+          description: The version of the statement you are confirming, e.g. `v1`.
+      additionalProperties: false
+      type: object
+      required:
+      - confirmed
+      - statement_version
+      title: Attestation
+      description: 'The agency''s statement that it may have this target scanned. It is kept with the scan, and
+        it is the agency''s:
+
+        TECHVIFY supplies the scanner and the API, the agency vouches for its own clients.'
     CheckGroup:
       properties:
         id:
@@ -557,6 +906,187 @@ components:
       - request_id
       title: Problem
       description: RFC 9457 problem details; this is the shape of every error.
+    Scan:
+      properties:
+        scan_id:
+          type: string
+          title: Scan Id
+        client_id:
+          type: string
+          title: Client Id
+        target:
+          type: string
+          title: Target
+          description: As you sent it, with anything that looks like a secret masked.
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - completed
+          - failed
+          title: Status
+        checks:
+          items:
+            type: string
+          type: array
+          title: Checks
+        crawl:
+          type: boolean
+          title: Crawl
+        created_at:
+          type: string
+          title: Created At
+        started_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Started At
+        finished_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Finished At
+        summary:
+          anyOf:
+          - $ref: '#/components/schemas/ScanSummary'
+          - type: 'null'
+          description: Present once the scan is completed.
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/ScanError'
+          - type: 'null'
+          description: Present when the scan failed.
+        report_available:
+          type: boolean
+          title: Report Available
+          description: True once `GET /v1/scans/{scan_id}/report` returns the report.
+      type: object
+      required:
+      - scan_id
+      - client_id
+      - target
+      - status
+      - checks
+      - crawl
+      - created_at
+      - started_at
+      - finished_at
+      - summary
+      - error
+      - report_available
+      title: Scan
+    ScanCreate:
+      properties:
+        client_id:
+          type: string
+          maxLength: 64
+          title: Client Id
+          description: One of your clients (`cli_...`).
+        target:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Target
+          description: An http(s):// URL or a host name, with no user name or password. Public addresses only.
+        checks:
+          anyOf:
+          - items:
+              type: string
+            type: array
+            maxItems: 16
+            minItems: 1
+          - type: 'null'
+          title: Checks
+          description: Check group ids from `GET /v1/options`. Omit it to run every group.
+        crawl:
+          type: boolean
+          title: Crawl
+          description: Also follow the links of the page on the same origin and check each page (operator's limits).
+          default: false
+        attestation:
+          $ref: '#/components/schemas/Attestation'
+      additionalProperties: false
+      type: object
+      required:
+      - client_id
+      - target
+      - attestation
+      title: ScanCreate
+    ScanError:
+      properties:
+        code:
+          type: string
+          title: Code
+          description: '`scan_error` (it broke inside the service) or `interrupted` (the service stopped).'
+        detail:
+          type: string
+          title: Detail
+      type: object
+      required:
+      - code
+      - detail
+      title: ScanError
+    ScanGate:
+      properties:
+        fail_on:
+          type: string
+          title: Fail On
+        failed:
+          type: boolean
+          title: Failed
+          description: At least one finding at or above `fail_on`.
+        incomplete:
+          type: boolean
+          title: Incomplete
+          description: The scan could not look at everything (for example the home page was unreachable).
+      type: object
+      required:
+      - fail_on
+      - failed
+      - incomplete
+      title: ScanGate
+    ScanList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Scan'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Pass it as `cursor` to get the next page; null when there is no more.
+      type: object
+      required:
+      - items
+      - next_cursor
+      title: ScanList
+    ScanSummary:
+      properties:
+        findings:
+          type: integer
+          title: Findings
+        severity:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Severity
+          description: 'Findings per severity: CRITICAL, HIGH, MEDIUM, LOW, INFO.'
+        gate:
+          $ref: '#/components/schemas/ScanGate'
+        pages_scanned:
+          type: integer
+          title: Pages Scanned
+      type: object
+      required:
+      - findings
+      - severity
+      - gate
+      - pages_scanned
+      title: ScanSummary
   securitySchemes:
     bearerAuth:
       type: http
@@ -568,3 +1098,5 @@ tags:
   description: Health and what a request can ask for.
 - name: clients
   description: The clients of your agency. Each scan belongs to one client.
+- name: scans
+  description: Request a scan, follow it, and read its report.

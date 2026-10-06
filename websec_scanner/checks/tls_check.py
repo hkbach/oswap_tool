@@ -35,7 +35,7 @@ from cryptography import x509
 
 from .. import rule_loader
 from ..catalog import CVSS_TLS_CIPHER_BROKEN_BUT_ENCRYPTING
-from ..http_utils import USER_AGENT, url_host
+from ..http_utils import USER_AGENT, check_peer, url_host
 from ..models import Finding, Severity
 from ..request_options import proxy_credentials
 from ..rule_loader import CipherGroup, TlsProbeRules, is_interceptor_issuer
@@ -192,7 +192,9 @@ _CRLF = "\r\n"
 _END_OF_HEADERS = b"\r\n\r\n"
 
 
-def _open_connection(hostname: str, port: int, timeout: int, proxy: str | None = None) -> socket.socket:
+def _open_connection(
+    hostname: str, port: int, timeout: int, proxy: str | None = None, connect_guard=None
+) -> socket.socket:
     """A TCP connection to ``hostname:port``, through an http:// proxy's CONNECT tunnel if one is set.
 
     The TLS check opens its own sockets rather than going through the HTTP session, so without
@@ -201,7 +203,7 @@ def _open_connection(hostname: str, port: int, timeout: int, proxy: str | None =
     exposes the scanner's address that the proxy was meant to hide.
     """
     if not proxy:
-        return socket.create_connection((hostname, port), timeout=timeout)
+        return check_peer(socket.create_connection((hostname, port), timeout=timeout), connect_guard)
     parts = urlsplit(proxy)
     sock = socket.create_connection((parts.hostname, parts.port or 80), timeout=timeout)
     try:
@@ -230,7 +232,9 @@ def _open_connection(hostname: str, port: int, timeout: int, proxy: str | None =
         raise
 
 
-def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int, limiter=None, proxy=None):
+def _fetch_raw_cert_and_connection_info(
+    hostname: str, port: int, timeout: int, limiter=None, proxy=None, connect_guard=None
+):
     """Step 1: non-verifying connection. Returns (der_cert, protocol, cipher, error)."""
     if limiter is not None:
         limiter.acquire(f"https://{hostname}:{port}/")  # a handshake is traffic too (FR-AUTHZ-05)
@@ -245,7 +249,7 @@ def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int, 
     insecure_ctx.set_ciphers("DEFAULT:ALL:@SECLEVEL=0")
 
     try:
-        with _open_connection(hostname, port, timeout, proxy) as sock:
+        with _open_connection(hostname, port, timeout, proxy, connect_guard) as sock:
             with insecure_ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
                 der_cert = ssock.getpeercert(binary_form=True)
                 protocol = ssock.version()
@@ -256,14 +260,20 @@ def _fetch_raw_cert_and_connection_info(hostname: str, port: int, timeout: int, 
 
 
 def _verify_trust(
-    hostname: str, port: int, timeout: int, trust: ssl.SSLContext | None = None, limiter=None, proxy=None
+    hostname: str,
+    port: int,
+    timeout: int,
+    trust: ssl.SSLContext | None = None,
+    limiter=None,
+    proxy=None,
+    connect_guard=None,
 ):
     """Step 2: verifying connection. Returns None if trusted, or the raised exception."""
     verify_ctx = trust if trust is not None else ssl.create_default_context()
     if limiter is not None:
         limiter.acquire(f"https://{hostname}:{port}/")
     try:
-        with _open_connection(hostname, port, timeout, proxy) as sock:
+        with _open_connection(hostname, port, timeout, proxy, connect_guard) as sock:
             with verify_ctx.wrap_socket(sock, server_hostname=hostname):
                 pass
         return None
@@ -284,13 +294,21 @@ def check_tls(
     limiter=None,
     proxy: str | None = None,
     probe: bool = True,
+    connect_guard=None,
 ) -> list[Finding]:
     """TLS checks; ``warnings`` receives a note when the handshake looks intercepted (FR-DET-16)
-    and one for every probe that could not run (FR-TLS-14). ``probe=False`` skips the probes."""
+    and one for every probe that could not run (FR-TLS-14). ``probe=False`` skips the probes.
+
+    ``connect_guard(ip) -> bool`` is asked about the address of every connection this check opens (the two
+    certificate connections and the probes) before anything is sent; see ``http_utils.check_peer``."""
+    # Passed on only when set, so a helper that is replaced in a test keeps its old signature.
+    guard = {"connect_guard": connect_guard} if connect_guard is not None else {}
     findings: list[Finding] = []
     url = f"https://{url_host(hostname)}:{port}"
 
-    der_cert, protocol, cipher, conn_err = _fetch_raw_cert_and_connection_info(hostname, port, timeout, limiter, proxy)
+    der_cert, protocol, cipher, conn_err = _fetch_raw_cert_and_connection_info(
+        hostname, port, timeout, limiter, proxy, **guard
+    )
     if conn_err is not None:
         findings.append(
             Finding(
@@ -313,7 +331,7 @@ def check_tls(
             port,
             timeout,
             rules,
-            connect=lambda host, tcp_port, seconds: _open_connection(host, tcp_port, seconds, proxy),
+            connect=lambda host, tcp_port, seconds: _open_connection(host, tcp_port, seconds, proxy, connect_guard),
             limiter=limiter,  # every probe is a connection: --rate-limit and --max-requests apply (FR-AUTHZ-05)
         )
         if warnings is not None:
@@ -395,7 +413,7 @@ def check_tls(
     # period is fine — otherwise a self-signed-style verification failure
     # would just re-state the expiry/not-yet-valid finding above.
     if not cert_time_problem:
-        trust_err = _verify_trust(hostname, port, timeout, trust, limiter, proxy)
+        trust_err = _verify_trust(hostname, port, timeout, trust, limiter, proxy, **guard)
         if trust_err is not None:
             findings.append(
                 Finding(

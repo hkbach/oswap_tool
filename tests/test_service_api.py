@@ -671,7 +671,7 @@ def test_every_operation_but_the_health_check_asks_for_a_key():
 def test_operation_ids_are_unique_and_every_error_is_a_problem():
     spec = openapi.build_spec()
     operation_ids = [op["operationId"] for methods in spec["paths"].values() for op in methods.values()]
-    assert len(operation_ids) == len(set(operation_ids)) == 7
+    assert len(operation_ids) == len(set(operation_ids)) == 12
     for methods in spec["paths"].values():
         for operation in methods.values():
             for status, response in operation["responses"].items():

@@ -146,10 +146,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.26.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.27.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.26.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.27.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -399,7 +399,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.26.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.27.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -638,6 +638,13 @@ python -m websec_scanner.service                                         # 127.0
 curl -H "Authorization: Bearer wsk_..." http://127.0.0.1:8780/v1/options
 curl -H "Authorization: Bearer wsk_..." -H "Content-Type: application/json" \
      -d '{"display_name": "Acme Ltd", "external_ref": "acme-1"}' http://127.0.0.1:8780/v1/clients
+
+# request a scan (202 at once), follow it, read the report
+curl -H "Authorization: Bearer wsk_..." -H "Content-Type: application/json" -H "Idempotency-Key: order-1001" \
+     -d '{"client_id": "cli_...", "target": "https://shop.example/", "crawl": false,
+          "attestation": {"confirmed": true, "statement_version": "v1"}}' http://127.0.0.1:8780/v1/scans
+curl -H "Authorization: Bearer wsk_..." http://127.0.0.1:8780/v1/scans/scn_...          # status: queued, running, completed, failed
+curl -H "Authorization: Bearer wsk_..." http://127.0.0.1:8780/v1/scans/scn_.../report   # the same JSON as the command line
 ```
 
 - **The contract** is `docs/openapi.yaml` (also served at `/v1/openapi.json`); a test keeps it equal to the code.
@@ -646,9 +653,21 @@ curl -H "Authorization: Bearer wsk_..." -H "Content-Type: application/json" \
 - **Every key belongs to one agency** and sees only that agency's data. Keys are stored only as a hash and are shown
   once. An id of another agency is answered exactly like an id that does not exist.
 - **Errors** are `application/problem+json` documents with a stable `code`; nothing you sent is echoed back.
-- **What exists today (phase 1):** clients (`/v1/clients`), what a scan request can ask for (`/v1/options`) and the
-  health check. **Not yet:** the scan endpoints themselves, quotas and rate limits, storing and deleting results.
-  Until the scan endpoints exist the service cannot scan anything. There is no Docker image for it yet.
+- **Scans.** `POST /v1/scans` queues a scan and answers `202`; the scan runs in the background (at most 4 at a time,
+  2 per agency, one per host; a full queue answers `429`). Poll `GET /v1/scans/{id}` until it is `completed` or `failed`,
+  then read `/report` (JSON) or `/report.html`. `GET /v1/scans` finds scans by client or state. Send an
+  `Idempotency-Key` so that a retry after a timeout does not queue a second scan. In `attestation` you confirm that
+  you are authorized to have the target scanned; you vouch for your own clients, and the service keeps your
+  statement with the scan. A scan that cannot reach the site still `completed`: its report says so.
+- **The service scans public internet addresses only.** A target that is, or resolves to, a loopback, private,
+  link-local or cloud-metadata address is refused, and the address a connection really reaches is checked again before
+  anything is sent (so a name that changes its answer cannot lead the scanner inside). The limits of a scan (speed,
+  number of requests, time, crawl, TLS probes) are the operator's; a request cannot change them.
+- **Results** are one JSON file per scan under `results/<agency>/<client>/<year>/<month>/`. They are masked like every
+  report. There is no retention policy and no way to delete a result through the API yet.
+- **What exists today (phase 2):** clients, `/v1/options`, the scan endpoints and the health check. **Not yet:**
+  quotas and rate limits per agency, cancelling or deleting a scan, deleting a client's data, webhooks. There is no
+  Docker image for the service yet.
 - Requirements are in the SRS, section 4.17 (`docs/SRS-websec-scanner.md`).
 
 ## Development
@@ -661,7 +680,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-88 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-89 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -846,6 +865,17 @@ THIRD_PARTY_LICENSES.md  # license of every dependency, direct and transitive
 ```
 
 ## Changelog
+
+- **v1.27.0** (agency API, phase 2: scans). The hosted service can now scan. What changes for you:
+  - **Nothing changes for the command line and the local web UI.** The scanning core gained an optional
+    `connect_guard` (asked about the address of every connection, before anything is sent); without it the core
+    behaves exactly as before, and the CLI and the web UI never set it.
+  - **New endpoints of the service** (contract 1.1.0): `POST /v1/scans`, `GET /v1/scans`, `GET /v1/scans/{id}`,
+    `GET /v1/scans/{id}/report` and `/report.html`. Scans run in the background, with the operator's limits.
+  - **The service scans public internet addresses only**, checked when a scan is requested and again at every
+    connection. New settings for the operator are described in the SRS (section 4.17); a development switch,
+    `WEBSEC_SERVICE_ALLOW_PRIVATE_TARGETS`, lets a scan reach loopback and prints a warning.
+  - Not in this release: quotas and rate limits per agency, cancelling or deleting a scan or a client's data, webhooks.
 
 - **v1.26.0** (agency API, phase 1). A hosted service for agencies, in its own package. What changes for you:
   - **Nothing changes for the command line and the local web UI.** The service is a separate, optional part
