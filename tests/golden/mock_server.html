@@ -66,6 +66,9 @@ h3.group { font-size:16px; margin:22px 0 4px; } h3.group .status { margin-left:8
 p.group-desc { margin:0 0 10px; }
 .finding h4 { display:inline; font-size:15px; margin:0; }
 .ids a { color:var(--muted); }
+table.api { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+table.api th, table.api td { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line, #ddd);
+  overflow-wrap:anywhere; vertical-align:top; }
 @media print { body { background:#fff; } .card { break-inside:avoid; } }
 </style>
 </head>
@@ -78,7 +81,7 @@ p.group-desc { margin:0 0 10px; }
 <tr><th>Started (UTC)</th><td><STARTED_AT></td></tr>
 <tr><th>Finished (UTC)</th><td><FINISHED_AT></td></tr>
 <tr><th>Test targets</th><td>Security headers, Cookies, TLS/SSL, HTTP to HTTPS redirect, CORS, Exposed files, Directory listing, robots.txt / sitemap.xml</td></tr><tr><th>Checks run</th><td>security-headers, cookies, http-to-https-redirect, cors, sensitive-paths, directory-listing, robots-sitemap</td></tr>
-<tr><th>Total findings</th><td>12</td></tr>
+<tr><th>Total findings</th><td>12</td></tr><tr><th>Scanner version</th><td><VERSION></td></tr><tr><th>Rules version</th><td>sensitive_paths=2026.09.30.2;tls_interceptors=2026.09.30.1;exclusions=2026.10.01.1;tls_probe=2026.10.04.1</td></tr><tr><th>Scan ID</th><td><SCAN_ID></td></tr><tr><th>Requests sent</th><td>29</td></tr><tr><th>Limits</th><td>none set</td></tr>
 </table>
 <p class="gate fail">Findings at or above the --fail-on high threshold: the CLI exits with code 1 (fails the CI gate).</p>
 <table class="summary"><tr><td class="sev-CRITICAL"><span class="n">2</span><span class="l">CRITICAL</span></td><td class="sev-HIGH"><span class="n">1</span><span class="l">HIGH</span></td><td class="sev-MEDIUM"><span class="n">4</span><span class="l">MEDIUM</span></td><td class="sev-LOW"><span class="n">2</span><span class="l">LOW</span></td><td class="sev-INFO"><span class="n">3</span><span class="l">INFO</span></td></tr></table>

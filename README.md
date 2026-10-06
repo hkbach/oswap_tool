@@ -130,10 +130,10 @@ Requires Python 3.12 or later. The package is not published on PyPI.
 pip install -r requirements.txt
 
 # Or directly from GitHub, pinned to a release tag (needs git)
-pip install "git+https://github.com/hkbach/oswap_tool@v1.22.0"
+pip install "git+https://github.com/hkbach/oswap_tool@v1.23.0"
 
 # Or from the tag's source archive (no git needed)
-pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.22.0.tar.gz"
+pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/v1.23.0.tar.gz"
 ```
 
 Installing the package adds two commands: `websec-scanner` (same as
@@ -355,7 +355,7 @@ CI systems themselves.** Try them on a non-production target first.
    `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`, but the TLS check then connects
    directly. Tested against a local test proxy only.
 3. **Release tag.** The templates install the scanner from the tag in
-   `SCANNER_REF` (currently `v1.22.0`). The tag must exist in the repository;
+   `SCANNER_REF` (currently `v1.23.0`). The tag must exist in the repository;
    pinning a tag or a commit keeps the scan reproducible.
 4. **Target URL.** Set `TARGET_URL` to the approved target. Scanning a
    staging environment is safer than scanning production.
@@ -530,7 +530,9 @@ targets were not tested, non-fatal errors, and the findings:
 - **Download Test result** (next to the Scan button, shown after a scan)
   downloads a standalone HTML report: embedded CSS, no scripts, works offline,
   printable. It has a summary by test target, a summary by OWASP Top 10 and the
-  findings grouped by test target.
+  findings grouped by test target. Its table at the top also says what produced it and what the
+  scan was allowed to do (versions, scan ID, requests sent, limits, whether a limit stopped it
+  early), and it shows the crawl and the API inventory when the scan had them.
   The server keeps the reports of the last 20 scans, in memory only; they are
   lost when the server stops.
 - **Download JSON** downloads the same format as the CLI's `--json`.
@@ -566,7 +568,7 @@ ruff check . && ruff format --check .
 python -m pytest -q                   # offline; talks only to mock servers on 127.0.0.1
 ```
 
-The test suite covers the acceptance scenarios AT-01 to AT-84 in SRS section 9.
+The test suite covers the acceptance scenarios AT-01 to AT-85 in SRS section 9.
 It starts its own HTTP/HTTPS servers on `127.0.0.1` and generates test
 certificates (expired, not yet valid, expiring, self-signed), so it needs no
 internet access. Tests that need a trusted TLS handshake skip themselves when
@@ -769,6 +771,17 @@ python -m websec_scanner https://example.com --crawl --crawl-depth 2 --crawl-max
 - The local web UI does not crawl: it refuses a `crawl` field like any other it does not send.
 
 ## Changelog
+
+- **v1.23.0** (HTML report). The standalone HTML report (`--html`, and "Download Test result" in
+  the web UI) now shows more of what the scan did. What changes for you:
+  - **Scan details in the table at the top:** scanner and rules version, scan ID, requests sent,
+    the limits that were set (or "none set"), and, only when they happened, how often the scanner
+    backed off after HTTP 429/503 and which limit stopped the scan early.
+  - **An "API inventory" section** when the scan used `--api-spec`: the servers, security schemes
+    and the first 100 endpoints, with the same "no request was sent to any endpoint" note as the
+    console. Text taken from the spec is escaped, and control characters are made visible.
+  - Nothing else changes: the JSON report and its `schema_version` (1.10) are the same, and a
+    report that has none of these fields shows none of these rows.
 
 - **v1.22.0** (crawler). `--crawl` follows same-origin links and runs the headers and cookies
   checks on each page. What changes for you:
