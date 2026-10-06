@@ -59,7 +59,7 @@ a local copy of the service.
 
 ## A3. Get access
 
-Keys are made by the operator of the service (TECHVIFY, or you if you host it yourself); there is no public endpoint for it.
+Keys are made by the operator of the service (the service provider, or you if you host it yourself); there is no public endpoint for it.
 You need two things from them: the **base URL** (for example `https://scanner.example.com`) and an **API key**:
 
 ```text
@@ -200,7 +200,7 @@ are the operator's, not the request's.**
 **The attestation.** By sending `confirmed: true` you state that you are authorized to have this target scanned. You vouch
 for your own clients; the service supplies the scanner and the API and **keeps your statement with the scan** (which key, from
 which address, when, for which host). Keep your own record of who in your organisation confirmed what. The wording of
-statement `v1` is for TECHVIFY's legal reviewers to write; ask them for the current text before you rely on it.
+statement `v1` is for the service provider's legal reviewers to write; ask them for the current text before you rely on it.
 
 ### What a target must be
 
@@ -571,7 +571,7 @@ or a link that carries it, to the browser.
 
 ## A12. For the operator of the service
 
-This is for whoever hosts the service (TECHVIFY or an agency that runs its own).
+This is for whoever hosts the service (the service provider or an agency that runs its own).
 
 ```bash
 pip install "websec-scanner[service]"          # adds FastAPI and uvicorn; the CLI does not need them
@@ -653,7 +653,7 @@ pip install "git+https://github.com/hkbach/oswap_tool@26efd4411328"     # Verifi
 `pip install "https://github.com/hkbach/oswap_tool/archive/refs/tags/<tag>.tar.gz"` (needs a published tag).
 
 > If the repository is not public to your account, give the runner access the way you do for other private dependencies.
-> How the scanner is distributed to customers is TECHVIFY's decision; ask them which source to use.
+> How the scanner is distributed to customers is the service provider's decision; ask them which source to use.
 
 A Docker image can be built from the repository's `Dockerfile` (a non-root image of the CLI). *(Not tested for this
 tutorial: no Docker daemon was available. The README's `ghcr.io/hkbach/websec-scanner` tags refer to releases that have

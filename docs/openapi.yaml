@@ -673,7 +673,7 @@ components:
       description: 'The agency''s statement that it may have this target scanned. It is kept with the scan, and
         it is the agency''s:
 
-        TECHVIFY supplies the scanner and the API, the agency vouches for its own clients.'
+        the service provider supplies the scanner and the API, the agency vouches for its own clients.'
     CheckGroup:
       properties:
         id:

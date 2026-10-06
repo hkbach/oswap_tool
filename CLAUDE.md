@@ -1,103 +1,103 @@
 # CLAUDE.md – WebSec Scanner
 
-Quy tắc cho Claude khi làm việc trong repo này. Đọc kèm:
+Rules for Claude when working in this repo. Read alongside:
 
-- `docs/PRODUCT-BACKLOG.md`: backlog, quyết định D1–D3 (mục 1.4), thứ tự sprint (mục 9.1).
-- `docs/SRS-websec-scanner.md`: đặc tả hành vi hiện có. Không đổi hành vi đã đặc tả nếu không có FR tương ứng.
+- `docs/PRODUCT-BACKLOG.md`: backlog, decisions D1–D3 (section 1.4), sprint order (section 9.1).
+- `docs/SRS-websec-scanner.md`: specification of existing behavior. Do not change specified behavior without a corresponding FR.
 
-## Sản phẩm trong một đoạn
+## The product in one paragraph
 
-Scanner cấu hình bảo mật web không xâm lấn (non-intrusive), viết bằng Python. Có hai lối vào dùng chung một lõi:
+A non-intrusive web security configuration scanner, written in Python. It has two entry points sharing one core:
 
 - CLI: `python -m websec_scanner <target>`
-- Web UI cục bộ: `python -m websec_scanner.web`. Chạy `http.server` tại `127.0.0.1:8765`, file tĩnh nằm ở `websec_scanner/static/`. `POST /api/scan` gọi thẳng `run_scan()` trong `cli.py`, `GET /api/report/<id>.html` dùng `render_html()`.
+- Local Web UI: `python -m websec_scanner.web`. Runs `http.server` at `127.0.0.1:8765`, static files are in `websec_scanner/static/`. `POST /api/scan` calls `run_scan()` in `cli.py` directly, `GET /api/report/<id>.html` uses `render_html()`.
 
-CLI và Web UI cục bộ không có server hay service riêng (quyết định D1). Ngoại lệ duy nhất là **dịch vụ API cho agency** (quyết định D12, 2026-10-05, chủ sản phẩm duyệt): nằm riêng trong `websec_scanner/service/`, dùng FastAPI + SQLite qua nhóm dependency tùy chọn `[service]`. CLI, Web UI và lõi (`run_scan()`) không được import `service/` và không phụ thuộc nó (có test chặn). Ngoài `service/`, không thêm FastAPI, DB, queue hay framework web nếu FR không yêu cầu.
+The CLI and local Web UI have no separate server or service (decision D1). The only exception is the **agency API service** (decision D12, 2026-10-05, approved by the product owner): it lives separately in `websec_scanner/service/`, using FastAPI + SQLite via the optional `[service]` dependency group. The CLI, Web UI and core (`run_scan()`) must not import `service/` and must not depend on it (enforced by a test). Outside `service/`, do not add FastAPI, a DB, a queue or a web framework unless an FR requires it.
 
-## Lệnh
+## Commands
 
 ```bash
-pip install -r requirements-dev.txt   # pyproject.toml sẽ có ở FR-QA-07 (Sprint 3)
-ruff check . && ruff format --check . # chưa cấu hình; bắt buộc từ Sprint 3 (FR-QA-07)
-python -m pytest -q                   # phải chạy offline, không gọi mạng ngoài
+pip install -r requirements-dev.txt   # pyproject.toml will exist at FR-QA-07 (Sprint 3)
+ruff check . && ruff format --check . # not configured yet; mandatory from Sprint 3 (FR-QA-07)
+python -m pytest -q                   # must run offline, no calls to external networks
 python -m websec_scanner --help
 python -m websec_scanner.web
 ```
 
-## Cách làm việc
+## How to work
 
-1. Mỗi lần chỉ làm một FR hoặc một nhóm nhỏ trong sprint hiện tại (backlog mục 9.1).
-2. Lập kế hoạch trước khi code: file sẽ sửa, test sẽ viết, rủi ro. Chờ người duyệt.
-3. Viết test trước, code sau. Test dùng mock server cục bộ, không bao giờ quét host thật.
-4. Mỗi thay đổi nhỏ, commit message có ID, ví dụ `feat(FR-AUTH-02): add redact()`.
-5. Hành vi thay đổi thì cập nhật SRS và tick backlog trong cùng thay đổi.
+1. Work on only one FR or one small group in the current sprint at a time (backlog section 9.1).
+2. Plan before coding: files to change, tests to write, risks. Wait for human approval.
+3. Write tests first, code second. Tests use a local mock server and never scan a real host.
+4. Keep each change small, with the ID in the commit message, for example `feat(FR-AUTH-02): add redact()`.
+5. When behavior changes, update the SRS and tick the backlog in the same change.
 
-## Quy tắc bắt buộc
+## Mandatory rules
 
-**Kiến trúc**
+**Architecture**
 
-- Python ≥ 3.12 (quyết định ngày 2026-09-30; môi trường dev dùng 3.14), code mới bắt buộc có type hints.
-- CLI và Web UI phải cho ra cùng JSON. Mọi xử lý đầu ra (redact, sort, `schema_version`, `fingerprint`, gate theo `--fail-on`) nằm ở một chỗ và được cả hai dùng chung.
-- Mỗi check là hàm thuần trong `checks/`: nhận session/response, trả `list[Finding]`, không giữ state toàn cục.
-- Danh sách header, path, chữ ký nội dung là dữ liệu khai báo (dict/list/YAML), không hard-code trong logic.
+- Python ≥ 3.12 (decided 2026-09-30; the dev environment uses 3.14), new code must have type hints.
+- The CLI and Web UI must produce the same JSON. All output processing (redact, sort, `schema_version`, `fingerprint`, gating by `--fail-on`) lives in one place and is shared by both.
+- Each check is a pure function in `checks/`: it takes a session/response, returns `list[Finding]`, and holds no global state.
+- Lists of headers, paths and content signatures are declarative data (dict/list/YAML), not hard-coded in logic.
 
-**An toàn khi quét**
+**Scan safety**
 
-- Chế độ mặc định không gửi payload khai thác. Chỉ dùng GET/HEAD/OPTIONS, không có method thay đổi dữ liệu.
-- Không quét host nào ngoài mock server hoặc app thử nghiệm chạy local.
+- The default mode sends no exploit payloads. Use only GET/HEAD/OPTIONS, with no data-modifying methods.
+- Do not scan any host other than the mock server or a test app running locally.
 
-**Secret và evidence (D2)**
+**Secrets and evidence (D2)**
 
-- Mọi evidence phải qua `redact()` trước khi in, ghi file hoặc trả qua API.
-- Cờ `--show-secrets` chỉ có ở CLI. Web UI không được nhận hay bật cờ này dưới bất kỳ hình thức nào.
-- Không log hay commit secret, cookie thật, token hoặc dữ liệu khách hàng. Fixture chỉ dùng giá trị giả rõ ràng.
+- All evidence must pass through `redact()` before being printed, written to file or returned via the API.
+- The `--show-secrets` flag exists only in the CLI. The Web UI must not accept or enable this flag in any form.
+- Do not log or commit secrets, real cookies, tokens or customer data. Fixtures use only obviously fake values.
 
-**Severity CORS (D3)**
+**CORS severity (D3)**
 
-| Tổ hợp | Severity |
+| Combination | Severity |
 |---|---|
 | `*` + credentials | MEDIUM |
-| Phản xạ origin + credentials | HIGH |
-| Phản xạ origin, không credentials | MEDIUM |
-| `*` đơn lẻ | INFO |
+| Reflected origin + credentials | HIGH |
+| Reflected origin, no credentials | MEDIUM |
+| `*` alone | INFO |
 
-**Finding và output**
+**Findings and output**
 
-- Finding mới phải có: `id` ổn định, `severity`, `owasp_category`, `cwe`, `confidence`, `description`, `evidence`, `recommendation`, `url`.
-- Không chắc thì hạ `confidence`, không nâng severity.
-- Không phá JSON schema hay exit code hiện có. Nếu buộc phải đổi thì nâng `schema_version` và ghi changelog.
+- A new finding must have: a stable `id`, `severity`, `owasp_category`, `cwe`, `confidence`, `description`, `evidence`, `recommendation`, `url`.
+- When unsure, lower `confidence`; do not raise severity.
+- Do not break the existing JSON schema or exit codes. If a change is unavoidable, bump `schema_version` and record it in the changelog.
 
-**Web UI cục bộ**
+**Local Web UI**
 
-- Giữ bind `127.0.0.1` mặc định.
-- Giữ các kiểm tra Host/Origin/Content-Type/kích thước body. Không nới lỏng các kiểm tra này.
-- Web UI không nhận credential dưới bất kỳ hình thức nào (D8, FR-WEB-07): `POST /api/scan` chỉ nhận `target`, `authorized`, `checks`, `crawl` (boolean, chủ sản phẩm duyệt ngày 2026-10-04, FR-UI-14); trường credential hay trường lạ bị từ chối 400. Giới hạn crawl do người vận hành đặt lúc khởi động server, trình duyệt không đổi được, và Web UI luôn theo robots.txt. Quét có đăng nhập chỉ ở CLI/CI.
+- Keep the default bind of `127.0.0.1`.
+- Keep the Host/Origin/Content-Type/body-size checks. Do not loosen these checks.
+- The Web UI accepts no credentials in any form (D8, FR-WEB-07): `POST /api/scan` accepts only `target`, `authorized`, `checks`, `crawl` (boolean, approved by the product owner on 2026-10-04, FR-UI-14); credential fields or unknown fields are rejected with 400. Crawl limits are set by the operator at server startup, the browser cannot change them, and the Web UI always follows robots.txt. Authenticated scanning is CLI/CI only.
 
-**Dịch vụ API (`service/`, D12)**
+**API service (`service/`, D12)**
 
-- Khóa API chỉ lưu dạng băm, hiện đúng một lần lúc tạo; không log khóa, không đưa vào lỗi hay audit.
-- Mọi truy vấn lọc theo `agency_id` của khóa; ID của agency khác trả 404, không lộ sự tồn tại (có test cách ly).
-- Chặn quét địa chỉ nội bộ (SSRF) mặc định bật; chỉ cấu hình nhà phát triển mới tắt được.
-- API không nhận credential của khách để quét; kết quả lưu đã qua `redact()`, không bao giờ lưu `--show-secrets`.
-- Lỗi dùng `application/problem+json`; `docs/openapi.yaml` phải khớp với mã (có test); đổi hợp đồng thì tăng phiên bản API.
+- API keys are stored only as hashes and shown exactly once at creation; do not log keys or put them in errors or audit records.
+- Every query filters by the key's `agency_id`; another agency's ID returns 404 without revealing its existence (there is an isolation test).
+- Blocking scans of internal addresses (SSRF) is on by default; only a developer configuration can turn it off.
+- The API does not accept customer credentials for scanning; results are stored after `redact()` and `--show-secrets` output is never stored.
+- Errors use `application/problem+json`; `docs/openapi.yaml` must match the code (there is a test); if the contract changes, bump the API version.
 
-**Ngôn ngữ**
+**Language**
 
-- Mọi text của sản phẩm dùng tiếng Anh: UI, báo cáo HTML, output CLI, thông báo lỗi API, nội dung finding (SRS NFR-USA-03). Test `test_ui_text_is_english` chặn chữ tiếng Việt trong file tĩnh của UI.
-- README viết tiếng Anh (quyết định của chủ sản phẩm ngày 2026-09-30). Các tài liệu dự án còn lại (SRS, backlog, `docs/srs-feedback.md`, CLAUDE.md) viết tiếng Việt.
+- All product text is in English: UI, HTML report, CLI output, API error messages, finding content (SRS NFR-USA-03). The test `test_ui_text_is_english` blocks Vietnamese text in the UI's static files.
+- The README is written in English (product owner decision, 2026-09-30). The remaining project documents (SRS, backlog, `docs/srs-feedback.md`, CLAUDE.md) are written in English.
 
-**Chất lượng và dependency**
+**Quality and dependencies**
 
-- Code phải qua `ruff`. Không tắt rule bằng `noqa` nếu không ghi lý do.
-- Không thêm dependency khi chưa nêu lý do và chưa kiểm tra license có cho phép thương mại hóa.
-- Không viết "đảm bảo an toàn" hay "phát hiện 100%" trong báo cáo, README hay output.
+- Code must pass `ruff`. Do not disable rules with `noqa` without recording a reason.
+- Do not add a dependency without stating the reason and checking that its license permits commercialization.
+- Do not write "guaranteed safe" or "detects 100%" in reports, the README or output.
 
-## Việc Claude không tự làm
+## What Claude does not do on its own
 
-Các việc sau cần người duyệt:
+The following need human approval:
 
-- Push, tạo release, deploy.
-- Xóa file ngoài phạm vi FR.
-- Thêm active check (backlog E9).
-- Đổi kiến trúc (thêm server, DB, queue).
-- Thay đổi quyết định D1–D3.
+- Push, create a release, deploy.
+- Delete files outside the scope of the FR.
+- Add an active check (backlog E9).
+- Change the architecture (add a server, DB, queue).
+- Change decisions D1–D3.

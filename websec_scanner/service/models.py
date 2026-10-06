@@ -145,7 +145,7 @@ IDEMPOTENCY_KEY_PATTERN = r"^[A-Za-z0-9._:-]{1,64}$"
 
 class Attestation(_Body):
     """The agency's statement that it may have this target scanned. It is kept with the scan, and it is the agency's:
-    TECHVIFY supplies the scanner and the API, the agency vouches for its own clients."""
+    the service provider supplies the scanner and the API, the agency vouches for its own clients."""
 
     confirmed: Annotated[
         bool,

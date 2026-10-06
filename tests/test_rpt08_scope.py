@@ -13,8 +13,8 @@ from websec_scanner.report import print_report
 from websec_scanner.sarif import to_sarif
 
 # Multi-word so legitimate technical terms ("Secure cookie attribute", "Transport Layer
-# Security") never trip this check; CLAUDE.md names the Vietnamese phrasing, these are its
-# direct English equivalents, which is what the (English-only, NFR-USA-03) output can contain.
+# Security") never trip this check; CLAUDE.md names the forbidden claims, these are
+# the exact phrasings the (English-only, NFR-USA-03) output could contain.
 _FORBIDDEN_PHRASES = (
     "100% secure",
     "100% detect",

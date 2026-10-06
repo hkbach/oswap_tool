@@ -31,8 +31,7 @@ Thumbs.db
 # Per-run benchmark output (kept as a CI artifact, not committed)
 benchmarks/results/
 
-# Planning documents kept on the maintainer's machine only (not published)
-docs/PRODUCT-BACKLOG.md
-docs/PHASE-B-ROADMAP.md
-docs/DECISIONS-S14-S20.md
-docs/OPEN-ITEMS.md
+# Documents kept on the maintainer's machine only (not published), except the API contract files
+docs/*
+!docs/openapi.yaml
+!docs/report.schema.json
