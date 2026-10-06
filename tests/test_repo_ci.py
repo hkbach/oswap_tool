@@ -52,6 +52,12 @@ def test_min_deps_job_pins_the_floors_declared_in_pyproject(workflow):
         assert f'"{name}=={version}"' in job, f"min-deps must install {name}=={version}"
     oldest = re.search(r'requires-python = ">=(\d+\.\d+)"', pyproject).group(1)
     assert f'python-version: "{oldest}"' in job
+    # the service extra (decision D12) has floors too, and the same job proves them
+    service = re.search(r"^service = \[(.*?)^\]", pyproject, flags=re.MULTILINE | re.DOTALL).group(1)
+    service_floors = dict(re.findall(r'"([a-z0-9-]+)>=([\d.]+)"', service))
+    assert service_floors and set(service_floors) == {"fastapi", "uvicorn"}
+    for name, version in service_floors.items():
+        assert f'"{name}=={version}"' in job, f"min-deps must install {name}=={version}"
 
 
 def test_workflow_runs_lint_and_offline_tests(workflow):
@@ -100,3 +106,8 @@ def test_gitleaks_allowlist_only_covers_the_fake_redaction_values():
     source = (ROOT / "tests" / "test_redact.py").read_text(encoding="utf-8")
     for value in re.findall(r"'''\^(.+?)\$'''", re.search(r"regexes = \[(.*)\]", config).group(1)):
         assert f'"{value}"' in source, f"{value} is not a fixture value in tests/test_redact.py"
+
+
+def test_the_audit_job_covers_the_service_dependencies_too(workflow):
+    job = workflow[workflow.index("  audit:") : workflow.index("  docker:")]
+    assert 'pip install ".[service]"' in job and "--path" in job

@@ -19,11 +19,12 @@ def _package_name(requirement: str) -> str:
     return re.split(r"[<>=!~\[]", requirement, maxsplit=1)[0].strip().lower()
 
 
-def _declared_dependencies() -> tuple[set[str], set[str]]:
+def _declared_dependencies() -> tuple[set[str], set[str], set[str]]:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     runtime = {_package_name(r) for r in project["dependencies"]}
     dev = {_package_name(r) for r in project["optional-dependencies"]["dev"]}
-    return runtime, dev
+    service = {_package_name(r) for r in project["optional-dependencies"]["service"]}
+    return runtime, dev, service
 
 
 _ROW = re.compile(r"^\|\s*([\w.-]+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$")
@@ -36,22 +37,25 @@ def _inventory_rows() -> list[tuple[str, str, str]]:
     return [(m.group(1).lower(), m.group(2), m.group(3)) for m in rows if m and m.group(1) != "Package"]
 
 
-def _inventoried_direct_dependencies() -> tuple[set[str], set[str]]:
-    runtime, dev = set(), set()
+def _inventoried_direct_dependencies() -> tuple[set[str], set[str], set[str]]:
+    runtime, dev, service = set(), set(), set()
     for package, _license, owner in _inventory_rows():
         entries = {o.strip() for o in owner.split(",")}
         if "this project" in entries:
             runtime.add(package)
         if "this project (dev)" in entries:
             dev.add(package)
-    return runtime, dev
+        if "this project (service)" in entries:
+            service.add(package)
+    return runtime, dev, service
 
 
 def test_third_party_licenses_lists_every_direct_dependency():
-    declared_runtime, declared_dev = _declared_dependencies()
-    listed_runtime, listed_dev = _inventoried_direct_dependencies()
+    declared_runtime, declared_dev, declared_service = _declared_dependencies()
+    listed_runtime, listed_dev, listed_service = _inventoried_direct_dependencies()
     assert listed_runtime == declared_runtime
     assert listed_dev == declared_dev
+    assert listed_service == declared_service
 
 
 def test_third_party_licenses_has_no_copyleft_that_would_force_releasing_source():

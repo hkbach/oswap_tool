@@ -8,7 +8,7 @@ import textwrap
 
 from .catalog import CHECK_GROUPS
 from .models import SEVERITY_ORDER
-from .output import API_LISTED_ENDPOINTS, CRAWL_SKIP_TEXT, CRAWL_STOP_TEXT, CVSS_NOTE, SCOPE_NOTE
+from .output import API_LISTED_ENDPOINTS, CRAWL_SKIP_TEXT, CVSS_NOTE, SCOPE_NOTE, crawl_message
 
 _SEVERITIES = SEVERITY_ORDER
 # Everything a terminal acts on: C0 controls except tab, DEL, and the C1 range (which includes
@@ -132,7 +132,7 @@ def _other_pages(finding: dict) -> str:
 def _print_crawl(crawl: dict) -> None:
     """FR-CRAWL-01: what the crawl covered and why it stopped."""
     print("-" * 72)
-    print(f" Crawl: {crawl['pages_visited']} page(s) visited ({CRAWL_STOP_TEXT[crawl['stopped_reason']]})")
+    print(f" Crawl: {crawl_message(crawl)}")
     robots = "followed" if crawl["respect_robots"] else "ignored (--ignore-robots)"
     print(
         f"   Limits: depth {crawl['max_depth']}, {crawl['max_pages']} pages, {crawl['max_duration']:g} s; "

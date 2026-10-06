@@ -37,7 +37,7 @@ from .exports import to_csv, to_junit
 from .html_report import render_html
 from .http_utils import build_session, decode_body, excluded
 from .limits import ScanLimiter, ScanLimitReached
-from .models import ScanResult
+from .models import ScannedPage, ScanResult
 from .output import DEFAULT_FAIL_ON, FAIL_ON_CHOICES, build_report, exit_code, gate_message, scrub_text
 from .redact import redact
 from .report import print_report, printable_text, write_json
@@ -368,6 +368,17 @@ def run_scan(
             set_cookie_headers = [raw for r in (*resp.history, resp) for raw in r.raw.headers.getlist("Set-Cookie")]
             _run_check(result, "cookies", cookies.check_cookies, base_url, set_cookie_headers)
 
+        # FR-REPORT-10: the target page is the first page of the report; its findings are the page-level ones so far.
+        result.pages.append(
+            ScannedPage(
+                url=resp.url,
+                status=resp.status_code,
+                depth=0,
+                checked=want("headers") or want("cookies"),
+                findings=_count_page_findings(result.findings),
+            )
+        )
+
         # FIX-09: TLS runs on the first HTTPS URL of the baseline chain (the target itself,
         # or where an http:// target redirected to), and the redirect check always runs.
         chain = [r.url for r in (*resp.history, resp)]
@@ -431,6 +442,12 @@ def run_scan(
 
 
 _MAX_CRAWL_ERRORS = 10  # a site that fails on every page must not fill the error list
+_PAGE_CHECKS = ("security-headers", "cookies")  # the checks that judge one page (FR-REPORT-10)
+
+
+def _count_page_findings(findings) -> int:
+    """Distinct findings (by fingerprint) of the checks that judge a page, not HSTS of the start host, TLS or files."""
+    return len({f.fingerprint for f in findings if f.check in _PAGE_CHECKS})
 
 
 def _run_crawl(session, result: ScanResult, resp, options: CrawlOptions, want) -> None:
@@ -445,10 +462,8 @@ def _run_crawl(session, result: ScanResult, resp, options: CrawlOptions, want) -
     crawled = crawl_module.crawl(session, resp.url, start_html, options)
     result.crawl = crawled
     for page in crawled.pages:
-        if not page.checkable:
-            continue
         seen: set[str] = set()  # fingerprints: one finding per issue per page, whatever the check returns
-        if want("headers"):
+        if page.checkable and want("headers"):
             _run_page_check(
                 result,
                 seen,
@@ -459,8 +474,11 @@ def _run_crawl(session, result: ScanResult, resp, options: CrawlOptions, want) -
                 page.headers,
                 is_https=page.url.lower().startswith("https://"),
             )
-        if want("cookies"):
+        if page.checkable and want("cookies"):
             _run_page_check(result, seen, page.url, "cookies", cookies.check_cookies, page.url, page.set_cookies)
+        result.pages.append(
+            ScannedPage(url=page.url, status=page.status, depth=page.depth, checked=page.checkable, findings=len(seen))
+        )
     result.errors.extend(crawled.errors[:_MAX_CRAWL_ERRORS])
     if len(crawled.errors) > _MAX_CRAWL_ERRORS:
         result.errors.append(f"... and {len(crawled.errors) - _MAX_CRAWL_ERRORS} more crawler error(s)")

@@ -44,6 +44,8 @@ function setBusy(busy, target) {
   $("groups-none").disabled = busy;
   $("status").hidden = !busy;
   $("status-text").textContent = busy ? `Scanning ${target}… this can take up to a minute.` : "";
+  if (busy) $("crawl").disabled = true;
+  else updateCrawlAvailability();
 }
 
 function formatTime(iso) {
@@ -57,9 +59,35 @@ function plural(count, word) {
 
 // --- test target picker ----------------------------------------------------------
 
+// FR-UI-14: crawling adds pages to the Security headers and Cookies checks, so it needs one of them.
+function crawlApplies(checks) {
+  if (checks === null || checks === undefined) return true; // the list did not load: every group runs
+  return checks.includes("headers") || checks.includes("cookies");
+}
+
+// The request body: the crawl box adds one boolean; its limits are the server's, never the page's.
+function scanPayload(target, checks, crawl) {
+  const payload = { target, authorized: true };
+  if (checks) payload.checks = checks;
+  if (crawl && crawlApplies(checks)) payload.crawl = true;
+  return payload;
+}
+
+function crawlHint(crawl) {
+  return `Follows links on the same origin: up to ${crawl.max_pages} pages, ${crawl.max_depth} level(s) deep, ` +
+    `${crawl.max_duration} s. robots.txt is respected. Applies to the Security headers and Cookies checks.`;
+}
+
+function updateCrawlAvailability() {
+  const applies = !groupsLoaded || crawlApplies(selectedGroups());
+  $("crawl").disabled = !applies;
+  $("crawl-note").hidden = applies;
+}
+
 function updateGroupsCount() {
   const boxes = groupBoxes();
   $("groups-count").textContent = `${selectedGroups().length} of ${boxes.length} selected`;
+  updateCrawlAvailability();
 }
 
 function setAllGroups(checked) {
@@ -71,7 +99,8 @@ async function loadGroups() {
   try {
     const response = await fetch("/api/checks");
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const { groups } = await response.json();
+    const { groups, crawl } = await response.json();
+    if (crawl) $("crawl-hint").textContent = crawlHint(crawl);
     const list = $("groups-list");
     list.replaceChildren();
     for (const group of groups) {
@@ -159,6 +188,18 @@ function referencesRow(links) {
   return row;
 }
 
+// FR-CRAWL-03: the pages after the finding's own URL, and how many more there were than are listed.
+function otherPagesText(f) {
+  const others = (f.affected_urls || []).filter((url) => url !== f.url);
+  const more = f.affected_count - 1 - others.length;
+  return others.join(", ") + (more > 0 ? ` and ${more} more page(s)` : "");
+}
+
+function showCrawlLine(result) {
+  $("crawl-line").textContent = result.crawl_message ? `Crawl: ${result.crawl_message}` : "";
+  $("crawl-line").hidden = !result.crawl_message;
+}
+
 function findingItem(f, context) {
   const item = el("li", `finding sev-${f.severity.toLowerCase()}`);
   const head = el("div", "finding-head");
@@ -175,6 +216,7 @@ function findingItem(f, context) {
   if (f.evidence) details.append(detailRow("Evidence", f.evidence, true));
   if (f.recommendation) details.append(detailRow("Recommendation", f.recommendation, false));
   if (f.url) details.append(detailRow("URL", f.url, true));
+  if (f.affected_count > 1) details.append(detailRow("Also seen on", otherPagesText(f), true));
   const links = (f.references || []).filter((ref) => String(ref).startsWith("https://"));
   if (links.length) details.append(referencesRow(links));
   if (details.childElementCount) item.append(details);
@@ -240,6 +282,69 @@ function renderFindings() {
   $("no-findings").textContent = findings.length === 0 ? "No findings." : "No findings at this severity.";
 }
 
+// --- tabs and the list of scanned pages (FR-UI-15) ---------------------------------
+
+const TABS = ["findings", "urls"];
+
+function selectTab(name) {
+  for (const tab of TABS) {
+    const selected = tab === name;
+    $(`tab-${tab}`).setAttribute("aria-selected", String(selected));
+    $(`tab-${tab}`).tabIndex = selected ? 0 : -1;
+    $(`panel-${tab}`).hidden = !selected;
+  }
+}
+
+// The keyboard pattern of a tab list: arrows move (and wrap), Home and End jump.
+function tabKeydown(event) {
+  const current = TABS.findIndex((tab) => $(`tab-${tab}`).getAttribute("aria-selected") === "true");
+  let next = null;
+  if (event.key === "ArrowRight") next = (current + 1) % TABS.length;
+  else if (event.key === "ArrowLeft") next = (current + TABS.length - 1) % TABS.length;
+  else if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = TABS.length - 1;
+  if (next === null) return;
+  event.preventDefault();
+  selectTab(TABS[next]);
+  $(`tab-${TABS[next]}`).focus();
+}
+
+// What the table does not say by itself: why it may be short, and why a page was not checked.
+function pagesNotes(result, pages, visited) {
+  if (pages.length === 0) return ["No page was fetched, so nothing was checked."];
+  const notes = [];
+  if (!result.crawl) {
+    notes.push("Only the target page was scanned. Tick the crawl box above the Scan button to scan the pages it links to.");
+  }
+  if (visited > pages.length) notes.push(`Showing the first ${pages.length} of ${visited} pages.`);
+  if (pages.some((page) => !page.checked)) {
+    notes.push("Pages that are not HTML, or that answered with an error or a redirect, were fetched but not checked.");
+  }
+  return notes;
+}
+
+function renderPages(result) {
+  const pages = result.pages || [];
+  const visited = result.crawl ? Math.max(result.crawl.pages_visited, pages.length) : pages.length;
+  $("tab-findings").textContent = `Findings (${result.findings.length})`;
+  $("tab-urls").textContent = `Scanned URLs (${visited})`;
+  $("pages-body").replaceChildren(
+    ...pages.map((page) => {
+      const row = el("tr");
+      row.append(
+        el("td", null, page.url),
+        el("td", null, String(page.status)),
+        el("td", null, String(page.depth)),
+        el("td", null, page.checked ? "Yes" : "No"),
+        el("td", null, String(page.findings)),
+      );
+      return row;
+    }),
+  );
+  $("pages-table").hidden = pages.length === 0;
+  $("pages-notes").replaceChildren(...pagesNotes(result, pages, visited).map((note) => el("p", "meta", note)));
+}
+
 function renderResult(result) {
   lastResult = result;
   $("result-target").textContent = result.target;
@@ -249,10 +354,13 @@ function renderResult(result) {
   const checks = result.checks_run.length ? `Checks run: ${result.checks_run.join(", ")}` : "No checks ran.";
   const redirected = result.final_url && result.final_url !== result.target;
   $("checks-run").textContent = redirected ? `Final URL: ${result.final_url} · ${checks}` : checks;
+  showCrawlLine(result);
   renderSummary(result);
   renderErrors(result);
   $("severity-filter").value = "ALL";
   renderFindings();
+  renderPages(result);
+  selectTab("findings"); // a new result always opens on its findings
   showReportLink(result);
   $("results").hidden = false;
 }
@@ -278,8 +386,7 @@ async function runScan(event) {
     return;
   }
 
-  const payload = { target, authorized: true };
-  if (groupsLoaded) payload.checks = checks;
+  const payload = scanPayload(target, groupsLoaded ? checks : null, $("crawl").checked);
   showReportLink(null); // the link always refers to the result shown below it
   setBusy(true, target);
   try {
@@ -306,7 +413,7 @@ async function runScan(event) {
 function downloadJson() {
   if (!lastResult) return;
   // Same shape as the CLI --json report: drop the UI-only fields (web.WEB_ONLY_FIELDS).
-  const { gate_failed, gate_status, gate_message, groups, owasp_groups, report_id, report_url, ...report } = lastResult;
+  const { gate_failed, gate_status, gate_message, crawl_message, groups, owasp_groups, report_id, report_url, ...report } = lastResult;
   const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
   const link = el("a");
   link.href = URL.createObjectURL(blob);
@@ -320,6 +427,10 @@ $("scan-form").addEventListener("submit", runScan);
 $("severity-filter").addEventListener("change", renderFindings);
 $("group-by").addEventListener("change", renderFindings);
 $("download-json").addEventListener("click", downloadJson);
+for (const tab of TABS) {
+  $(`tab-${tab}`).addEventListener("click", () => selectTab(tab));
+  $(`tab-${tab}`).addEventListener("keydown", tabKeydown);
+}
 $("groups-all").addEventListener("click", () => setAllGroups(true));
 $("groups-none").addEventListener("click", () => setAllGroups(false));
 loadGroups();

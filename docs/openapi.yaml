@@ -1,0 +1,570 @@
+openapi: 3.1.0
+info:
+  title: WebSec Scanner Service API
+  description: '
+
+    Request web security scans and read their results. The scanner is non-intrusive: it only sends ordinary GET,
+    HEAD and
+
+    OPTIONS requests and never sends a payload that exploits anything.
+
+
+    **Authentication.** Send your API key as `Authorization: Bearer wsk_...`. Call the API from your **backend**,
+    never from
+
+    a browser: a key in a web page is a key anyone can read. Every key belongs to one agency and sees only that
+
+    agency''s data.
+
+
+    **Errors.** Every error is a `application/problem+json` document with a stable `code`; branch on `code`, not
+    on
+
+    the text.
+
+    Nothing you sent is echoed back in an error.
+
+
+    **Ids.** Ids are made by the service: `cli_...` for a client. Attach your own reference to a client with `external_ref`.
+
+    '
+  version: 1.0.0
+paths:
+  /healthz:
+    get:
+      tags:
+      - service
+      summary: Is the service up?
+      description: No key needed. Says nothing about the data.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: The service cannot reach its database.
+          content:
+            application/problem+json:
+              schema: &id001
+                $ref: '#/components/schemas/Problem'
+  /v1/options:
+    get:
+      tags:
+      - service
+      summary: What a scan request can ask for
+      description: The check groups and the limits of a crawl, so your front end can draw the same form as the demo
+        page.
+      operationId: getOptions
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Options'
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+      security:
+      - bearerAuth: []
+  /v1/clients:
+    post:
+      tags:
+      - clients
+      summary: Create a client
+      description: 'Required scope: `clients:write`. `external_ref` is your own reference, unique among your active
+        clients.'
+      operationId: createClient
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+        '403':
+          description: The API key does not have the scope this call needs.
+          content:
+            application/problem+json:
+              schema: *id001
+        '409':
+          description: The request conflicts with an existing record.
+          content:
+            application/problem+json:
+              schema: *id001
+        '413':
+          description: The request body is too large.
+          content:
+            application/problem+json:
+              schema: *id001
+        '422':
+          description: The request is not valid; `errors` says where.
+          content:
+            application/problem+json:
+              schema: *id001
+    get:
+      tags:
+      - clients
+      summary: List your clients
+      description: 'Required scope: `clients:read`. In order of creation, oldest first, in pages.'
+      operationId: listClients
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: external_ref
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^[A-Za-z0-9._:-]{1,128}$
+          - type: 'null'
+          description: Only the client with this reference.
+          title: External Ref
+        description: Only the client with this reference.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: Page size.
+          default: 50
+          title: Limit
+        description: Page size.
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: '`next_cursor` of the previous page.'
+          title: Cursor
+        description: '`next_cursor` of the previous page.'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientList'
+        '400':
+          description: The request is malformed (for example an unusable cursor).
+          content:
+            application/problem+json:
+              schema: *id001
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+        '403':
+          description: The API key does not have the scope this call needs.
+          content:
+            application/problem+json:
+              schema: *id001
+        '422':
+          description: The request is not valid; `errors` says where.
+          content:
+            application/problem+json:
+              schema: *id001
+  /v1/clients/{client_id}:
+    get:
+      tags:
+      - clients
+      summary: Read a client
+      description: 'Required scope: `clients:read`.'
+      operationId: getClient
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Client Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+        '403':
+          description: The API key does not have the scope this call needs.
+          content:
+            application/problem+json:
+              schema: *id001
+        '404':
+          description: No such record for your agency.
+          content:
+            application/problem+json:
+              schema: *id001
+        '422':
+          description: The request is not valid; `errors` says where.
+          content:
+            application/problem+json:
+              schema: *id001
+    patch:
+      tags:
+      - clients
+      summary: Change a client's name or labels
+      description: 'Required scope: `clients:write`. `external_ref` cannot be changed.'
+      operationId: updateClient
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Client Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+        '403':
+          description: The API key does not have the scope this call needs.
+          content:
+            application/problem+json:
+              schema: *id001
+        '404':
+          description: No such record for your agency.
+          content:
+            application/problem+json:
+              schema: *id001
+        '413':
+          description: The request body is too large.
+          content:
+            application/problem+json:
+              schema: *id001
+        '422':
+          description: The request is not valid; `errors` says where.
+          content:
+            application/problem+json:
+              schema: *id001
+    delete:
+      tags:
+      - clients
+      summary: Delete a client
+      description: 'Required scope: `clients:write`. The client leaves every read; its `external_ref` can be used
+        again.'
+      operationId: deleteClient
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Client Id
+      responses:
+        '204':
+          description: Successful Response
+        '401':
+          description: The API key is missing, malformed, unknown, expired or revoked.
+          content:
+            application/problem+json:
+              schema: *id001
+        '403':
+          description: The API key does not have the scope this call needs.
+          content:
+            application/problem+json:
+              schema: *id001
+        '404':
+          description: No such record for your agency.
+          content:
+            application/problem+json:
+              schema: *id001
+        '422':
+          description: The request is not valid; `errors` says where.
+          content:
+            application/problem+json:
+              schema: *id001
+components:
+  schemas:
+    CheckGroup:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        description:
+          type: string
+          title: Description
+      type: object
+      required:
+      - id
+      - title
+      - description
+      title: CheckGroup
+    Client:
+      properties:
+        client_id:
+          type: string
+          title: Client Id
+          description: Made by the service, e.g. cli_01j9z8k2m4q7r5t6v8w0x1y2z3.
+        display_name:
+          type: string
+          title: Display Name
+        external_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Ref
+        metadata:
+          additionalProperties:
+            anyOf:
+            - type: string
+            - type: integer
+            - type: number
+            - type: boolean
+          type: object
+          title: Metadata
+        created_at:
+          type: string
+          title: Created At
+          description: UTC, ISO 8601, milliseconds.
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - client_id
+      - display_name
+      - external_ref
+      - metadata
+      - created_at
+      - updated_at
+      title: Client
+    ClientCreate:
+      properties:
+        display_name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Display Name
+          description: Name shown to your own staff.
+        external_ref:
+          anyOf:
+          - type: string
+            pattern: ^[A-Za-z0-9._:-]{1,128}$
+          - type: 'null'
+          title: External Ref
+          description: Your own reference for this client, unique among your active clients. Fixed once set.
+        metadata:
+          additionalProperties:
+            anyOf:
+            - type: string
+            - type: integer
+            - type: number
+            - type: boolean
+          type: object
+          title: Metadata
+          description: Free labels (text, numbers, true/false). Never put secrets here.
+      additionalProperties: false
+      type: object
+      required:
+      - display_name
+      title: ClientCreate
+    ClientList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Client'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Pass it as `cursor` to get the next page; null when there is no more.
+      type: object
+      required:
+      - items
+      - next_cursor
+      title: ClientList
+    ClientUpdate:
+      properties:
+        display_name:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Display Name
+        metadata:
+          anyOf:
+          - additionalProperties:
+              anyOf:
+              - type: string
+              - type: integer
+              - type: number
+              - type: boolean
+            type: object
+          - type: 'null'
+          title: Metadata
+          description: Replaces the labels when given (send {} to clear them).
+      additionalProperties: false
+      type: object
+      title: ClientUpdate
+    CrawlLimits:
+      properties:
+        max_depth:
+          type: integer
+          title: Max Depth
+        max_pages:
+          type: integer
+          title: Max Pages
+        max_duration:
+          type: number
+          title: Max Duration
+        respect_robots:
+          type: boolean
+          title: Respect Robots
+          description: 'Always true: a crawl follows robots.txt.'
+      type: object
+      required:
+      - max_depth
+      - max_pages
+      - max_duration
+      - respect_robots
+      title: CrawlLimits
+    Health:
+      properties:
+        status:
+          type: string
+          title: Status
+        service_version:
+          type: string
+          title: Service Version
+      type: object
+      required:
+      - status
+      - service_version
+      title: Health
+    Options:
+      properties:
+        api_version:
+          type: string
+          title: Api Version
+        scanner_version:
+          type: string
+          title: Scanner Version
+        report_schema_version:
+          type: string
+          title: Report Schema Version
+        check_groups:
+          items:
+            $ref: '#/components/schemas/CheckGroup'
+          type: array
+          title: Check Groups
+        crawl:
+          $ref: '#/components/schemas/CrawlLimits'
+      type: object
+      required:
+      - api_version
+      - scanner_version
+      - report_schema_version
+      - check_groups
+      - crawl
+      title: Options
+      description: What a scan request can ask for, so a front end can draw the same form as the demo page.
+    Problem:
+      properties:
+        type:
+          type: string
+          title: Type
+          description: urn:websec:problem:<code>
+        title:
+          type: string
+          title: Title
+        status:
+          type: integer
+          title: Status
+        detail:
+          type: string
+          title: Detail
+        code:
+          type: string
+          title: Code
+          description: Stable, machine-readable. Branch on this, not on the text.
+        request_id:
+          type: string
+          title: Request Id
+          description: Quote it when you ask for support.
+        errors:
+          anyOf:
+          - items:
+              additionalProperties: true
+              type: object
+            type: array
+          - type: 'null'
+          title: Errors
+          description: Field problems of a 422.
+      type: object
+      required:
+      - type
+      - title
+      - status
+      - detail
+      - code
+      - request_id
+      title: Problem
+      description: RFC 9457 problem details; this is the shape of every error.
+  securitySchemes:
+    bearerAuth:
+      type: http
+      description: '`Authorization: Bearer wsk_<handle>_<secret>`'
+      scheme: bearer
+      bearerFormat: wsk_<handle>_<secret>
+tags:
+- name: service
+  description: Health and what a request can ask for.
+- name: clients
+  description: The clients of your agency. Each scan belongs to one client.

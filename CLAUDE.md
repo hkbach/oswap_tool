@@ -12,7 +12,7 @@ Scanner cấu hình bảo mật web không xâm lấn (non-intrusive), viết b�
 - CLI: `python -m websec_scanner <target>`
 - Web UI cục bộ: `python -m websec_scanner.web`. Chạy `http.server` tại `127.0.0.1:8765`, file tĩnh nằm ở `websec_scanner/static/`. `POST /api/scan` gọi thẳng `run_scan()` trong `cli.py`, `GET /api/report/<id>.html` dùng `render_html()`.
 
-Không có server hay service riêng (quyết định D1). Không thêm FastAPI, DB, queue hay framework web nếu FR không yêu cầu.
+CLI và Web UI cục bộ không có server hay service riêng (quyết định D1). Ngoại lệ duy nhất là **dịch vụ API cho agency** (quyết định D12, 2026-10-05, chủ sản phẩm duyệt): nằm riêng trong `websec_scanner/service/`, dùng FastAPI + SQLite qua nhóm dependency tùy chọn `[service]`. CLI, Web UI và lõi (`run_scan()`) không được import `service/` và không phụ thuộc nó (có test chặn). Ngoài `service/`, không thêm FastAPI, DB, queue hay framework web nếu FR không yêu cầu.
 
 ## Lệnh
 
@@ -71,7 +71,15 @@ python -m websec_scanner.web
 
 - Giữ bind `127.0.0.1` mặc định.
 - Giữ các kiểm tra Host/Origin/Content-Type/kích thước body. Không nới lỏng các kiểm tra này.
-- Web UI không nhận credential dưới bất kỳ hình thức nào (D8, FR-WEB-07): `POST /api/scan` chỉ nhận `target`, `authorized`, `checks`; trường credential hay trường lạ bị từ chối 400. Quét có đăng nhập chỉ ở CLI/CI.
+- Web UI không nhận credential dưới bất kỳ hình thức nào (D8, FR-WEB-07): `POST /api/scan` chỉ nhận `target`, `authorized`, `checks`, `crawl` (boolean, chủ sản phẩm duyệt ngày 2026-10-04, FR-UI-14); trường credential hay trường lạ bị từ chối 400. Giới hạn crawl do người vận hành đặt lúc khởi động server, trình duyệt không đổi được, và Web UI luôn theo robots.txt. Quét có đăng nhập chỉ ở CLI/CI.
+
+**Dịch vụ API (`service/`, D12)**
+
+- Khóa API chỉ lưu dạng băm, hiện đúng một lần lúc tạo; không log khóa, không đưa vào lỗi hay audit.
+- Mọi truy vấn lọc theo `agency_id` của khóa; ID của agency khác trả 404, không lộ sự tồn tại (có test cách ly).
+- Chặn quét địa chỉ nội bộ (SSRF) mặc định bật; chỉ cấu hình nhà phát triển mới tắt được.
+- API không nhận credential của khách để quét; kết quả lưu đã qua `redact()`, không bao giờ lưu `--show-secrets`.
+- Lỗi dùng `application/problem+json`; `docs/openapi.yaml` phải khớp với mã (có test); đổi hợp đồng thì tăng phiên bản API.
 
 **Ngôn ngữ**
 

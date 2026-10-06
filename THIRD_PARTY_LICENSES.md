@@ -43,6 +43,7 @@ used, unmodified dependency in this project.
 | pytest | MIT | this project (dev) |
 | ruff | MIT | this project (dev) |
 | jsonschema | MIT | this project (dev) |
+| httpx | BSD-3-Clause | this project (dev) |
 | colorama | BSD-3-Clause | pytest (transitive; Windows only) |
 | iniconfig | MIT | pytest (transitive) |
 | packaging | Apache-2.0 OR BSD-2-Clause | pytest (transitive) |
@@ -52,6 +53,31 @@ used, unmodified dependency in this project.
 | jsonschema-specifications | MIT | jsonschema (transitive) |
 | referencing | MIT | jsonschema (transitive) |
 | rpds-py | MIT | jsonschema (transitive) |
+| httpcore | BSD-3-Clause | httpx (transitive) |
+| h11 | MIT | httpcore, uvicorn (transitive) |
+
+## Service (optional `service` extra; decision D12, never needed by the CLI or the local web UI)
+
+Declared in `pyproject.toml` `[project.optional-dependencies] service`. Licenses read from the package
+metadata of the versions installed on 2026-10-05 (Python 3.14): all permissive, none copyleft.
+
+| Package | License | Direct dependency of |
+|---|---|---|
+| fastapi | MIT | this project (service) |
+| uvicorn | BSD-3-Clause | this project (service) |
+| starlette | BSD-3-Clause | fastapi (transitive) |
+| pydantic | MIT | fastapi (transitive) |
+| pydantic-core | MIT | pydantic (transitive) |
+| annotated-types | MIT | pydantic (transitive) |
+| annotated-doc | MIT | fastapi (transitive) |
+| typing-inspection | MIT | fastapi, pydantic (transitive) |
+| typing-extensions | PSF-2.0 | fastapi, pydantic, anyio (transitive) |
+| opentelemetry-api | Apache-2.0 | fastapi (transitive) |
+| anyio | MIT | starlette, httpx (transitive) |
+| click | BSD-3-Clause | uvicorn (transitive) |
+
+`h11` (MIT) and `idna` (BSD-3-Clause) are listed above. The service is the first part of this project
+that is meant to be exposed to a network, so these packages are the ones to keep patched.
 
 ## Data and rule files
 

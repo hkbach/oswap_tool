@@ -41,7 +41,7 @@ def load(path):
 def test_crawl_flag_adds_pages_and_the_report_says_so(http_server, tmp_path):
     code, base, out = scan(http_server, tmp_path, "--crawl")
     report = load(out["json"])
-    assert report["schema_version"] == SCHEMA_VERSION == "1.10"
+    assert report["schema_version"] == SCHEMA_VERSION == "1.11"
     assert report["crawl"]["pages_visited"] == 3
     assert report["crawl"]["stopped_reason"] == "complete"
     csp = next(f for f in report["findings"] if f["id"] == "HDR-CONTENT-SECURITY-POLICY-MISSING")
@@ -293,8 +293,9 @@ def ui():
     server.server_close()
 
 
-def test_the_web_ui_refuses_a_crawl_field(ui):
-    for field_name in ("crawl", "crawl_depth", "ignore_robots"):
+def test_the_web_ui_refuses_every_crawl_setting(ui):
+    """The crawl box itself is `crawl` (tests/test_web_crawl.py); its settings are not the browser's to send."""
+    for field_name in ("crawl_depth", "crawl_max_pages", "crawl_max_duration", "ignore_robots"):
         response = requests.post(
             ui + "/api/scan",
             json={"target": "http://127.0.0.1:9/", "authorized": True, field_name: True},
@@ -302,10 +303,3 @@ def test_the_web_ui_refuses_a_crawl_field(ui):
         )
         assert response.status_code == 400
         assert response.json()["code"] == "unknown_field"
-
-
-def test_the_web_ui_report_has_no_crawl(http_server):
-    from websec_scanner import output
-
-    result = cli.run_scan(http_server(site_handler(PAGES)), tls_probe=False)
-    assert output.build_report(result)["crawl"] is None

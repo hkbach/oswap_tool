@@ -35,6 +35,18 @@
         </div>
         <ul id="groups-list" class="groups-list"></ul>
         <p id="groups-loading" class="meta">Loading test targets…</p>
+        <ul class="groups-list crawl-list">
+          <li class="group-option">
+            <label>
+              <input id="crawl" type="checkbox">
+              <span class="group-option-text">
+                <span class="group-option-title">Also crawl the site and check the pages it links to</span>
+                <span id="crawl-hint" class="group-option-desc">Follows links on the same origin, within the limits this server was started with. robots.txt is respected. Applies to the Security headers and Cookies checks.</span>
+                <span id="crawl-note" class="group-option-desc" hidden>Select Security headers or Cookies to use this option.</span>
+              </span>
+            </label>
+          </li>
+        </ul>
       </fieldset>
 
       <div class="form-step">
@@ -75,6 +87,7 @@
         <ul id="summary" class="summary"></ul>
         <p id="scope" class="meta"></p>
         <p id="checks-run" class="meta"></p>
+        <p id="crawl-line" class="meta" hidden></p>
       </div>
 
       <div id="errors" class="card errors" hidden>
@@ -82,8 +95,13 @@
         <ul id="error-list"></ul>
       </div>
 
+      <div class="tabs" role="tablist" aria-label="Scan result">
+        <button id="tab-findings" class="tab" type="button" role="tab" aria-selected="true" aria-controls="panel-findings" tabindex="0">Findings</button>
+        <button id="tab-urls" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-urls" tabindex="-1">Scanned URLs</button>
+      </div>
+
+      <div id="panel-findings" role="tabpanel" aria-labelledby="tab-findings">
       <div class="findings-head">
-        <h2>Findings</h2>
         <div class="controls">
           <label class="filter">Group by
             <select id="group-by">
@@ -105,6 +123,17 @@
       </div>
       <p id="no-findings" class="empty" hidden>No findings.</p>
       <div id="groups" class="groups"></div>
+      </div>
+
+      <div id="panel-urls" role="tabpanel" aria-labelledby="tab-urls" hidden>
+        <div id="pages-notes" class="pages-notes"></div>
+        <div class="table-wrap">
+          <table id="pages-table" class="pages-table">
+            <thead><tr><th>URL</th><th>Status</th><th>Depth</th><th>Checked</th><th>Findings</th></tr></thead>
+            <tbody id="pages-body"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <footer class="page-footer">

@@ -17,9 +17,11 @@ if TYPE_CHECKING:
 # report shape: minor for added fields, major for removed/renamed fields or changed meaning.
 # History: "1.0" = unversioned layout of scanner v1.1.0; 1.1 = scanner 1.2.0;
 # 1.2 adds final_url and redirect_chain; 1.3 adds gate.
-SCHEMA_VERSION = "1.10"
+SCHEMA_VERSION = "1.11"
 # FR-CRAWL-03: a finding found on several crawled pages lists at most this many of their URLs.
 MAX_AFFECTED_URLS = 20
+# FR-REPORT-10: the report lists at most this many of the pages a scan fetched.
+MAX_REPORT_PAGES = 500
 
 
 class Severity(str, Enum):
@@ -106,6 +108,17 @@ class Finding:
 
 
 @dataclass
+class ScannedPage:
+    """One page the scan fetched, and what was done to it (FR-REPORT-10)."""
+
+    url: str
+    status: int  # the HTTP status of the answer
+    depth: int  # 0 for the target page, 1 for a page it links to, and so on
+    checked: bool  # the headers/cookies checks were applied to this page
+    findings: int  # how many findings of those checks apply to this page (not capped like affected_urls)
+
+
+@dataclass
 class ScanResult:
     """Aggregated result for one target."""
 
@@ -132,6 +145,8 @@ class ScanResult:
     api: ApiInventory | None = None
     # What the crawl did (FR-CRAWL-01); None when --crawl was not used. build_report() turns it into "crawl".
     crawl: CrawlResult | None = None
+    # The pages fetched, the target page first (FR-REPORT-10); empty when the target could not be fetched.
+    pages: list = field(default_factory=list)
 
     def add(self, finding: Finding) -> None:
         self.findings.append(finding)
